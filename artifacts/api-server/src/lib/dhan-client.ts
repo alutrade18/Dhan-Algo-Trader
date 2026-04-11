@@ -65,6 +65,11 @@ export const dhanClient = {
     credentials.accessToken = accessToken;
   },
 
+  disconnect() {
+    credentials.clientId = "";
+    credentials.accessToken = "";
+  },
+
   getCredentialsMasked() {
     return {
       clientId: credentials.clientId

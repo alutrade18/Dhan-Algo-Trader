@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut } from "lucide-react";
 
 const settingsSchema = z.object({
   defaultProductType: z.string(),
@@ -80,6 +80,24 @@ export default function Settings() {
     },
     onError: () => {
       toast({ title: "Network error", description: "Could not reach the server", variant: "destructive" });
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/broker/disconnect", { method: "POST" });
+      if (!res.ok) throw new Error("Request failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      setConnectResult(null);
+      brokerForm.reset({ clientId: "", accessToken: "" });
+      toast({ title: "Disconnected from broker", description: "Credentials have been cleared." });
+      queryClient.invalidateQueries({ queryKey: ["healthz"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to disconnect", variant: "destructive" });
     },
   });
 
@@ -246,11 +264,23 @@ export default function Settings() {
               </div>
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Button type="submit" disabled={connectMutation.isPending} className="gap-2">
                 <Wifi className="w-4 h-4" />
                 {connectMutation.isPending ? "Connecting..." : "Save & Connect"}
               </Button>
+              {isConnected && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={disconnectMutation.isPending}
+                  onClick={() => disconnectMutation.mutate()}
+                >
+                  <LogOut className="w-4 h-4" />
+                  {disconnectMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              )}
               <p className="text-xs text-muted-foreground">
                 Credentials are stored securely in memory and validated against Dhan API.
               </p>

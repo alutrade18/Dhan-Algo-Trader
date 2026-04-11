@@ -52,6 +52,12 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
   }
 });
 
+router.post("/broker/disconnect", (req, res): void => {
+  dhanClient.disconnect();
+  req.log.info("Broker credentials cleared — disconnected");
+  res.json({ success: true, message: "Disconnected from broker" });
+});
+
 router.get("/broker/status", async (_req, res): Promise<void> => {
   if (!dhanClient.isConfigured()) {
     res.json({
