@@ -3,10 +3,9 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,9 +22,6 @@ const settingsSchema = z.object({
   maxDailyLoss: z.coerce.number().optional(),
   maxDailyProfit: z.coerce.number().optional(),
   riskPerTrade: z.coerce.number().optional(),
-  enableAutoTrading: z.boolean(),
-  enableNotifications: z.boolean(),
-  theme: z.enum(["light", "dark", "system"]),
 });
 
 const brokerSchema = z.object({
@@ -135,9 +131,6 @@ export default function Settings() {
       maxDailyLoss: 0,
       maxDailyProfit: 0,
       riskPerTrade: 0,
-      enableAutoTrading: false,
-      enableNotifications: true,
-      theme: "dark",
     },
   });
 
@@ -151,9 +144,6 @@ export default function Settings() {
         maxDailyLoss: settings.maxDailyLoss ?? 0,
         maxDailyProfit: settings.maxDailyProfit ?? 0,
         riskPerTrade: settings.riskPerTrade ?? 0,
-        enableAutoTrading: settings.enableAutoTrading ?? false,
-        enableNotifications: settings.enableNotifications ?? true,
-        theme: (settings.theme as "light" | "dark" | "system") ?? "dark",
       });
     }
   }, [settings, form]);
@@ -483,82 +473,6 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            <Card className="col-span-1 md:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-lg">System Preferences</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="enableAutoTrading"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Master Auto-Trading Switch</FormLabel>
-                          <FormDescription>
-                            Enable or disable ALL automated trading instantly.
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className={field.value ? "bg-success" : ""}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="enableNotifications"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">System Notifications</FormLabel>
-                          <FormDescription>
-                            Receive alerts for order execution and strategy signals.
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="theme"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Application Theme</FormLabel>
-                          <FormDescription>
-                            Select your preferred UI appearance. You can also toggle at the top right.
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Select onValueChange={field.onChange} value={field.value ?? "dark"}>
-                            <SelectTrigger className="w-[140px]">
-                              <SelectValue placeholder="Theme" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="light">Light</SelectItem>
-                              <SelectItem value="dark">Dark</SelectItem>
-                              <SelectItem value="system">System</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           <div className="flex justify-end">
