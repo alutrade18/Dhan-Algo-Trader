@@ -1017,20 +1017,18 @@ export default function OrdersPage() {
                   <Label className="text-xs">From Date</Label>
                   <Input
                     type="date"
-                    className="h-8 text-sm w-40"
+                    className="h-9 text-sm w-44 cursor-pointer"
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    max={todayISO()}
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">To Date</Label>
                   <Input
                     type="date"
-                    className="h-8 text-sm w-40"
+                    className="h-9 text-sm w-44 cursor-pointer"
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    max={todayISO()}
                   />
                 </div>
                 <div className="flex gap-1.5">
