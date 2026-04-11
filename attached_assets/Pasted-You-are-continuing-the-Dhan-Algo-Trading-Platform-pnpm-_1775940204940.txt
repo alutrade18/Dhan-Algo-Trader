@@ -1,0 +1,223 @@
+You are continuing the Dhan Algo Trading Platform (pnpm monorepo).
+Stack: React + Vite + shadcn/ui frontend, Express 5 backend, PostgreSQL + Drizzle ORM, Dhan broker API.
+
+## TASK: Build a complete Order Book page
+
+File to create/replace: artifacts/trading-platform/src/pages/orders.tsx
+
+---
+
+## DESIGN REQUIREMENTS
+
+Build a professional dark-theme order book page with these sections:
+
+### Section 1 — Top Stats Bar
+Show 4 metric cards in a row:
+- Total Orders Today (count of all)
+- Traded (count where orderStatus = "TRADED")
+- Pending (count where orderStatus = "PENDING" or "TRANSIT")
+- Rejected/Cancelled (count where status = "REJECTED" or "CANCELLED")
+
+### Section 2 — Tab Bar
+Two tabs:
+- "Today's Orders" (default active)
+- "Order History" (date range search)
+
+---
+
+### Tab 1: Today's Orders
+
+Fetch from: GET /api/orders (Dhan API, already proxied in backend)
+
+Show a table with these columns:
+| Time | Symbol | Type | Product | Qty | Price | Trigger | Status | Action |
+
+- Time: show createTime formatted as "HH:MM:SS"
+- Symbol: show tradingSymbol (bold, monospace font)
+- Type: BUY badge (green) or SELL badge (red)
+- Product: INTRADAY / CNC / MARGIN / MTF badge (gray pill)
+- Qty: show quantity, if filledQty > 0 show "10/5 filled" format
+- Price: show price, if MARKET order show "MKT" text
+- Trigger: show triggerPrice only if > 0, else show "-"
+- Status: colored badge:
+  - TRADED → green
+  - PENDING / TRANSIT → amber/yellow
+  - REJECTED → red
+  - CANCELLED → gray
+  - EXPIRED → gray
+  - PART_TRADED → blue
+- Action column: show buttons based on status:
+  - If PENDING or TRANSIT: show "Modify" button (blue, small) + "Cancel" button (red, small)
+  - If TRADED/CANCELLED/REJECTED/EXPIRED: show "-"
+
+Auto-refresh every 15 seconds (show a small countdown timer "Refreshing in 12s" in top right of table).
+
+Show loading skeleton while fetching.
+Show empty state if no orders: "No orders placed today" with an icon.
+
+---
+
+### Modify Order Modal (Dialog)
+
+When user clicks "Modify" button, open a Dialog with:
+- Order ID shown at top (read-only)
+- Symbol shown (read-only)
+- Current values pre-filled
+
+Editable fields:
+- Order Type: Select dropdown → LIMIT / MARKET / STOP_LOSS / STOP_LOSS_MARKET
+- Quantity: number input (required)
+- Price: number input (required if LIMIT or STOP_LOSS, disabled if MARKET)
+- Trigger Price: number input (required only if STOP_LOSS or STOP_LOSS_MARKET)
+- Validity: Select → DAY / IOC
+
+Submit button: "Modify Order" → calls PUT /api/orders/:orderId
+On success: show toast "Order modified successfully", close modal, refresh table
+On error: show error toast with omsErrorDescription if available
+
+---
+
+### Cancel Order Confirmation
+
+When user clicks "Cancel" button:
+- Show a small inline confirmation: "Cancel this order? [Yes, Cancel] [No]"
+- No full modal needed — use a popover or inline confirm within the table row
+- On confirm: calls DELETE /api/orders/:orderId
+- On success: show toast "Order cancelled", refresh table
+- On error: show error toast
+
+---
+
+### Tab 2: Order History
+
+Dhan API does NOT have a date-range order history endpoint directly.
+So show historical trades from: GET /api/trades/history (already in backend)
+
+Show these controls at top:
+- From Date: date input (default: 30 days ago)
+- To Date: date input (default: today)
+- Search button (calls the API with params)
+- Export to Excel button (disabled until data is loaded)
+
+Table columns for history:
+| Date & Time | Symbol | Side | Product | Order Type | Qty Traded | Traded Price | Exchange Trade ID |
+
+- Date & Time: show createTime formatted nicely "24 Nov 2021, 11:20"
+- Symbol: tradingSymbol (monospace bold)
+- Side: BUY (green badge) / SELL (red badge)
+- Qty Traded: tradedQuantity
+- Traded Price: tradedPrice formatted as ₹3,345.80
+- Exchange Trade ID: show last 8 chars of exchangeTradeId (to save space), full on hover tooltip
+
+Show loading state while fetching.
+Show empty state if no results: "No trades found for selected period"
+
+---
+
+### Export to Excel
+
+When user clicks "Export to Excel" button:
+- Use the xlsx package (already installed or install: pnpm add xlsx)
+- Export whichever tab is active:
+  - Today's orders: export all rows currently shown
+  - History tab: export the search results
+
+Columns to export for Today's Orders:
+Order ID, Symbol, Transaction Type, Product, Order Type, Quantity, Filled Qty, Price, Trigger Price, Status, Create Time, Update Time, OMS Error (if any)
+
+Columns to export for History:
+Trade ID, Order ID, Symbol, Transaction Type, Product, Order Type, Qty Traded, Traded Price, Create Time, Exchange Time
+
+Filename format:
+- "dhan-orders-today-2025-04-12.xlsx"
+- "dhan-trades-2025-04-01-to-2025-04-12.xlsx"
+
+Show success toast "Exported X rows to Excel" after download.
+
+---
+
+## BACKEND CHANGES NEEDED
+
+File: artifacts/api-server/src/routes/orders.ts
+
+### Existing routes (already there — do NOT break):
+- GET /api/orders → proxy to Dhan GET /orders
+- POST /api/orders → proxy to Dhan POST /orders
+- PUT /api/orders/:orderId → proxy to Dhan PUT /orders/:orderId
+- DELETE /api/orders/:orderId → proxy to Dhan DELETE /orders/:orderId
+
+### Add these if missing:
+- GET /api/orders/:orderId → proxy to Dhan GET /orders/:orderId
+- GET /api/orders/external/:correlationId → proxy to Dhan GET /orders/external/:correlationId
+
+File: artifacts/api-server/src/routes/trades.ts
+
+### Add if missing:
+- GET /api/trades → proxy to Dhan GET /trades
+- GET /api/trades/:orderId → proxy to Dhan GET /trades/:orderId
+- GET /api/trades/history → proxy to Dhan GET /trades (Dhan returns today's trades only; for history, call with date params if available, otherwise return today's trades with a note)
+
+---
+
+## UI / UX DETAILS
+
+### Table styling:
+- Dark background table (bg-card)
+- Alternating row hover effect
+- Sticky header
+- Horizontal scroll on mobile
+- All monetary values: Indian Rupee format ₹X,XX,XXX.XX (en-IN locale)
+- All times: IST format
+
+### Status badge colors (use these exact Tailwind classes):
+- TRADED: `bg-green-500/20 text-green-400 border border-green-500/30`
+- PENDING: `bg-yellow-500/20 text-yellow-400 border border-yellow-500/30`
+- TRANSIT: `bg-yellow-500/20 text-yellow-400 border border-yellow-500/30`
+- PART_TRADED: `bg-blue-500/20 text-blue-400 border border-blue-500/30`
+- REJECTED: `bg-red-500/20 text-red-400 border border-red-500/30`
+- CANCELLED: `bg-gray-500/20 text-gray-400 border border-gray-500/30`
+- EXPIRED: `bg-gray-500/20 text-gray-400 border border-gray-500/30`
+
+### BUY/SELL badge:
+- BUY: `bg-green-500/20 text-green-400`
+- SELL: `bg-red-500/20 text-red-400`
+
+### Action buttons (small, compact):
+- Modify: `variant="outline" size="sm"` with blue border
+- Cancel: `variant="outline" size="sm"` with red text and red border
+
+### Auto-refresh countdown:
+- Small text in top-right of table card: "Auto refresh in 14s"
+- Use setInterval counting down from 15 to 0, then re-fetch and reset
+
+### Loading skeleton:
+- Show 5 skeleton rows while fetching
+- Use existing Skeleton component from shadcn/ui
+
+### Error state:
+- If Dhan API returns error (broker not connected): show alert banner
+  "Broker not connected. Please connect your Dhan account in Settings."
+  with a "Go to Settings" button
+
+---
+
+## PACKAGE NEEDED
+
+Install if not already present:
+pnpm add xlsx
+pnpm add --save-dev @types/xlsx
+
+---
+
+## IMPORTANT RULES
+
+- Use existing shadcn/ui components: Table, Dialog, Badge, Button, Input, Select, Tabs, Skeleton, Popover, Tooltip
+- Keep dark terminal theme
+- TypeScript strict — no `any` types
+- All API calls use existing fetch pattern from other pages (no axios)
+- Show toast on every action success/failure
+- Modify modal must pre-fill current order values
+- Cancel must have confirmation step — no accidental cancels
+- Export must work even if 0 rows (show "No data to export" toast)
+- Do NOT use react-query for this page — use useState + useEffect + fetch directly (simpler for this page)
+- After done: pnpm run typecheck
