@@ -69,117 +69,137 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ── LIGHT THEME: Corporate slate-blue palette ─────────────────────── */
 :root,
 .light {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
+  /* Page */
+  --background: 210 28% 97%;        /* #f3f7fb — ice-blue white */
+  --foreground: 214 40% 12%;        /* #111e2e — deep navy */
 
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 217.2 91.2% 59.8%;
+  /* Borders & inputs */
+  --border: 213 22% 86%;            /* #cdd8e6 — blue-gray border */
+  --input: 213 22% 86%;
+  --ring: 214 72% 44%;              /* #1d5db5 — corporate navy blue */
 
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --card-border: 240 5.9% 90%;
+  /* Cards */
+  --card: 0 0% 100%;                /* pure white cards */
+  --card-foreground: 214 40% 12%;
+  --card-border: 213 22% 86%;
 
+  /* Popovers / dropdowns */
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --popover-border: 240 5.9% 90%;
+  --popover-foreground: 214 40% 12%;
+  --popover-border: 213 22% 86%;
 
-  --primary: 217.2 91.2% 59.8%;
+  /* Primary — corporate royal blue */
+  --primary: 214 72% 44%;           /* #1d5db5 */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
+  /* Secondary — soft blue-gray fill */
+  --secondary: 211 28% 92%;         /* #e2eaf4 */
+  --secondary-foreground: 214 35% 18%;
 
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
+  /* Muted */
+  --muted: 210 24% 95%;             /* #edf2f8 */
+  --muted-foreground: 214 18% 42%;  /* #5a7090 */
 
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
+  /* Accent */
+  --accent: 211 32% 90%;            /* #d8e5f2 */
+  --accent-foreground: 214 40% 12%;
 
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
+  /* Status */
+  --destructive: 0 78% 50%;         /* #e01f1f — sharp red */
+  --destructive-foreground: 0 0% 100%;
+  --success: 145 62% 34%;           /* #228850 — rich green */
+  --success-foreground: 0 0% 100%;
 
-  --success: 142 71% 38%;
-  --success-foreground: 0 0% 98%;
-
-  --sidebar: 240 4.8% 97%;
-  --sidebar-foreground: 240 5.9% 10%;
-  --sidebar-border: 240 5.9% 90%;
-  --sidebar-primary: 217.2 91.2% 59.8%;
+  /* Sidebar */
+  --sidebar: 213 30% 94%;           /* #e6eef7 */
+  --sidebar-foreground: 214 35% 18%;
+  --sidebar-border: 213 22% 86%;
+  --sidebar-primary: 214 72% 44%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 4.8% 93%;
-  --sidebar-accent-foreground: 240 5.9% 10%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
+  --sidebar-accent: 211 28% 90%;
+  --sidebar-accent-foreground: 214 35% 18%;
+  --sidebar-ring: 214 72% 44%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
 
-  --radius: 0.25rem;
+  --radius: 0.375rem;
 
-  --chart-1: 220 70% 50%;
-  --chart-2: 160 60% 45%;
-  --chart-3: 30 80% 55%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
+  --chart-1: 214 72% 44%;
+  --chart-2: 145 62% 34%;
+  --chart-3: 32 90% 48%;
+  --chart-4: 262 60% 52%;
+  --chart-5: 340 72% 50%;
 }
 
+/* ── DARK THEME: Bloomberg/Refinitiv terminal palette ───────────────── */
 .dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
+  /* Page — deep navy-charcoal, NOT pure black */
+  --background: 222 24% 8%;         /* #0e1420 — deep navy */
+  --foreground: 210 28% 90%;        /* #dae4ef — warm off-white */
 
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  /* Borders & inputs */
+  --border: 220 18% 20%;            /* #252f40 — blue-tinted dark border */
+  --input: 220 18% 16%;             /* #1c2435 — dark input bg */
+  --ring: 210 82% 62%;              /* #3e8ef5 — bright electric blue */
 
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --card-border: 240 3.7% 15.9%;
+  /* Cards — slightly lifted from background */
+  --card: 220 22% 11%;              /* #141c2b — card surface */
+  --card-foreground: 210 28% 90%;
+  --card-border: 220 18% 20%;
 
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border: 240 3.7% 15.9%;
+  /* Popovers */
+  --popover: 220 22% 11%;
+  --popover-foreground: 210 28% 90%;
+  --popover-border: 220 18% 20%;
 
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
+  /* Primary — electric corporate blue */
+  --primary: 210 82% 62%;           /* #3e8ef5 */
+  --primary-foreground: 222 24% 8%;
 
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
+  /* Secondary — dark blue-gray chip */
+  --secondary: 220 18% 16%;         /* #1c2435 */
+  --secondary-foreground: 210 24% 80%; /* #b8cfe0 */
 
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
+  /* Muted */
+  --muted: 220 18% 14%;             /* #18202f */
+  --muted-foreground: 213 20% 58%;  /* #7b9ab5 — readable slate-blue */
 
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
+  /* Accent */
+  --accent: 220 18% 16%;
+  --accent-foreground: 210 24% 80%;
 
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
+  /* Status — bright enough to read on dark bg */
+  --destructive: 0 72% 55%;         /* #e03a3a — vivid red */
+  --destructive-foreground: 0 0% 100%;
+  --success: 145 60% 44%;           /* #2dab63 — vivid green */
+  --success-foreground: 0 0% 100%;
 
-  --success: 142 71% 29%;
-  --success-foreground: 0 0% 98%;
-
-  --sidebar: 240 10% 5%;
-  --sidebar-foreground: 0 0% 98%;
-  --sidebar-border: 240 3.7% 15.9%;
-  --sidebar-primary: 217.2 91.2% 59.8%;
-  --sidebar-primary-foreground: 0 0% 98%;
-  --sidebar-accent: 240 3.7% 15.9%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
+  /* Sidebar — deepest layer */
+  --sidebar: 222 26% 6%;            /* #0a1019 */
+  --sidebar-foreground: 210 24% 82%;
+  --sidebar-border: 220 18% 18%;
+  --sidebar-primary: 210 82% 62%;
+  --sidebar-primary-foreground: 222 24% 8%;
+  --sidebar-accent: 220 18% 14%;
+  --sidebar-accent-foreground: 210 24% 82%;
+  --sidebar-ring: 210 82% 62%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
 
-  --radius: 0.25rem;
+  --radius: 0.375rem;
 
-  --chart-1: 220 70% 50%;
-  --chart-2: 160 60% 45%;
-  --chart-3: 30 80% 55%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
+  --chart-1: 210 82% 62%;
+  --chart-2: 145 60% 44%;
+  --chart-3: 32 85% 58%;
+  --chart-4: 262 65% 65%;
+  --chart-5: 340 72% 58%;
 }
 
 @layer base {
