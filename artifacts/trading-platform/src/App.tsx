@@ -9,13 +9,10 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Orders from "@/pages/orders";
 import Positions from "@/pages/positions";
-import Holdings from "@/pages/holdings";
 import Strategies from "@/pages/strategies";
-import Trades from "@/pages/trades";
-import TradeLogs from "@/pages/trade-logs";
-import Settings from "@/pages/settings";
 import Backtesting from "@/pages/backtesting";
 import PaperTrading from "@/pages/paper-trading";
+import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient();
 
@@ -26,12 +23,9 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/orders" component={Orders} />
         <Route path="/positions" component={Positions} />
-        <Route path="/holdings" component={Holdings} />
         <Route path="/strategies" component={Strategies} />
         <Route path="/backtesting" component={Backtesting} />
         <Route path="/paper-trading" component={PaperTrading} />
-        <Route path="/trades" component={Trades} />
-        <Route path="/trade-logs" component={TradeLogs} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

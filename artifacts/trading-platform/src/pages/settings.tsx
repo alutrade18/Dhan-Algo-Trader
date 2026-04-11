@@ -1,28 +1,16 @@
-import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import { useGetSettings } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut, RefreshCw, User } from "lucide-react";
-
-const settingsSchema = z.object({
-  defaultProductType: z.string(),
-  defaultOrderType: z.string(),
-  defaultExchange: z.string(),
-  maxOrderValue: z.coerce.number().optional(),
-  maxDailyLoss: z.coerce.number().optional(),
-  maxDailyProfit: z.coerce.number().optional(),
-  riskPerTrade: z.coerce.number().optional(),
-});
 
 const brokerSchema = z.object({
   clientId: z.string().min(1, "Client ID is required"),
@@ -49,7 +37,6 @@ interface ConnectResult extends FundDetails {
 
 export default function Settings() {
   const { data: settings, isLoading } = useGetSettings();
-  const updateSettings = useUpdateSettings();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [connectResult, setConnectResult] = useState<ConnectResult | null>(null);
@@ -75,12 +62,9 @@ export default function Settings() {
       if (result.success) {
         toast({ title: "Broker connected successfully", description: `Available balance: ₹${result.availableBalance?.toLocaleString("en-IN")}` });
         queryClient.invalidateQueries({ queryKey: ["healthz"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
       } else {
-        toast({
-          title: `Connection failed: ${result.errorCode}`,
-          description: result.errorMessage,
-          variant: "destructive",
-        });
+        toast({ title: `Connection failed: ${result.errorCode}`, description: result.errorMessage, variant: "destructive" });
       }
     },
     onError: () => {
@@ -121,50 +105,10 @@ export default function Settings() {
     onError: () => toast({ title: "Failed to refresh balance", variant: "destructive" }),
   });
 
-  const form = useForm<z.infer<typeof settingsSchema>>({
-    resolver: zodResolver(settingsSchema),
-    defaultValues: {
-      defaultProductType: "INTRA",
-      defaultOrderType: "MARKET",
-      defaultExchange: "NSE",
-      maxOrderValue: 0,
-      maxDailyLoss: 0,
-      maxDailyProfit: 0,
-      riskPerTrade: 0,
-    },
-  });
-
-  useEffect(() => {
-    if (settings) {
-      form.reset({
-        defaultProductType: settings.defaultProductType ?? "INTRA",
-        defaultOrderType: settings.defaultOrderType ?? "MARKET",
-        defaultExchange: settings.defaultExchange ?? "NSE",
-        maxOrderValue: settings.maxOrderValue ?? 0,
-        maxDailyLoss: settings.maxDailyLoss ?? 0,
-        maxDailyProfit: settings.maxDailyProfit ?? 0,
-        riskPerTrade: settings.riskPerTrade ?? 0,
-      });
-    }
-  }, [settings, form]);
-
-  const onSubmit = (values: z.infer<typeof settingsSchema>) => {
-    updateSettings.mutate({ data: values }, {
-      onSuccess: () => {
-        toast({ title: "Settings updated successfully" });
-        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
-      },
-      onError: () => {
-        toast({ title: "Failed to update settings", variant: "destructive" });
-      }
-    });
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -174,16 +118,15 @@ export default function Settings() {
   const maskedClientId = settings?.dhanClientId ?? "";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your broker connection, trading preferences and risk limits.</p>
+        <p className="text-sm text-muted-foreground">Manage your broker connection.</p>
       </div>
 
-      {/* Broker Connection Card */}
       <Card className="border-primary/20">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
                 {isConnected ? (
@@ -191,12 +134,12 @@ export default function Settings() {
                 ) : (
                   <WifiOff className="w-4 h-4 text-destructive" />
                 )}
-                Broker Connection (Dhan)
+                Broker Connection
               </CardTitle>
               <CardDescription>
                 {isConnected
                   ? `Connected as ${maskedClientId}`
-                  : "Enter your Dhan credentials to connect to live trading"}
+                  : "Enter your broker credentials to connect to live trading"}
               </CardDescription>
             </div>
             <Badge
@@ -216,7 +159,7 @@ export default function Settings() {
           >
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Dhan Client ID</label>
+                <label className="text-sm font-medium">Client ID</label>
                 <Input
                   placeholder="Enter your Client ID"
                   {...brokerForm.register("clientId")}
@@ -260,7 +203,7 @@ export default function Settings() {
 
             {connectResult?.success && (
               <div className="rounded-lg border border-success/30 bg-success/5 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-success/20 bg-success/10">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-success/20 bg-success/10 flex-wrap gap-2">
                   <div className="flex items-center gap-2 text-success">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="font-semibold text-sm">Account Connected</span>
@@ -322,166 +265,12 @@ export default function Settings() {
                 </Button>
               )}
               <p className="text-xs text-muted-foreground">
-                Credentials are stored securely in memory and validated against Dhan API.
+                Credentials are validated and stored securely.
               </p>
             </div>
           </form>
         </CardContent>
       </Card>
-
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Order Defaults</CardTitle>
-                <CardDescription>Default parameters for new orders</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="defaultProductType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Product Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select product type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="INTRA">Intraday (MIS)</SelectItem>
-                          <SelectItem value="CNC">Delivery (CNC)</SelectItem>
-                          <SelectItem value="MARGIN">Margin (NRML)</SelectItem>
-                          <SelectItem value="BO">Bracket Order (BO)</SelectItem>
-                          <SelectItem value="CO">Cover Order (CO)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="defaultOrderType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Order Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select order type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="MARKET">Market</SelectItem>
-                          <SelectItem value="LIMIT">Limit</SelectItem>
-                          <SelectItem value="SL">Stop Loss</SelectItem>
-                          <SelectItem value="SLM">Stop Loss Market</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="defaultExchange"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Exchange</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select exchange" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="NSE">NSE</SelectItem>
-                          <SelectItem value="BSE">BSE</SelectItem>
-                          <SelectItem value="MCX">MCX</SelectItem>
-                          <SelectItem value="NFO">NFO</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Risk Management</CardTitle>
-                <CardDescription>Global limits across all strategies</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="maxOrderValue"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Max Order Value (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} value={field.value ?? 0} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="maxDailyLoss"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Max Daily Loss (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} value={field.value ?? 0} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="maxDailyProfit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Max Daily Profit (₹) - Auto Pause</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} value={field.value ?? 0} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="riskPerTrade"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default Risk Per Trade (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} value={field.value ?? 0} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-          </div>
-
-          <div className="flex justify-end">
-            <Button type="submit" disabled={updateSettings.isPending}>
-              {updateSettings.isPending ? "Saving..." : "Save Settings"}
-            </Button>
-          </div>
-        </form>
-      </Form>
     </div>
   );
 }
