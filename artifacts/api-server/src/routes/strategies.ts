@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, sql, desc } from "drizzle-orm";
-import { db, strategiesTable, tradeLogsTable } from "@workspace/db";
+import { db, strategiesTable, tradeLogsTable, settingsTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
+import { sendTelegramAlert } from "../lib/telegram";
 import {
   CreateStrategyBody,
   UpdateStrategyBody,
@@ -14,24 +15,58 @@ import {
 
 const router: IRouter = Router();
 
+function serializeStrategy(s: typeof strategiesTable.$inferSelect) {
+  return {
+    ...s,
+    entryPrice: s.entryPrice ? Number(s.entryPrice) : null,
+    stopLoss: s.stopLoss ? Number(s.stopLoss) : null,
+    target: s.target ? Number(s.target) : null,
+    trailingStopLoss: s.trailingStopLoss ? Number(s.trailingStopLoss) : null,
+    maxLossPerDay: s.maxLossPerDay ? Number(s.maxLossPerDay) : null,
+    maxProfitPerDay: s.maxProfitPerDay ? Number(s.maxProfitPerDay) : null,
+    totalPnl: Number(s.totalPnl),
+  };
+}
+
 router.get("/strategies", async (_req, res): Promise<void> => {
   const strategies = await db
     .select()
     .from(strategiesTable)
     .orderBy(desc(strategiesTable.createdAt));
+  res.json(strategies.map(serializeStrategy));
+});
 
-  res.json(
-    strategies.map((s) => ({
-      ...s,
-      entryPrice: s.entryPrice ? Number(s.entryPrice) : null,
-      stopLoss: s.stopLoss ? Number(s.stopLoss) : null,
-      target: s.target ? Number(s.target) : null,
-      trailingStopLoss: s.trailingStopLoss ? Number(s.trailingStopLoss) : null,
-      maxLossPerDay: s.maxLossPerDay ? Number(s.maxLossPerDay) : null,
-      maxProfitPerDay: s.maxProfitPerDay ? Number(s.maxProfitPerDay) : null,
-      totalPnl: Number(s.totalPnl),
-    })),
-  );
+router.get("/strategies/performance", async (_req, res): Promise<void> => {
+  const strategies = await db.select().from(strategiesTable);
+  const totalStrategies = strategies.length;
+  const activeStrategies = strategies.filter((s) => s.status === "active").length;
+  const totalTrades = strategies.reduce((sum, s) => sum + s.totalTrades, 0);
+  const totalPnl = strategies.reduce((sum, s) => sum + Number(s.totalPnl), 0);
+  const totalWins = strategies.reduce((sum, s) => sum + s.winTrades, 0);
+  const overallWinRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
+  const avgPnlPerTrade = totalTrades > 0 ? totalPnl / totalTrades : 0;
+
+  let bestStrategy = "";
+  let worstStrategy = "";
+  let bestPnl = -Infinity;
+  let worstPnl = Infinity;
+
+  for (const s of strategies) {
+    const pnl = Number(s.totalPnl);
+    if (pnl > bestPnl) { bestPnl = pnl; bestStrategy = s.name; }
+    if (pnl < worstPnl) { worstPnl = pnl; worstStrategy = s.name; }
+  }
+
+  res.json({
+    totalStrategies,
+    activeStrategies,
+    totalTrades,
+    totalPnl,
+    overallWinRate: Math.round(overallWinRate * 100) / 100,
+    bestStrategy: bestStrategy || "N/A",
+    worstStrategy: worstStrategy || "N/A",
+    avgPnlPerTrade: Math.round(avgPnlPerTrade * 100) / 100,
+  });
 });
 
 router.get("/strategies/:id", async (req, res): Promise<void> => {
@@ -40,27 +75,15 @@ router.get("/strategies/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
   const [strategy] = await db
     .select()
     .from(strategiesTable)
     .where(eq(strategiesTable.id, params.data.id));
-
   if (!strategy) {
     res.status(404).json({ error: "Strategy not found" });
     return;
   }
-
-  res.json({
-    ...strategy,
-    entryPrice: strategy.entryPrice ? Number(strategy.entryPrice) : null,
-    stopLoss: strategy.stopLoss ? Number(strategy.stopLoss) : null,
-    target: strategy.target ? Number(strategy.target) : null,
-    trailingStopLoss: strategy.trailingStopLoss ? Number(strategy.trailingStopLoss) : null,
-    maxLossPerDay: strategy.maxLossPerDay ? Number(strategy.maxLossPerDay) : null,
-    maxProfitPerDay: strategy.maxProfitPerDay ? Number(strategy.maxProfitPerDay) : null,
-    totalPnl: Number(strategy.totalPnl),
-  });
+  res.json(serializeStrategy(strategy));
 });
 
 router.post("/strategies", async (req, res): Promise<void> => {
@@ -69,7 +92,6 @@ router.post("/strategies", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-
   const [strategy] = await db
     .insert(strategiesTable)
     .values({
@@ -95,17 +117,7 @@ router.post("/strategies", async (req, res): Promise<void> => {
       exitConditions: parsed.data.exitConditions,
     })
     .returning();
-
-  res.status(201).json({
-    ...strategy,
-    entryPrice: strategy.entryPrice ? Number(strategy.entryPrice) : null,
-    stopLoss: strategy.stopLoss ? Number(strategy.stopLoss) : null,
-    target: strategy.target ? Number(strategy.target) : null,
-    trailingStopLoss: strategy.trailingStopLoss ? Number(strategy.trailingStopLoss) : null,
-    maxLossPerDay: strategy.maxLossPerDay ? Number(strategy.maxLossPerDay) : null,
-    maxProfitPerDay: strategy.maxProfitPerDay ? Number(strategy.maxProfitPerDay) : null,
-    totalPnl: Number(strategy.totalPnl),
-  });
+  res.status(201).json(serializeStrategy(strategy));
 });
 
 router.patch("/strategies/:id", async (req, res): Promise<void> => {
@@ -114,13 +126,11 @@ router.patch("/strategies/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
   const parsed = UpdateStrategyBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-
   const updateData: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
@@ -149,22 +159,11 @@ router.patch("/strategies/:id", async (req, res): Promise<void> => {
     .set(updateData)
     .where(eq(strategiesTable.id, params.data.id))
     .returning();
-
   if (!strategy) {
     res.status(404).json({ error: "Strategy not found" });
     return;
   }
-
-  res.json({
-    ...strategy,
-    entryPrice: strategy.entryPrice ? Number(strategy.entryPrice) : null,
-    stopLoss: strategy.stopLoss ? Number(strategy.stopLoss) : null,
-    target: strategy.target ? Number(strategy.target) : null,
-    trailingStopLoss: strategy.trailingStopLoss ? Number(strategy.trailingStopLoss) : null,
-    maxLossPerDay: strategy.maxLossPerDay ? Number(strategy.maxLossPerDay) : null,
-    maxProfitPerDay: strategy.maxProfitPerDay ? Number(strategy.maxProfitPerDay) : null,
-    totalPnl: Number(strategy.totalPnl),
-  });
+  res.json(serializeStrategy(strategy));
 });
 
 router.delete("/strategies/:id", async (req, res): Promise<void> => {
@@ -173,17 +172,14 @@ router.delete("/strategies/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
   const [deleted] = await db
     .delete(strategiesTable)
     .where(eq(strategiesTable.id, params.data.id))
     .returning();
-
   if (!deleted) {
     res.status(404).json({ error: "Strategy not found" });
     return;
   }
-
   res.sendStatus(204);
 });
 
@@ -193,35 +189,36 @@ router.post("/strategies/:id/toggle", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
   const [existing] = await db
     .select()
     .from(strategiesTable)
     .where(eq(strategiesTable.id, params.data.id));
-
   if (!existing) {
     res.status(404).json({ error: "Strategy not found" });
     return;
   }
-
   const newStatus = existing.status === "active" ? "paused" : "active";
-
   const [strategy] = await db
     .update(strategiesTable)
     .set({ status: newStatus })
     .where(eq(strategiesTable.id, params.data.id))
     .returning();
 
-  res.json({
-    ...strategy,
-    entryPrice: strategy.entryPrice ? Number(strategy.entryPrice) : null,
-    stopLoss: strategy.stopLoss ? Number(strategy.stopLoss) : null,
-    target: strategy.target ? Number(strategy.target) : null,
-    trailingStopLoss: strategy.trailingStopLoss ? Number(strategy.trailingStopLoss) : null,
-    maxLossPerDay: strategy.maxLossPerDay ? Number(strategy.maxLossPerDay) : null,
-    maxProfitPerDay: strategy.maxProfitPerDay ? Number(strategy.maxProfitPerDay) : null,
-    totalPnl: Number(strategy.totalPnl),
-  });
+  void sendTelegramAlert(
+    `Strategy *${strategy.name}* ${newStatus === "active" ? "▶️ activated" : "⏸ paused"}`
+  );
+
+  res.json(serializeStrategy(strategy));
+});
+
+router.post("/strategies/pause-all", async (_req, res): Promise<void> => {
+  await db
+    .update(strategiesTable)
+    .set({ status: "paused" })
+    .where(eq(strategiesTable.status, "active"));
+
+  void sendTelegramAlert("⏸ *All strategies paused* by user action");
+  res.json({ success: true, message: "All strategies paused" });
 });
 
 router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
@@ -235,10 +232,43 @@ router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
     .select()
     .from(strategiesTable)
     .where(eq(strategiesTable.id, params.data.id));
-
   if (!strategy) {
     res.status(404).json({ error: "Strategy not found" });
     return;
+  }
+
+  const [settings] = await db.select().from(settingsTable);
+  if (settings?.killSwitchEnabled) {
+    void sendTelegramAlert(`🚫 Order rejected for *${strategy.tradingSymbol}*: Kill switch is active`);
+    res.status(403).json({
+      error: "Kill switch is active. Disable it in Settings to place orders.",
+    });
+    return;
+  }
+
+  if (settings?.maxDailyLoss) {
+    const maxLoss = Number(settings.maxDailyLoss);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [lossRow] = await db
+      .select({
+        totalLoss: sql<number>`coalesce(sum(case when ${tradeLogsTable.pnl}::numeric < 0 then ${tradeLogsTable.pnl}::numeric else 0 end), 0)::float`,
+      })
+      .from(tradeLogsTable)
+      .where(sql`${tradeLogsTable.executedAt} >= ${today.toISOString()}`);
+
+    const todayLoss = Math.abs(lossRow?.totalLoss ?? 0);
+    if (todayLoss >= maxLoss) {
+      void sendTelegramAlert(
+        `🚫 Daily loss limit ₹${maxLoss} reached (today's loss: ₹${todayLoss.toFixed(2)}). Order rejected for *${strategy.tradingSymbol}*`
+      );
+      res.status(403).json({
+        error: `Daily loss limit of ₹${maxLoss} reached. Trading halted for today.`,
+        limitReached: true,
+      });
+      return;
+    }
   }
 
   try {
@@ -270,10 +300,12 @@ router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
 
     await db
       .update(strategiesTable)
-      .set({
-        totalTrades: sql`${strategiesTable.totalTrades} + 1`,
-      })
+      .set({ totalTrades: sql`${strategiesTable.totalTrades} + 1` })
       .where(eq(strategiesTable.id, strategy.id));
+
+    void sendTelegramAlert(
+      `✅ Order placed\nSymbol: *${strategy.tradingSymbol}*\nSide: ${strategy.transactionType}\nQty: ${strategy.quantity}\nOrder ID: ${orderId}`
+    );
 
     res.json({
       strategyId: strategy.id,
@@ -303,6 +335,10 @@ router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
       })
       .where(eq(strategiesTable.id, strategy.id));
 
+    void sendTelegramAlert(
+      `❌ Order failed\nSymbol: *${strategy.tradingSymbol}*\nError: ${String(e)}`
+    );
+
     req.log.error({ err: e }, "Strategy execution failed");
     res.json({
       strategyId: strategy.id,
@@ -312,46 +348,6 @@ router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
       executedAt: new Date().toISOString(),
     });
   }
-});
-
-router.get("/strategies/performance", async (_req, res): Promise<void> => {
-  const strategies = await db.select().from(strategiesTable);
-
-  const totalStrategies = strategies.length;
-  const activeStrategies = strategies.filter((s) => s.status === "active").length;
-  const totalTrades = strategies.reduce((sum, s) => sum + s.totalTrades, 0);
-  const totalPnl = strategies.reduce((sum, s) => sum + Number(s.totalPnl), 0);
-  const totalWins = strategies.reduce((sum, s) => sum + s.winTrades, 0);
-  const overallWinRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
-  const avgPnlPerTrade = totalTrades > 0 ? totalPnl / totalTrades : 0;
-
-  let bestStrategy = "";
-  let worstStrategy = "";
-  let bestPnl = -Infinity;
-  let worstPnl = Infinity;
-
-  for (const s of strategies) {
-    const pnl = Number(s.totalPnl);
-    if (pnl > bestPnl) {
-      bestPnl = pnl;
-      bestStrategy = s.name;
-    }
-    if (pnl < worstPnl) {
-      worstPnl = pnl;
-      worstStrategy = s.name;
-    }
-  }
-
-  res.json({
-    totalStrategies,
-    activeStrategies,
-    totalTrades,
-    totalPnl,
-    overallWinRate: Math.round(overallWinRate * 100) / 100,
-    bestStrategy: bestStrategy || "N/A",
-    worstStrategy: worstStrategy || "N/A",
-    avgPnlPerTrade: Math.round(avgPnlPerTrade * 100) / 100,
-  });
 });
 
 export default router;

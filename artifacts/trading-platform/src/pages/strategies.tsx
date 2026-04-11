@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { 
-  useGetStrategies, 
-  useToggleStrategy, 
-  useExecuteStrategy, 
-  useDeleteStrategy, 
+import {
+  useGetStrategies,
+  useToggleStrategy,
+  useExecuteStrategy,
+  useDeleteStrategy,
   useCreateStrategy,
   useUpdateStrategy,
   useGetStrategyPerformance,
-  getGetStrategiesQueryKey 
+  getGetStrategiesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -17,18 +17,129 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Strategy, CreateStrategyBodyType, StrategyStatus } from "@workspace/api-zod/src/generated/types";
-import { Play, Pause, Trash2, Zap, Plus, Settings2, BarChart } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Strategy } from "@workspace/api-zod/src/generated/types";
+import {
+  Play, Pause, Trash2, Zap, Plus, Settings2, X, PlusCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-const formatCurrency = (val?: number) => val !== undefined ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val) : '₹0.00';
+const formatCurrency = (val?: number) =>
+  val !== undefined
+    ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(val)
+    : "₹0";
+
+const INDICATORS = ["RSI", "EMA", "SMA", "MACD", "Price", "Volume", "BB_Upper", "BB_Lower", "VWAP"];
+const COMPARATORS = [
+  { value: "<", label: "<" },
+  { value: ">", label: ">" },
+  { value: "=", label: "=" },
+  { value: "crosses_above", label: "Crosses Above" },
+  { value: "crosses_below", label: "Crosses Below" },
+];
+
+interface Condition {
+  indicator: string;
+  comparator: string;
+  value: string;
+  period?: string;
+}
+
+function ConditionBuilder({
+  label,
+  conditions,
+  onChange,
+}: {
+  label: string;
+  conditions: Condition[];
+  onChange: (c: Condition[]) => void;
+}) {
+  const add = () =>
+    onChange([...conditions, { indicator: "RSI", comparator: "<", value: "30", period: "14" }]);
+  const remove = (i: number) => onChange(conditions.filter((_, idx) => idx !== i));
+  const update = (i: number, field: keyof Condition, val: string) => {
+    const next = [...conditions];
+    next[i] = { ...next[i], [field]: val };
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <Button type="button" variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={add}>
+          <PlusCircle className="h-3 w-3" /> Add
+        </Button>
+      </div>
+      {conditions.length === 0 && (
+        <p className="text-[11px] text-muted-foreground bg-muted/40 rounded px-3 py-2">
+          No conditions — strategy fires on schedule/manual execute
+        </p>
+      )}
+      {conditions.map((c, i) => (
+        <div key={i} className="flex gap-2 items-center bg-muted/40 rounded-md px-3 py-2">
+          <Select value={c.indicator} onValueChange={v => update(i, "indicator", v)}>
+            <SelectTrigger className="h-7 text-xs w-[90px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{INDICATORS.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}</SelectContent>
+          </Select>
+          {(c.indicator !== "Price" && c.indicator !== "Volume") && (
+            <Input
+              className="h-7 text-xs w-[52px]"
+              placeholder="Period"
+              value={c.period ?? "14"}
+              onChange={e => update(i, "period", e.target.value)}
+            />
+          )}
+          <Select value={c.comparator} onValueChange={v => update(i, "comparator", v)}>
+            <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{COMPARATORS.map(op => <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input
+            className="h-7 text-xs w-[70px]"
+            placeholder="Value"
+            value={c.value}
+            onChange={e => update(i, "value", e.target.value)}
+          />
+          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => remove(i)}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function parseConditions(raw?: string | null): Condition[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderConditions(raw?: string | null): string {
+  const conditions = parseConditions(raw);
+  if (!conditions.length) return "—";
+  return conditions
+    .map(c => {
+      const indStr = c.period ? `${c.indicator}(${c.period})` : c.indicator;
+      return `${indStr} ${c.comparator} ${c.value}`;
+    })
+    .join(", ");
+}
 
 const strategySchema = z.object({
   name: z.string().min(1, "Required"),
@@ -49,8 +160,6 @@ const strategySchema = z.object({
   maxLossPerDay: z.coerce.number().optional(),
   maxProfitPerDay: z.coerce.number().optional(),
   timeframeMinutes: z.coerce.number().optional(),
-  entryConditions: z.string().optional(),
-  exitConditions: z.string().optional(),
 });
 
 export default function Strategies() {
@@ -63,9 +172,11 @@ export default function Strategies() {
   const updateStrategy = useUpdateStrategy();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [entryConditions, setEntryConditions] = useState<Condition[]>([]);
+  const [exitConditions, setExitConditions] = useState<Condition[]>([]);
 
   const form = useForm<z.infer<typeof strategySchema>>({
     resolver: zodResolver(strategySchema),
@@ -80,71 +191,99 @@ export default function Strategies() {
   });
 
   const handleToggle = (id: number) => {
-    toggleStrategy.mutate({ id }, {
-      onSuccess: () => {
-        toast({ title: "Strategy status updated" });
-        queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() });
-      }
-    });
+    toggleStrategy.mutate(
+      { id },
+      {
+        onSuccess: (data) => {
+          toast({ title: `Strategy ${(data as { status?: string }).status === "active" ? "activated" : "paused"}` });
+          queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() });
+        },
+      },
+    );
   };
 
   const handleExecute = (id: number) => {
-    executeStrategy.mutate({ id }, {
-      onSuccess: () => {
-        toast({ title: "Strategy execution triggered" });
+    executeStrategy.mutate(
+      { id },
+      {
+        onSuccess: (data) => {
+          const d = data as { status?: string; message?: string };
+          if (d.status === "success") {
+            toast({ title: "Order placed", description: d.message });
+          } else {
+            toast({ title: "Execution failed", description: d.message, variant: "destructive" });
+          }
+        },
+        onError: (err) => {
+          toast({ title: "Execution failed", description: String(err), variant: "destructive" });
+        },
       },
-      onError: () => {
-        toast({ title: "Execution failed", variant: "destructive" });
-      }
-    });
+    );
   };
 
   const onSubmit = (values: z.infer<typeof strategySchema>) => {
+    const data = {
+      ...values,
+      entryConditions: JSON.stringify(entryConditions),
+      exitConditions: JSON.stringify(exitConditions),
+    };
+
     if (editingId) {
-      updateStrategy.mutate({ id: editingId, data: values }, {
-        onSuccess: () => {
-          toast({ title: "Strategy updated successfully" });
-          setDialogOpen(false);
-          setEditingId(null);
-          form.reset();
-          queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() });
-        }
-      });
+      updateStrategy.mutate(
+        { id: editingId, data: data as Parameters<typeof updateStrategy.mutate>[0]["data"] },
+        {
+          onSuccess: () => {
+            toast({ title: "Strategy updated" });
+            closeDialog();
+            queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() });
+          },
+        },
+      );
     } else {
-      createStrategy.mutate({ data: values as any }, {
-        onSuccess: () => {
-          toast({ title: "Strategy created successfully" });
-          setDialogOpen(false);
-          form.reset();
-          queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() });
-        }
-      });
+      createStrategy.mutate(
+        { data: data as Parameters<typeof createStrategy.mutate>[0]["data"] },
+        {
+          onSuccess: () => {
+            toast({ title: "Strategy created" });
+            closeDialog();
+            queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() });
+          },
+        },
+      );
     }
   };
 
-  const openEditDialog = (strategy: Strategy) => {
-    setEditingId(strategy.id);
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingId(null);
+    setEntryConditions([]);
+    setExitConditions([]);
+    form.reset();
+  };
+
+  const openEditDialog = (s: Strategy) => {
+    setEditingId(s.id);
+    setEntryConditions(parseConditions(s.entryConditions));
+    setExitConditions(parseConditions(s.exitConditions));
     form.reset({
-      name: strategy.name,
-      description: strategy.description || "",
-      type: strategy.type as "scalping" | "swing" | "positional" | "options" | "custom",
-      securityId: strategy.securityId,
-      tradingSymbol: strategy.tradingSymbol,
-      exchangeSegment: strategy.exchangeSegment,
-      transactionType: strategy.transactionType as "BUY" | "SELL",
-      productType: strategy.productType as "INTRA" | "CNC" | "MARGIN" | "CO" | "BO",
-      orderType: strategy.orderType as "MARKET" | "LIMIT" | "SL" | "SLM",
-      quantity: strategy.quantity,
-      entryPrice: strategy.entryPrice,
-      stopLoss: strategy.stopLoss,
-      target: strategy.target,
-      trailingStopLoss: strategy.trailingStopLoss,
-      maxPositions: strategy.maxPositions,
-      maxLossPerDay: strategy.maxLossPerDay,
-      maxProfitPerDay: strategy.maxProfitPerDay,
-      timeframeMinutes: strategy.timeframeMinutes,
-      entryConditions: strategy.entryConditions,
-      exitConditions: strategy.exitConditions,
+      name: s.name,
+      description: s.description || "",
+      type: s.type as "scalping" | "swing" | "positional" | "options" | "custom",
+      securityId: s.securityId,
+      tradingSymbol: s.tradingSymbol,
+      exchangeSegment: s.exchangeSegment,
+      transactionType: s.transactionType as "BUY" | "SELL",
+      productType: s.productType as "INTRA" | "CNC" | "MARGIN" | "CO" | "BO",
+      orderType: s.orderType as "MARKET" | "LIMIT" | "SL" | "SLM",
+      quantity: s.quantity,
+      entryPrice: s.entryPrice ?? undefined,
+      stopLoss: s.stopLoss ?? undefined,
+      target: s.target ?? undefined,
+      trailingStopLoss: s.trailingStopLoss ?? undefined,
+      maxPositions: s.maxPositions ?? undefined,
+      maxLossPerDay: s.maxLossPerDay ?? undefined,
+      maxProfitPerDay: s.maxProfitPerDay ?? undefined,
+      timeframeMinutes: s.timeframeMinutes ?? undefined,
     });
     setDialogOpen(true);
   };
@@ -152,16 +291,13 @@ export default function Strategies() {
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
-        <Dialog open={dialogOpen} onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) { setEditingId(null); form.reset(); }
-        }}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-2" /> Create Strategy</Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[720px] max-h-[88vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingId ? 'Edit Strategy' : 'Create New Strategy'}</DialogTitle>
+              <DialogTitle>{editingId ? "Edit Strategy" : "Create New Strategy"}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -171,7 +307,7 @@ export default function Strategies() {
                   )} />
                   <FormField control={form.control} name="type" render={({ field }) => (
                     <FormItem><FormLabel>Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="scalping">Scalping</SelectItem>
@@ -180,12 +316,11 @@ export default function Strategies() {
                           <SelectItem value="options">Options</SelectItem>
                           <SelectItem value="custom">Custom</SelectItem>
                         </SelectContent>
-                      </Select>
-                      <FormMessage />
+                      </Select><FormMessage />
                     </FormItem>
                   )} />
                 </div>
-                
+
                 <div className="grid grid-cols-3 gap-4">
                   <FormField control={form.control} name="tradingSymbol" render={({ field }) => (
                     <FormItem><FormLabel>Symbol</FormLabel><FormControl><Input {...field} placeholder="NIFTY-I" /></FormControl><FormMessage /></FormItem>
@@ -195,7 +330,7 @@ export default function Strategies() {
                   )} />
                   <FormField control={form.control} name="exchangeSegment" render={({ field }) => (
                     <FormItem><FormLabel>Exchange</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="NSE">NSE</SelectItem>
@@ -203,8 +338,7 @@ export default function Strategies() {
                           <SelectItem value="NFO">NFO</SelectItem>
                           <SelectItem value="MCX">MCX</SelectItem>
                         </SelectContent>
-                      </Select>
-                      <FormMessage />
+                      </Select><FormMessage />
                     </FormItem>
                   )} />
                 </div>
@@ -212,69 +346,72 @@ export default function Strategies() {
                 <div className="grid grid-cols-4 gap-4">
                   <FormField control={form.control} name="transactionType" render={({ field }) => (
                     <FormItem><FormLabel>Action</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="BUY">BUY</SelectItem>
                           <SelectItem value="SELL">SELL</SelectItem>
                         </SelectContent>
-                      </Select>
-                      <FormMessage />
+                      </Select><FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="productType" render={({ field }) => (
                     <FormItem><FormLabel>Product</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="INTRA">INTRA</SelectItem>
                           <SelectItem value="CNC">CNC</SelectItem>
                           <SelectItem value="MARGIN">MARGIN</SelectItem>
                         </SelectContent>
-                      </Select>
-                      <FormMessage />
+                      </Select><FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="orderType" render={({ field }) => (
-                    <FormItem><FormLabel>Order</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormItem><FormLabel>Order Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
-                          <SelectItem value="MARKET">MKT</SelectItem>
-                          <SelectItem value="LIMIT">LMT</SelectItem>
+                          <SelectItem value="MARKET">MARKET</SelectItem>
+                          <SelectItem value="LIMIT">LIMIT</SelectItem>
                           <SelectItem value="SL">SL</SelectItem>
                         </SelectContent>
-                      </Select>
-                      <FormMessage />
+                      </Select><FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="quantity" render={({ field }) => (
-                    <FormItem><FormLabel>Quantity</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Qty</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
+                  <FormField control={form.control} name="entryPrice" render={({ field }) => (
+                    <FormItem><FormLabel>Entry Price</FormLabel><FormControl><Input type="number" step="0.05" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
                   <FormField control={form.control} name="stopLoss" render={({ field }) => (
-                    <FormItem><FormLabel>Stop Loss (%)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Stop Loss %</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="target" render={({ field }) => (
-                    <FormItem><FormLabel>Target (%)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="trailingStopLoss" render={({ field }) => (
-                    <FormItem><FormLabel>Trailing SL (%)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Target %</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
 
-                <FormField control={form.control} name="entryConditions" render={({ field }) => (
-                  <FormItem><FormLabel>Entry Conditions (JSON/Logic)</FormLabel><FormControl><Textarea className="h-20 font-mono text-xs" placeholder='{"indicator": "RSI", "operator": "<", "value": 30}' {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                
-                <FormField control={form.control} name="exitConditions" render={({ field }) => (
-                  <FormItem><FormLabel>Exit Conditions (JSON/Logic)</FormLabel><FormControl><Textarea className="h-20 font-mono text-xs" placeholder='{"indicator": "RSI", "operator": ">", "value": 70}' {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
+                <div className="space-y-3 border border-border rounded-md p-3">
+                  <p className="text-xs font-semibold text-foreground">Condition Builder</p>
+                  <ConditionBuilder
+                    label="Entry Conditions (ALL must be true to trigger BUY/SELL)"
+                    conditions={entryConditions}
+                    onChange={setEntryConditions}
+                  />
+                  <ConditionBuilder
+                    label="Exit Conditions (ANY triggers position close)"
+                    conditions={exitConditions}
+                    onChange={setExitConditions}
+                  />
+                </div>
 
-                <DialogFooter className="pt-4">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
                   <Button type="submit" disabled={createStrategy.isPending || updateStrategy.isPending}>
                     {editingId ? "Update Strategy" : "Create Strategy"}
                   </Button>
@@ -287,42 +424,23 @@ export default function Strategies() {
 
       {performance && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Overall P&L</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={cn("text-2xl font-bold font-mono", performance.totalPnl >= 0 ? "text-success" : "text-destructive")}>
-                {formatCurrency(performance.totalPnl)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold font-mono">{performance.overallWinRate.toFixed(1)}%</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Trades</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold font-mono">{performance.totalTrades}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Avg P&L / Trade</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={cn("text-2xl font-bold font-mono", performance.avgPnlPerTrade >= 0 ? "text-success" : "text-destructive")}>
-                {formatCurrency(performance.avgPnlPerTrade)}
-              </div>
-            </CardContent>
-          </Card>
+          {[
+            { label: "Overall P&L", value: formatCurrency(performance.totalPnl), colored: true, val: performance.totalPnl },
+            { label: "Win Rate", value: `${performance.overallWinRate.toFixed(1)}%`, colored: false, val: 0 },
+            { label: "Total Trades", value: String(performance.totalTrades), colored: false, val: 0 },
+            { label: "Avg P&L / Trade", value: formatCurrency(performance.avgPnlPerTrade), colored: true, val: performance.avgPnlPerTrade },
+          ].map(stat => (
+            <Card key={stat.label}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={cn("text-2xl font-bold font-mono", stat.colored && (stat.val >= 0 ? "text-success" : "text-destructive"))}>
+                  {stat.value}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -332,7 +450,7 @@ export default function Strategies() {
             <TableRow>
               <TableHead>Name / Symbol</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>Config</TableHead>
+              <TableHead>Conditions</TableHead>
               <TableHead className="text-right">Performance</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -340,14 +458,11 @@ export default function Strategies() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
+              Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell><Skeleton className="h-8 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-8 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
+                  {Array.from({ length: 6 }).map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-7 w-full" /></TableCell>
+                  ))}
                 </TableRow>
               ))
             ) : strategies && strategies.length > 0 ? (
@@ -360,57 +475,74 @@ export default function Strategies() {
                         <Settings2 className="h-3 w-3" />
                       </Button>
                     </div>
-                    <div className="font-mono text-xs text-muted-foreground mt-1">{s.tradingSymbol} • {s.exchangeSegment}</div>
+                    <div className="font-mono text-xs text-muted-foreground mt-0.5">
+                      {s.tradingSymbol} · {s.exchangeSegment} · {s.transactionType} {s.orderType} {s.quantity}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="capitalize text-[10px]">{s.type}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    <div>{s.quantity} Qty • {s.transactionType} {s.orderType}</div>
-                    <div className="mt-1">SL: {s.stopLoss ? `${s.stopLoss}%` : 'None'} • TG: {s.target ? `${s.target}%` : 'None'}</div>
+                  <TableCell className="text-xs text-muted-foreground max-w-[220px]">
+                    {(s.entryConditions || s.exitConditions) ? (
+                      <div className="space-y-0.5">
+                        {s.entryConditions && parseConditions(s.entryConditions).length > 0 && (
+                          <div className="truncate"><span className="text-success font-medium">Entry:</span> {renderConditions(s.entryConditions)}</div>
+                        )}
+                        {s.exitConditions && parseConditions(s.exitConditions).length > 0 && (
+                          <div className="truncate"><span className="text-destructive font-medium">Exit:</span> {renderConditions(s.exitConditions)}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground/50">No conditions</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className={cn("font-mono font-medium text-sm", (s.totalPnl || 0) >= 0 ? "text-success" : "text-destructive")}>
-                      {formatCurrency(s.totalPnl)}
+                    <div className={cn("font-mono font-medium text-sm", (s.totalPnl ?? 0) >= 0 ? "text-success" : "text-destructive")}>
+                      {formatCurrency(s.totalPnl ?? 0)}
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-1">
-                      W: {s.winTrades || 0} / L: {s.lossTrades || 0}
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      W: {s.winTrades ?? 0} / L: {s.lossTrades ?? 0}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge 
-                      variant={s.status === 'active' ? 'default' : s.status === 'paused' ? 'secondary' : 'destructive'} 
-                      className={cn("text-[10px] capitalize", s.status === 'active' && "bg-success hover:bg-success/90 text-success-foreground")}
+                    <Badge
+                      variant={s.status === "active" ? "default" : s.status === "paused" ? "secondary" : "destructive"}
+                      className={cn("text-[10px] capitalize", s.status === "active" && "bg-success hover:bg-success/90 text-success-foreground")}
                     >
                       {s.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
                         size="icon"
-                        className="h-8 w-8 hover:text-success hover:bg-success/10"
+                        className="h-7 w-7 hover:text-success hover:bg-success/10"
+                        title="Execute Now"
                         onClick={() => handleExecute(s.id)}
-                        disabled={s.status !== 'active'}
                       >
-                        <Zap className="h-4 w-4" />
+                        <Zap className="h-3.5 w-3.5" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground"
+                        className="h-7 w-7 text-muted-foreground"
                         onClick={() => handleToggle(s.id)}
                       >
-                        {s.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        {s.status === "active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => deleteStrategy.mutate({ id: s.id }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() }) })}
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() =>
+                          deleteStrategy.mutate(
+                            { id: s.id },
+                            { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetStrategiesQueryKey() }) },
+                          )
+                        }
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>
@@ -418,8 +550,8 @@ export default function Strategies() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No strategies configured
+                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                  No strategies — click "Create Strategy" to get started
                 </TableCell>
               </TableRow>
             )}

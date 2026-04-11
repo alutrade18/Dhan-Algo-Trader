@@ -1,0 +1,106 @@
+You are continuing development of the Dhan Algo Trading Platform (pnpm monorepo).
+Current stack: React + Vite frontend, Express 5 backend, PostgreSQL + Drizzle ORM, Dhan broker API.
+
+The following pages/features exist but are INCOMPLETE or need real functionality:
+
+---
+
+## TASK 1: Strategy Builder — Make it actually work
+File: artifacts/trading-platform/src/pages/strategies.tsx
+Currently the strategy form exists but conditions are not saved properly.
+
+- Add condition builder UI: user can add multiple entry conditions (e.g. RSI < 30, Price > EMA20)
+- Each condition should have: indicator, comparator (< > = crosses), value/indicator2
+- Save these conditions as JSON in the strategies DB table (conditions column)
+- Show saved conditions on strategy card in a readable format
+- Add "Execute Now" button that calls POST /api/strategies/:id/execute
+
+---
+
+## TASK 2: Backtesting — Connect to real historical data
+File: artifacts/trading-platform/src/pages/backtesting.tsx
+
+Currently the backtesting page has UI but no real data flowing.
+
+- On "Run Backtest" click, call POST /api/market/historical with user-selected symbol, from/to date, interval
+- Show returned candle data as a chart (use recharts or lightweight-charts)
+- Apply the selected strategy's entry/exit conditions on the candle data IN FRONTEND (simulate)
+- Calculate and display: Total Trades, Win Rate, Total P&L, Max Drawdown, Sharpe Ratio
+- Show a trade log table of each simulated trade (entry time, exit time, P&L)
+
+---
+
+## TASK 3: Paper Trading — Live P&L with real prices
+File: artifacts/trading-platform/src/pages/paper-trading.tsx
+
+- Add a symbol search/select at the top (call GET /api/market/securities to get list)
+- On selecting a symbol, call POST /api/market/quote every 5 seconds to get live LTP
+- Show live price updating in real time
+- "Buy" / "Sell" buttons to place dummy paper trades (store in local state or new paper_trades DB table)
+- Show running P&L based on live price vs. entry price
+- Show open positions table with: Symbol, Entry Price, Qty, Current Price, P&L (live updating)
+- Show closed trades table with final P&L
+
+---
+
+## TASK 4: Risk Management — Auto Kill Switch
+Add to backend: artifacts/api-server/src/routes/strategies.ts
+
+- In the execute strategy endpoint, before placing order, check:
+  1. Total realized P&L today from trade_logs
+  2. If loss exceeds settings.maxDailyLoss → reject order, return error "Daily loss limit reached"
+- Add to Settings page: maxDailyLoss field (₹ amount), defaulted to ₹5000
+- Show a red banner on Dashboard if kill switch is triggered
+
+---
+
+## TASK 5: Telegram Alerts
+Add to backend: new file artifacts/api-server/src/lib/telegram.ts
+
+- Use node-telegram-bot-api package
+- Send alert when: order placed, order failed, daily loss limit hit, strategy toggled
+- Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to env vars
+- Add Telegram settings fields in Settings page and DB settings table
+
+---
+
+## TASK 6: Dashboard — Make it show real data
+File: artifacts/trading-platform/src/pages/dashboard.tsx
+
+- Today's P&L: already connected, make sure it shows realized + unrealized combined
+- Add a mini equity curve chart showing P&L over last 7 days (from trade_logs table)
+- Add "Active Strategies" count card
+- Add "Recent Alerts" section showing last 5 trade_logs entries
+- Add quick action buttons: "Pause All Strategies", "Emergency Stop All"
+
+---
+
+## DB Changes needed
+Run these schema additions in lib/db/src/schema/:
+
+1. Add to strategies table:
+   - conditions: jsonb (entry/exit condition array)
+   - maxLossPerTrade: integer (in rupees)
+
+2. Create new table: paper_trades
+   - id, symbol, securityId, exchange, entryPrice, exitPrice, qty, side (BUY/SELL), status (OPEN/CLOSED), entryTime, exitTime, pnl
+
+3. Add to settings table:
+   - maxDailyLoss: integer (default 5000)
+   - telegramBotToken: text
+   - telegramChatId: text
+   - killSwitchEnabled: boolean (default false)
+
+After schema changes run: pnpm --filter @workspace/db run push
+
+---
+
+## IMPORTANT RULES
+- Keep existing code structure — same monorepo, same file locations
+- Use existing UI components from src/components/ui/
+- All new API routes go in artifacts/api-server/src/routes/
+- All new DB tables go in lib/db/src/schema/
+- Run codegen after API spec changes: pnpm --filter @workspace/api-spec run codegen
+- Dark mode terminal theme must be maintained
+- Show loading skeletons while data is fetching
+- Show toast notifications for all actions (success/error)

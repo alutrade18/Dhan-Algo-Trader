@@ -1,468 +1,467 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  PlayCircle, PauseCircle, RefreshCw, TrendingUp, TrendingDown,
-  Activity, Wallet, ShieldAlert, ArrowUpRight, ArrowDownRight, Plus, X
+  TrendingUp, TrendingDown, Activity, Wallet, RefreshCw, X, ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-interface VirtualPosition {
-  id: string;
-  symbol: string;
-  side: "BUY" | "SELL";
-  qty: number;
-  entryPrice: number;
-  currentPrice: number;
-  pnl: number;
-  pnlPct: number;
-  openTime: string;
-  exchange: string;
-}
+const BASE = import.meta.env.BASE_URL;
+
+const COMMON_SYMBOLS = [
+  { label: "NIFTY 50", securityId: "13", exchange: "IDX_I", basePrice: 22500 },
+  { label: "BANK NIFTY", securityId: "25", exchange: "IDX_I", basePrice: 47800 },
+  { label: "RELIANCE", securityId: "1333", exchange: "NSE_EQ", basePrice: 2890 },
+  { label: "TCS", securityId: "11536", exchange: "NSE_EQ", basePrice: 3720 },
+  { label: "HDFC Bank", securityId: "1330", exchange: "NSE_EQ", basePrice: 1710 },
+  { label: "INFY", securityId: "10999", exchange: "NSE_EQ", basePrice: 1540 },
+  { label: "ICICI Bank", securityId: "4963", exchange: "NSE_EQ", basePrice: 1180 },
+  { label: "SBIN", securityId: "3045", exchange: "NSE_EQ", basePrice: 820 },
+];
 
 interface PaperTrade {
-  id: string;
+  id: number;
   symbol: string;
-  side: "BUY" | "SELL";
+  securityId: string;
+  exchange: string;
+  side: string;
   qty: number;
-  price: number;
-  pnl: number;
-  closedAt: string;
-  result: "WIN" | "LOSS";
-}
-
-const SYMBOLS: Record<string, { base: number; volatility: number }> = {
-  "NIFTY": { base: 22500, volatility: 0.003 },
-  "BANKNIFTY": { base: 47800, volatility: 0.004 },
-  "RELIANCE": { base: 2890, volatility: 0.005 },
-  "TCS": { base: 3720, volatility: 0.004 },
-  "HDFC": { base: 1710, volatility: 0.006 },
-  "INFY": { base: 1540, volatility: 0.005 },
-  "ICICIBANK": { base: 1180, volatility: 0.006 },
-  "SBIN": { base: 820, volatility: 0.007 },
-};
-
-const INITIAL_CAPITAL = 1000000;
-
-function simulatePrice(base: number, volatility: number): number {
-  const change = (Math.random() - 0.48) * volatility;
-  return Math.round(base * (1 + change) * 100) / 100;
+  entryPrice: number;
+  exitPrice: number | null;
+  pnl: number | null;
+  status: string;
+  entryTime: string;
+  exitTime: string | null;
 }
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(val);
 }
 
+function simPrice(base: number): number {
+  const change = (Math.random() - 0.48) * 0.003;
+  return Math.round(base * (1 + change) * 100) / 100;
+}
+
 export default function PaperTrading() {
   const { toast } = useToast();
-  const [isActive, setIsActive] = useState(false);
-  const [capital, setCapital] = useState(INITIAL_CAPITAL);
-  const [usedMargin, setUsedMargin] = useState(0);
-  const [positions, setPositions] = useState<VirtualPosition[]>([]);
-  const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
-  const [prices, setPrices] = useState<Record<string, number>>(() =>
-    Object.fromEntries(Object.entries(SYMBOLS).map(([k, v]) => [k, v.base]))
-  );
+  const queryClient = useQueryClient();
 
-  const [orderSymbol, setOrderSymbol] = useState("NIFTY");
+  const [selectedSymbolId, setSelectedSymbolId] = useState(COMMON_SYMBOLS[0].securityId);
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [orderQty, setOrderQty] = useState(1);
-  const [orderExchange, setOrderExchange] = useState("NSE_FNO");
+  const [livePrices, setLivePrices] = useState<Record<string, number>>(() =>
+    Object.fromEntries(COMMON_SYMBOLS.map(s => [s.securityId, s.basePrice]))
+  );
+  const priceRef = useRef(livePrices);
+  priceRef.current = livePrices;
 
-  const totalPnl = positions.reduce((sum, p) => sum + p.pnl, 0);
-  const closedPnl = tradeHistory.reduce((sum, t) => sum + t.pnl, 0);
-  const totalEquity = capital + totalPnl;
+  const selectedSymbol = COMMON_SYMBOLS.find(s => s.securityId === selectedSymbolId)!;
 
-  const updatePrices = useCallback(() => {
-    setPrices(prev => {
-      const next = { ...prev };
-      Object.entries(SYMBOLS).forEach(([sym, cfg]) => {
-        next[sym] = simulatePrice(prev[sym] || cfg.base, cfg.volatility);
+  const { data: trades, isLoading } = useQuery<PaperTrade[]>({
+    queryKey: ["paper-trades"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/paper-trades`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const openTrades = trades?.filter(t => t.status === "OPEN") ?? [];
+  const closedTrades = trades?.filter(t => t.status === "CLOSED") ?? [];
+
+  const fetchSelectedPrice = useCallback(async () => {
+    const sym = COMMON_SYMBOLS.find(s => s.securityId === selectedSymbolId);
+    if (!sym) return;
+    try {
+      const exchange = sym.exchange.includes("IDX") ? "IDX_I" : "NSE_EQ";
+      const res = await fetch(`${BASE}api/market/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          securities: { [exchange]: [sym.securityId] },
+          quoteType: "LTP",
+        }),
       });
-      return next;
-    });
-  }, []);
+      if (res.ok) {
+        const data = await res.json() as { data?: Record<string, Record<string, { ltp?: number }>> };
+        const exchange_data = data.data && data.data[exchange];
+        const ltp = exchange_data && exchange_data[sym.securityId]?.ltp;
+        if (ltp && ltp > 0) {
+          setLivePrices(prev => ({ ...prev, [sym.securityId]: ltp }));
+          return;
+        }
+      }
+    } catch {
+      // fall through
+    }
+    setLivePrices(prev => ({
+      ...prev,
+      [sym.securityId]: simPrice(prev[sym.securityId] ?? sym.basePrice),
+    }));
+  }, [selectedSymbolId]);
 
   useEffect(() => {
-    if (!isActive) return;
-    const interval = setInterval(() => {
-      updatePrices();
-      setPositions(prev => prev.map(pos => {
-        const current = prices[pos.symbol] || pos.currentPrice;
-        const pnl = pos.side === "BUY"
-          ? (current - pos.entryPrice) * pos.qty
-          : (pos.entryPrice - current) * pos.qty;
-        return { ...pos, currentPrice: current, pnl: Math.round(pnl * 100) / 100, pnlPct: Math.round((pnl / (pos.entryPrice * pos.qty)) * 10000) / 100 };
-      }));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [isActive, prices, updatePrices]);
-
-  const placeOrder = () => {
-    const price = prices[orderSymbol] || SYMBOLS[orderSymbol]?.base || 100;
-    const required = price * orderQty;
-    if (required > capital) {
-      toast({ title: "Insufficient margin", description: `Required: ${formatCurrency(required)}`, variant: "destructive" });
-      return;
-    }
-
-    const newPos: VirtualPosition = {
-      id: `PT-${Date.now()}`,
-      symbol: orderSymbol,
-      side: orderSide,
-      qty: orderQty,
-      entryPrice: price,
-      currentPrice: price,
-      pnl: 0,
-      pnlPct: 0,
-      openTime: new Date().toLocaleTimeString("en-IN"),
-      exchange: orderExchange,
+    const simulateAll = () => {
+      setLivePrices(prev => {
+        const next = { ...prev };
+        COMMON_SYMBOLS.forEach(s => {
+          if (s.securityId !== selectedSymbolId) {
+            next[s.securityId] = simPrice(prev[s.securityId] ?? s.basePrice);
+          }
+        });
+        return next;
+      });
     };
 
-    setPositions(prev => [...prev, newPos]);
-    setCapital(prev => prev - required);
-    setUsedMargin(prev => prev + required);
+    fetchSelectedPrice();
+    simulateAll();
 
-    toast({
-      title: `${orderSide} ${orderQty} ${orderSymbol}`,
-      description: `Paper order placed @ ₹${price.toLocaleString("en-IN")}`,
-    });
-  };
+    const id = setInterval(() => {
+      fetchSelectedPrice();
+      simulateAll();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [fetchSelectedPrice, selectedSymbolId]);
 
-  const closePosition = (pos: VirtualPosition) => {
-    const current = prices[pos.symbol] || pos.currentPrice;
-    const pnl = pos.side === "BUY"
-      ? (current - pos.entryPrice) * pos.qty
-      : (pos.entryPrice - current) * pos.qty;
-    const margin = pos.entryPrice * pos.qty;
+  const openPosition = useMutation({
+    mutationFn: async () => {
+      const price = priceRef.current[selectedSymbolId] ?? selectedSymbol.basePrice;
+      const res = await fetch(`${BASE}api/paper-trades`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: selectedSymbol.label,
+          securityId: selectedSymbol.securityId,
+          exchange: selectedSymbol.exchange,
+          side: orderSide,
+          qty: orderQty,
+          entryPrice: price,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: `${orderSide} order placed`, description: `${orderQty} × ${selectedSymbol.label} at ₹${livePrices[selectedSymbolId]?.toFixed(2)}` });
+      queryClient.invalidateQueries({ queryKey: ["paper-trades"] });
+    },
+    onError: () => toast({ title: "Order failed", variant: "destructive" }),
+  });
 
-    setPositions(prev => prev.filter(p => p.id !== pos.id));
-    setCapital(prev => prev + margin + pnl);
-    setUsedMargin(prev => prev - margin);
+  const closePosition = useMutation({
+    mutationFn: async (id: number) => {
+      const trade = openTrades.find(t => t.id === id);
+      if (!trade) throw new Error("Trade not found");
+      const exitPrice = priceRef.current[trade.securityId] ?? trade.entryPrice;
+      const res = await fetch(`${BASE}api/paper-trades/${id}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exitPrice }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<PaperTrade>;
+    },
+    onSuccess: (trade) => {
+      const pnl = trade.pnl ?? 0;
+      toast({
+        title: `Position closed — ${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`,
+        variant: pnl >= 0 ? "default" : "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ["paper-trades"] });
+    },
+    onError: () => toast({ title: "Failed to close position", variant: "destructive" }),
+  });
 
-    const trade: PaperTrade = {
-      id: pos.id,
-      symbol: pos.symbol,
-      side: pos.side,
-      qty: pos.qty,
-      price: current,
-      pnl: Math.round(pnl * 100) / 100,
-      closedAt: new Date().toLocaleTimeString("en-IN"),
-      result: pnl >= 0 ? "WIN" : "LOSS",
-    };
-    setTradeHistory(prev => [trade, ...prev.slice(0, 19)]);
+  const clearAll = useMutation({
+    mutationFn: async () => {
+      await fetch(`${BASE}api/paper-trades`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["paper-trades"] });
+      toast({ title: "All paper trades cleared" });
+    },
+  });
 
-    toast({
-      title: `Position closed: ${pos.symbol}`,
-      description: `P&L: ${pnl >= 0 ? "+" : ""}₹${Math.round(pnl).toLocaleString("en-IN")}`,
-    });
-  };
-
-  const resetPaperTrading = () => {
-    setPositions([]);
-    setTradeHistory([]);
-    setCapital(INITIAL_CAPITAL);
-    setUsedMargin(0);
-    setIsActive(false);
-    setPrices(Object.fromEntries(Object.entries(SYMBOLS).map(([k, v]) => [k, v.base])));
-    toast({ title: "Paper trading reset", description: "Virtual capital restored to ₹10,00,000" });
-  };
+  const totalOpenPnl = openTrades.reduce((sum, t) => {
+    const cur = livePrices[t.securityId] ?? t.entryPrice;
+    const pnl = t.side === "BUY" ? (cur - t.entryPrice) * t.qty : (t.entryPrice - cur) * t.qty;
+    return sum + pnl;
+  }, 0);
+  const totalClosedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className={cn("gap-1.5 px-3 py-1", isActive ? "text-success border-success/30 bg-success/10" : "text-muted-foreground")}>
-            <span className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-success animate-pulse" : "bg-muted-foreground")} />
-            {isActive ? "LIVE SIMULATION" : "PAUSED"}
-          </Badge>
-          <Button
-            variant={isActive ? "outline" : "default"}
-            size="sm"
-            className="gap-2"
-            onClick={() => setIsActive(!isActive)}
-          >
-            {isActive ? <PauseCircle className="w-4 h-4" /> : <PlayCircle className="w-4 h-4" />}
-            {isActive ? "Pause" : "Start Simulation"}
-          </Button>
-          <Button variant="ghost" size="sm" className="gap-2" onClick={resetPaperTrading}>
-            <RefreshCw className="w-4 h-4" />
-            Reset
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">Virtual Capital</span>
-              <Wallet className="w-3.5 h-3.5 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Open P&L</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-2xl font-bold font-mono", totalOpenPnl >= 0 ? "text-success" : "text-destructive")}>
+              {totalOpenPnl >= 0 ? "+" : ""}{formatCurrency(totalOpenPnl)}
             </div>
-            <p className="text-xl font-bold font-mono">{formatCurrency(capital)}</p>
-            <p className="text-[10px] text-muted-foreground">Available to trade</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">Unrealized P&L</span>
-              {totalPnl >= 0 ? <TrendingUp className="w-3.5 h-3.5 text-success" /> : <TrendingDown className="w-3.5 h-3.5 text-destructive" />}
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5" /> Closed P&L</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-2xl font-bold font-mono", totalClosedPnl >= 0 ? "text-success" : "text-destructive")}>
+              {totalClosedPnl >= 0 ? "+" : ""}{formatCurrency(totalClosedPnl)}
             </div>
-            <p className={cn("text-xl font-bold font-mono", totalPnl >= 0 ? "text-success" : "text-destructive")}>
-              {totalPnl >= 0 ? "+" : ""}{formatCurrency(totalPnl)}
-            </p>
-            <p className="text-[10px] text-muted-foreground">{positions.length} open positions</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">Realized P&L</span>
-              <Activity className="w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-            <p className={cn("text-xl font-bold font-mono", closedPnl >= 0 ? "text-success" : "text-destructive")}>
-              {closedPnl >= 0 ? "+" : ""}{formatCurrency(closedPnl)}
-            </p>
-            <p className="text-[10px] text-muted-foreground">{tradeHistory.length} closed trades</p>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground">Open Positions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono">{openTrades.length}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">Total Equity</span>
-              <ShieldAlert className="w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-            <p className={cn("text-xl font-bold font-mono", totalEquity >= INITIAL_CAPITAL ? "text-success" : "text-destructive")}>
-              {formatCurrency(totalEquity)}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              {((totalEquity - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100).toFixed(2)}% return
-            </p>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground">Total Trades</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono">{trades?.length ?? 0}</div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Place Order
-            </CardTitle>
+            <CardTitle className="text-sm">Place Paper Order</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Symbol</label>
-              <Select value={orderSymbol} onValueChange={setOrderSymbol}>
+              <Select value={selectedSymbolId} onValueChange={setSelectedSymbolId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.keys(SYMBOLS).map(s => (
-                    <SelectItem key={s} value={s}>
-                      {s} — ₹{(prices[s] || SYMBOLS[s].base).toLocaleString("en-IN")}
+                  {COMMON_SYMBOLS.map(s => (
+                    <SelectItem key={s.securityId} value={s.securityId}>
+                      <span>{s.label}</span>
+                      <span className="text-muted-foreground ml-2 font-mono text-xs">
+                        ₹{livePrices[s.securityId]?.toFixed(2)}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Side</label>
-                <Select value={orderSide} onValueChange={v => setOrderSide(v as "BUY" | "SELL")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BUY">BUY</SelectItem>
-                    <SelectItem value="SELL">SELL</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            <div className="rounded-md bg-muted/40 p-3 text-center">
+              <div className="text-xs text-muted-foreground mb-1">{selectedSymbol.label} — Live Price</div>
+              <div className="text-3xl font-bold font-mono">
+                ₹{livePrices[selectedSymbolId]?.toFixed(2) ?? "—"}
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Quantity</label>
-                <Input type="number" min={1} value={orderQty} onChange={e => setOrderQty(Number(e.target.value))} />
+              <div className="flex items-center justify-center gap-1 mt-1 text-xs text-muted-foreground">
+                <RefreshCw className="h-3 w-3 animate-spin-slow" /> Updates every 5 seconds
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={orderSide === "BUY" ? "default" : "outline"}
+                className={cn(orderSide === "BUY" && "bg-success hover:bg-success/90 text-white")}
+                onClick={() => setOrderSide("BUY")}
+              >
+                <ArrowUpRight className="h-4 w-4 mr-1" /> BUY
+              </Button>
+              <Button
+                variant={orderSide === "SELL" ? "default" : "outline"}
+                className={cn(orderSide === "SELL" && "bg-destructive hover:bg-destructive/90")}
+                onClick={() => setOrderSide("SELL")}
+              >
+                <ArrowDownRight className="h-4 w-4 mr-1" /> SELL
+              </Button>
+            </div>
+
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Exchange Segment</label>
-              <Select value={orderExchange} onValueChange={setOrderExchange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NSE_EQ">NSE Equity</SelectItem>
-                  <SelectItem value="NSE_FNO">NSE F&O</SelectItem>
-                  <SelectItem value="BSE_EQ">BSE Equity</SelectItem>
-                  <SelectItem value="MCX">MCX</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-xs text-muted-foreground">Quantity</label>
+              <Input
+                type="number"
+                min={1}
+                value={orderQty}
+                onChange={e => setOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
+              />
             </div>
 
-            <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1">
+            <div className="rounded-md bg-muted/20 p-2 text-xs text-muted-foreground space-y-0.5">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">LTP (simulated)</span>
-                <span className="font-mono font-medium">₹{(prices[orderSymbol] || 0).toLocaleString("en-IN")}</span>
+                <span>Price</span>
+                <span className="font-mono">₹{livePrices[selectedSymbolId]?.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Order Value</span>
-                <span className="font-mono font-medium">₹{((prices[orderSymbol] || 0) * orderQty).toLocaleString("en-IN")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Available</span>
-                <span className={cn("font-mono font-medium", capital < (prices[orderSymbol] || 0) * orderQty ? "text-destructive" : "text-success")}>
-                  {formatCurrency(capital)}
-                </span>
+              <div className="flex justify-between font-medium">
+                <span>Value</span>
+                <span className="font-mono">₹{((livePrices[selectedSymbolId] ?? 0) * orderQty).toFixed(0)}</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                className="gap-1 bg-success hover:bg-success/90 text-white"
-                onClick={() => { setOrderSide("BUY"); placeOrder(); }}
-              >
-                <ArrowUpRight className="w-4 h-4" />
-                BUY
-              </Button>
-              <Button
-                className="gap-1 bg-destructive hover:bg-destructive/90 text-white"
-                onClick={() => { setOrderSide("SELL"); placeOrder(); }}
-              >
-                <ArrowDownRight className="w-4 h-4" />
-                SELL
-              </Button>
-            </div>
+            <Button
+              className="w-full"
+              variant={orderSide === "BUY" ? "default" : "destructive"}
+              onClick={() => openPosition.mutate()}
+              disabled={openPosition.isPending}
+            >
+              {openPosition.isPending ? "Placing..." : `${orderSide} ${orderQty} × ${selectedSymbol.label}`}
+            </Button>
           </CardContent>
         </Card>
 
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4">
           <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Open Positions</CardTitle>
-                <Badge variant="outline" className="text-[10px]">{positions.length} active</Badge>
-              </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Open Positions</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {positions.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground border-t border-border">
-                  No open positions. Place an order to start.
-                </div>
+              {isLoading ? (
+                <div className="p-4 space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              ) : openTrades.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">No open positions</div>
               ) : (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border">
-                      {["Symbol", "Side", "Qty", "Entry", "LTP", "P&L", ""].map(h => (
-                        <th key={h} className="text-left text-muted-foreground font-medium px-4 py-2">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {positions.map(pos => (
-                      <tr key={pos.id} className="border-b border-border/50 hover:bg-muted/20">
-                        <td className="px-4 py-2 font-mono font-medium">{pos.symbol}</td>
-                        <td className="px-4 py-2">
-                          <Badge variant="outline" className={cn("text-[10px] rounded-sm", pos.side === "BUY" ? "text-success border-success/30" : "text-destructive border-destructive/30")}>
-                            {pos.side}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2">{pos.qty}</td>
-                        <td className="px-4 py-2 font-mono">₹{pos.entryPrice.toLocaleString("en-IN")}</td>
-                        <td className="px-4 py-2 font-mono">
-                          ₹{(prices[pos.symbol] || pos.currentPrice).toLocaleString("en-IN")}
-                        </td>
-                        <td className={cn("px-4 py-2 font-mono font-semibold", pos.pnl >= 0 ? "text-success" : "text-destructive")}>
-                          {pos.pnl >= 0 ? "+" : ""}₹{Math.abs(pos.pnl).toLocaleString("en-IN")}
-                          <span className="text-[9px] ml-1 opacity-70">({pos.pnlPct >= 0 ? "+" : ""}{pos.pnlPct}%)</span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => closePosition(pos)}>
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Side</TableHead>
+                      <TableHead className="text-right">Entry ₹</TableHead>
+                      <TableHead className="text-right">Current ₹</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">P&L</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {openTrades.map(t => {
+                      const cur = livePrices[t.securityId] ?? t.entryPrice;
+                      const pnl = t.side === "BUY" ? (cur - t.entryPrice) * t.qty : (t.entryPrice - cur) * t.qty;
+                      const pnlPct = ((cur - t.entryPrice) / t.entryPrice) * 100 * (t.side === "SELL" ? -1 : 1);
+                      return (
+                        <TableRow key={t.id}>
+                          <TableCell className="font-medium text-sm">{t.symbol}</TableCell>
+                          <TableCell>
+                            <Badge variant={t.side === "BUY" ? "default" : "destructive"} className={cn("text-[10px]", t.side === "BUY" && "bg-success")}>
+                              {t.side}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">₹{t.entryPrice.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">₹{cur.toFixed(2)}</TableCell>
+                          <TableCell className="text-right text-xs">{t.qty}</TableCell>
+                          <TableCell className="text-right">
+                            <div className={cn("font-mono text-xs font-medium", pnl >= 0 ? "text-success" : "text-destructive")}>
+                              {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
+                            </div>
+                            <div className={cn("text-[10px]", pnlPct >= 0 ? "text-success" : "text-destructive")}>
+                              {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive"
+                              onClick={() => closePosition.mutate(t.id)}
+                              disabled={closePosition.isPending}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Live Market Watch</CardTitle>
-                {isActive && <span className="text-[10px] text-success animate-pulse">● UPDATING</span>}
-              </div>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Closed Trades</CardTitle>
+              {closedTrades.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => clearAll.mutate()}>
+                  Clear all
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border">
-                    {["Symbol", "LTP", "Change"].map(h => (
-                      <th key={h} className="text-left text-muted-foreground font-medium px-4 py-2">{h}</th>
+              {closedTrades.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">No closed trades yet</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Side</TableHead>
+                      <TableHead className="text-right">Entry</TableHead>
+                      <TableHead className="text-right">Exit</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">P&L</TableHead>
+                      <TableHead>Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {closedTrades.map(t => (
+                      <TableRow key={t.id}>
+                        <TableCell className="font-medium text-sm">{t.symbol}</TableCell>
+                        <TableCell>
+                          <Badge variant={t.side === "BUY" ? "default" : "destructive"} className={cn("text-[10px]", t.side === "BUY" && "bg-success")}>
+                            {t.side}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">₹{t.entryPrice.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">₹{t.exitPrice?.toFixed(2) ?? "—"}</TableCell>
+                        <TableCell className="text-right text-xs">{t.qty}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={cn("font-mono text-xs font-medium", (t.pnl ?? 0) >= 0 ? "text-success" : "text-destructive")}>
+                            {(t.pnl ?? 0) >= 0 ? "+" : ""}{formatCurrency(t.pnl ?? 0)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {t.exitTime ? new Date(t.exitTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(SYMBOLS).map(([sym, cfg]) => {
-                    const current = prices[sym] || cfg.base;
-                    const change = ((current - cfg.base) / cfg.base) * 100;
-                    return (
-                      <tr key={sym} className="border-b border-border/40 hover:bg-muted/20 cursor-pointer" onClick={() => setOrderSymbol(sym)}>
-                        <td className="px-4 py-1.5 font-mono font-medium">{sym}</td>
-                        <td className="px-4 py-1.5 font-mono">₹{current.toLocaleString("en-IN")}</td>
-                        <td className={cn("px-4 py-1.5 font-mono text-[11px]", change >= 0 ? "text-success" : "text-destructive")}>
-                          {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
+        </div>
+      </div>
 
-          {tradeHistory.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Closed Trades</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border">
-                      {["Symbol", "Side", "Qty", "Exit", "P&L", "Time", "Result"].map(h => (
-                        <th key={h} className="text-left text-muted-foreground font-medium px-4 py-2">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tradeHistory.map(trade => (
-                      <tr key={trade.id} className="border-b border-border/40 hover:bg-muted/20">
-                        <td className="px-4 py-1.5 font-mono font-medium">{trade.symbol}</td>
-                        <td className="px-4 py-1.5">
-                          <Badge variant="outline" className={cn("text-[10px] rounded-sm", trade.side === "BUY" ? "text-success border-success/30" : "text-destructive border-destructive/30")}>
-                            {trade.side}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-1.5">{trade.qty}</td>
-                        <td className="px-4 py-1.5 font-mono">₹{trade.price.toLocaleString("en-IN")}</td>
-                        <td className={cn("px-4 py-1.5 font-mono font-semibold", trade.pnl >= 0 ? "text-success" : "text-destructive")}>
-                          {trade.pnl >= 0 ? "+" : ""}₹{Math.abs(trade.pnl).toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-4 py-1.5 text-muted-foreground">{trade.closedAt}</td>
-                        <td className="px-4 py-1.5">
-                          <Badge variant="outline" className={cn("text-[10px] rounded-sm", trade.result === "WIN" ? "text-success border-success/30 bg-success/5" : "text-destructive border-destructive/30 bg-destructive/5")}>
-                            {trade.result}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
+      <div className="rounded-md border border-border bg-muted/20 p-3">
+        <p className="text-xs font-semibold text-muted-foreground mb-2">Live Prices — All Symbols</p>
+        <div className="grid grid-cols-4 gap-2">
+          {COMMON_SYMBOLS.map(s => {
+            const price = livePrices[s.securityId] ?? s.basePrice;
+            const change = ((price - s.basePrice) / s.basePrice) * 100;
+            return (
+              <button
+                key={s.securityId}
+                onClick={() => setSelectedSymbolId(s.securityId)}
+                className={cn("flex flex-col rounded-md border p-2 text-left transition-colors hover:bg-muted/60", selectedSymbolId === s.securityId && "border-primary bg-muted/60")}
+              >
+                <span className="text-[10px] font-medium text-muted-foreground">{s.label}</span>
+                <span className="font-mono text-sm font-bold">₹{price.toFixed(2)}</span>
+                <span className={cn("text-[10px] font-mono", change >= 0 ? "text-success" : "text-destructive")}>
+                  {change >= 0 ? "+" : ""}{change.toFixed(2)}%
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

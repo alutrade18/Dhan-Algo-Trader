@@ -8,6 +8,7 @@ import marketRouter from "./market";
 import strategiesRouter from "./strategies";
 import settingsRouter from "./settings";
 import brokerRouter from "./broker";
+import paperTradesRouter from "./paper-trades";
 import {
   orderRateLimit,
   dataRateLimit,
@@ -36,6 +37,7 @@ router.use([
   "/settings",
   "/broker",
   "/strategies",
+  "/paper-trades",
 ], nonTradingRateLimit);
 
 router.use(healthRouter);
@@ -47,5 +49,6 @@ router.use(marketRouter);
 router.use(strategiesRouter);
 router.use(settingsRouter);
 router.use(brokerRouter);
+router.use(paperTradesRouter);
 
 export default router;
