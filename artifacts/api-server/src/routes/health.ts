@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
+import { getRateLimitStats } from "../lib/rate-limiter";
+import { RATE_LIMITS_REFERENCE } from "../lib/dhan-errors";
 
 const router: IRouter = Router();
 
@@ -30,6 +32,17 @@ router.get("/healthz", (_req, res) => {
     marketOpen,
     brokerConnected,
     systemOnline: marketOpen && brokerConnected,
+  });
+});
+
+router.get("/rate-limits", (_req, res) => {
+  res.json({
+    limits: RATE_LIMITS_REFERENCE,
+    currentUsage: getRateLimitStats(),
+    notes: {
+      orderModificationCap: "Max 25 modifications per order (Dhan hard limit)",
+      rateLimitErrorCode: "DH-904 — Too many requests, retry after suggested delay",
+    },
   });
 });
 

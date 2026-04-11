@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { resolveDhanError, type DhanErrorInfo } from "./dhan-errors";
 
 const DHAN_BASE_URL = "https://api.dhan.co/v2";
 
@@ -38,11 +39,12 @@ async function dhanRequest(
   }
 
   if (!response.ok) {
+    const errorInfo = resolveDhanError(data);
     logger.error(
-      { status: response.status, path, data },
-      "Dhan API error",
+      { status: response.status, path, data, errorCode: errorInfo?.code },
+      `Dhan API error: ${errorInfo?.code ?? response.status} — ${errorInfo?.message ?? "Unknown error"}`,
     );
-    throw new DhanApiError(response.status, data);
+    throw new DhanApiError(response.status, data, errorInfo ?? undefined);
   }
 
   return data;
@@ -51,11 +53,34 @@ async function dhanRequest(
 export class DhanApiError extends Error {
   status: number;
   data: unknown;
-  constructor(status: number, data: unknown) {
-    super(`Dhan API error: ${status}`);
+  errorInfo?: DhanErrorInfo;
+
+  constructor(status: number, data: unknown, errorInfo?: DhanErrorInfo) {
+    const msg = errorInfo
+      ? `${errorInfo.code}: ${errorInfo.message}`
+      : `Dhan API error: ${status}`;
+    super(msg);
     this.name = "DhanApiError";
-    this.status = status;
+    this.status = errorInfo?.httpStatus ?? status;
     this.data = data;
+    this.errorInfo = errorInfo;
+  }
+
+  toClientResponse() {
+    if (this.errorInfo) {
+      return {
+        errorCode: this.errorInfo.code,
+        errorMessage: this.errorInfo.message,
+        retryable: this.errorInfo.retryable,
+        raw: this.data,
+      };
+    }
+    return {
+      errorCode: `HTTP-${this.status}`,
+      errorMessage: "An unexpected error occurred with the broker API.",
+      retryable: false,
+      raw: this.data,
+    };
   }
 }
 

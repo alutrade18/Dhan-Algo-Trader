@@ -1,0 +1,182 @@
+import { logger } from "./logger";
+
+export type ApiCategory = "order" | "data" | "quote" | "nontrading";
+
+interface WindowLimits {
+  perSecond?: number;
+  perMinute?: number;
+  perHour?: number;
+  perDay?: number;
+}
+
+const RATE_LIMITS: Record<ApiCategory, WindowLimits> = {
+  order: {
+    perSecond: 10,
+    perMinute: 250,
+    perHour: 1000,
+    perDay: 7000,
+  },
+  data: {
+    perSecond: 5,
+    perDay: 100000,
+  },
+  quote: {
+    perSecond: 1,
+  },
+  nontrading: {
+    perSecond: 20,
+  },
+};
+
+const CATEGORY_LABELS: Record<ApiCategory, string> = {
+  order: "Order API",
+  data: "Data API",
+  quote: "Quote API",
+  nontrading: "Non-Trading API",
+};
+
+class SlidingWindowCounter {
+  private timestamps: number[] = [];
+  private readonly windowMs: number;
+  private readonly limit: number;
+
+  constructor(windowMs: number, limit: number) {
+    this.windowMs = windowMs;
+    this.limit = limit;
+  }
+
+  private prune(now: number) {
+    const cutoff = now - this.windowMs;
+    this.timestamps = this.timestamps.filter((t) => t > cutoff);
+  }
+
+  check(now: number): boolean {
+    this.prune(now);
+    return this.timestamps.length < this.limit;
+  }
+
+  record(now: number) {
+    this.timestamps.push(now);
+  }
+
+  remaining(now: number): number {
+    this.prune(now);
+    return Math.max(0, this.limit - this.timestamps.length);
+  }
+
+  resetAt(now: number): number {
+    this.prune(now);
+    if (this.timestamps.length === 0) return now;
+    return this.timestamps[0] + this.windowMs;
+  }
+}
+
+interface CategoryCounters {
+  perSecond?: SlidingWindowCounter;
+  perMinute?: SlidingWindowCounter;
+  perHour?: SlidingWindowCounter;
+  perDay?: SlidingWindowCounter;
+}
+
+const counters: Record<ApiCategory, CategoryCounters> = {
+  order: {},
+  data: {},
+  quote: {},
+  nontrading: {},
+};
+
+function initCounters() {
+  for (const [cat, limits] of Object.entries(RATE_LIMITS) as [ApiCategory, WindowLimits][]) {
+    if (limits.perSecond !== undefined)
+      counters[cat].perSecond = new SlidingWindowCounter(1_000, limits.perSecond);
+    if (limits.perMinute !== undefined)
+      counters[cat].perMinute = new SlidingWindowCounter(60_000, limits.perMinute);
+    if (limits.perHour !== undefined)
+      counters[cat].perHour = new SlidingWindowCounter(3_600_000, limits.perHour);
+    if (limits.perDay !== undefined)
+      counters[cat].perDay = new SlidingWindowCounter(86_400_000, limits.perDay);
+  }
+}
+
+initCounters();
+
+export interface RateLimitResult {
+  allowed: boolean;
+  category: ApiCategory;
+  violatedWindow?: "second" | "minute" | "hour" | "day";
+  limit?: number;
+  retryAfterMs?: number;
+  remaining: Record<string, number>;
+}
+
+export function checkRateLimit(category: ApiCategory): RateLimitResult {
+  const now = Date.now();
+  const c = counters[category];
+  const limits = RATE_LIMITS[category];
+
+  const windows: Array<{ key: "second" | "minute" | "hour" | "day"; counter?: SlidingWindowCounter; limit?: number }> = [
+    { key: "second", counter: c.perSecond, limit: limits.perSecond },
+    { key: "minute", counter: c.perMinute, limit: limits.perMinute },
+    { key: "hour", counter: c.perHour, limit: limits.perHour },
+    { key: "day", counter: c.perDay, limit: limits.perDay },
+  ];
+
+  const remaining: Record<string, number> = {};
+
+  for (const w of windows) {
+    if (!w.counter || w.limit === undefined) continue;
+    remaining[w.key] = w.counter.remaining(now);
+
+    if (!w.counter.check(now)) {
+      const retryAfterMs = Math.max(0, w.counter.resetAt(now) - now);
+      logger.warn(
+        { category, window: w.key, limit: w.limit },
+        `[RateLimit] ${CATEGORY_LABELS[category]} ${w.key} limit reached (${w.limit}/${w.key})`
+      );
+      return {
+        allowed: false,
+        category,
+        violatedWindow: w.key,
+        limit: w.limit,
+        retryAfterMs,
+        remaining,
+      };
+    }
+  }
+
+  for (const w of windows) {
+    if (w.counter) w.counter.record(now);
+  }
+
+  return { allowed: true, category, remaining };
+}
+
+export function getRateLimitStats(): Record<ApiCategory, Record<string, number>> {
+  const now = Date.now();
+  const stats: Record<string, Record<string, number>> = {};
+  for (const [cat, c] of Object.entries(counters) as [ApiCategory, CategoryCounters][]) {
+    stats[cat] = {};
+    if (c.perSecond) stats[cat].perSecond_remaining = c.perSecond.remaining(now);
+    if (c.perMinute) stats[cat].perMinute_remaining = c.perMinute.remaining(now);
+    if (c.perHour) stats[cat].perHour_remaining = c.perHour.remaining(now);
+    if (c.perDay) stats[cat].perDay_remaining = c.perDay.remaining(now);
+  }
+  return stats as Record<ApiCategory, Record<string, number>>;
+}
+
+export function getOrderModificationCount(orderId: string): number {
+  return orderModCounts[orderId] ?? 0;
+}
+
+export function recordOrderModification(orderId: string): { allowed: boolean; count: number } {
+  const current = orderModCounts[orderId] ?? 0;
+  if (current >= ORDER_MOD_CAP) {
+    logger.warn({ orderId, count: current }, `[RateLimit] Order modification cap (${ORDER_MOD_CAP}) reached for order ${orderId}`);
+    return { allowed: false, count: current };
+  }
+  orderModCounts[orderId] = current + 1;
+  return { allowed: true, count: orderModCounts[orderId] };
+}
+
+const ORDER_MOD_CAP = 25;
+const orderModCounts: Record<string, number> = {};

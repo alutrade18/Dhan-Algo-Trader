@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
+import { handleRouteError } from "../lib/route-error";
+import { recordOrderModification } from "../lib/rate-limiter";
 import {
   PlaceOrderBody,
   ModifyOrderBody,
@@ -15,30 +17,28 @@ router.get("/orders", async (req, res): Promise<void> => {
     const orders = await dhanClient.getOrders();
     res.json(Array.isArray(orders) ? orders : []);
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch orders");
-    res.status(500).json({ error: "Failed to fetch orders" });
+    handleRouteError(res, e, "GET /orders");
   }
 });
 
 router.get("/orders/:orderId", async (req, res): Promise<void> => {
   const params = GetOrderByIdParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(400).json({ errorCode: "DH-905", errorMessage: params.error.message });
     return;
   }
   try {
     const order = await dhanClient.getOrderById(params.data.orderId);
     res.json(order);
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch order");
-    res.status(500).json({ error: "Failed to fetch order" });
+    handleRouteError(res, e, `GET /orders/${params.data.orderId}`);
   }
 });
 
 router.post("/orders", async (req, res): Promise<void> => {
   const parsed = PlaceOrderBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(400).json({ errorCode: "DH-905", errorMessage: parsed.error.message });
     return;
   }
 
@@ -65,25 +65,35 @@ router.post("/orders", async (req, res): Promise<void> => {
       message: "Order placed successfully",
     });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to place order");
-    res.status(500).json({ error: "Failed to place order" });
+    handleRouteError(res, e, "POST /orders");
   }
 });
 
 router.patch("/orders/:orderId", async (req, res): Promise<void> => {
   const params = ModifyOrderParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(400).json({ errorCode: "DH-905", errorMessage: params.error.message });
     return;
   }
   const parsed = ModifyOrderBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(400).json({ errorCode: "DH-905", errorMessage: parsed.error.message });
+    return;
+  }
+
+  const orderId = params.data.orderId;
+  const modResult = recordOrderModification(orderId);
+  if (!modResult.allowed) {
+    res.status(429).json({
+      errorCode: "DH-904",
+      errorMessage: `Order modification limit reached. Dhan caps modifications at 25 per order. This order has been modified ${modResult.count} times.`,
+      retryable: false,
+    });
     return;
   }
 
   try {
-    const result = await dhanClient.modifyOrder(params.data.orderId, {
+    const result = await dhanClient.modifyOrder(orderId, {
       order_type: parsed.data.orderType,
       quantity: parsed.data.quantity,
       price: parsed.data.price,
@@ -95,20 +105,21 @@ router.patch("/orders/:orderId", async (req, res): Promise<void> => {
 
     const r = result as Record<string, unknown>;
     res.json({
-      orderId: params.data.orderId,
+      orderId,
       status: String(r.orderStatus || "MODIFIED"),
-      message: "Order modified successfully",
+      message: `Order modified successfully (modification ${modResult.count}/25)`,
+      modificationsUsed: modResult.count,
+      modificationsRemaining: 25 - modResult.count,
     });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to modify order");
-    res.status(500).json({ error: "Failed to modify order" });
+    handleRouteError(res, e, `PATCH /orders/${orderId}`);
   }
 });
 
 router.delete("/orders/:orderId", async (req, res): Promise<void> => {
   const params = CancelOrderParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    res.status(400).json({ errorCode: "DH-905", errorMessage: params.error.message });
     return;
   }
 
@@ -120,8 +131,7 @@ router.delete("/orders/:orderId", async (req, res): Promise<void> => {
       message: "Order cancelled successfully",
     });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to cancel order");
-    res.status(500).json({ error: "Failed to cancel order" });
+    handleRouteError(res, e, `DELETE /orders/${params.data.orderId}`);
   }
 });
 

@@ -11,8 +11,38 @@ import strategiesRouter from "./strategies";
 import tradeLogsRouter from "./trade-logs";
 import settingsRouter from "./settings";
 import brokerRouter from "./broker";
+import {
+  orderRateLimit,
+  dataRateLimit,
+  quoteRateLimit,
+  nonTradingRateLimit,
+} from "../middleware/rate-limit";
 
 const router: IRouter = Router();
+
+router.use("/orders", orderRateLimit);
+
+router.use("/market/quote", quoteRateLimit);
+router.use("/market/ltp", quoteRateLimit);
+
+router.use("/market/historical", dataRateLimit);
+router.use("/market/intraday", dataRateLimit);
+router.use("/market/option-chain", dataRateLimit);
+router.use("/market/expiry", dataRateLimit);
+router.use("/market/security-list", dataRateLimit);
+
+router.use([
+  "/health",
+  "/dashboard",
+  "/positions",
+  "/holdings",
+  "/trades",
+  "/trade-logs",
+  "/funds",
+  "/settings",
+  "/broker",
+  "/strategies",
+], nonTradingRateLimit);
 
 router.use(healthRouter);
 router.use(dashboardRouter);
