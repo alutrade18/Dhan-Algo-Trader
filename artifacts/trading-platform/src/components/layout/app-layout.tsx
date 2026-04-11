@@ -43,14 +43,18 @@ function formatCurrency(val?: number | null) {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { refetchInterval: 30000 } });
   const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { refetchInterval: 60000 } });
   const { resolvedTheme, toggleTheme } = useTheme();
 
   useEffect(() => {
-    setSidebarOpen(false);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
   }, [location]);
 
   const marketOpen = isNSEMarketOpen();

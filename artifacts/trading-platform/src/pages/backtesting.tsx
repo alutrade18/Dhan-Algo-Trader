@@ -191,16 +191,7 @@ export default function Backtesting() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <FlaskConical className="w-6 h-6 text-primary" />
-            Backtesting Engine
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Test your strategy on historical data with realistic cost modelling — brokerage, slippage, and taxes included.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button onClick={runBacktest} disabled={running} className="gap-2">
           <Play className="w-4 h-4" />
           {running ? "Running..." : "Run Backtest"}

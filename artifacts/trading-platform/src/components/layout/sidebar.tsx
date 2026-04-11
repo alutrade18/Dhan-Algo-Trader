@@ -56,10 +56,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <div
         className={cn(
-          "fixed md:relative z-40 md:z-auto flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out",
-          "w-64 shrink-0",
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-          !isOpen && "md:w-64"
+          "fixed md:relative z-40 md:z-auto flex flex-col h-screen bg-sidebar border-sidebar-border transition-all duration-300 ease-in-out",
+          isOpen
+            ? "translate-x-0 w-64 border-r shrink-0"
+            : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-r-0"
         )}
       >
         <div className="p-4 flex items-center justify-between border-b border-sidebar-border shrink-0">

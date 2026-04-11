@@ -119,11 +119,6 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your broker connection.</p>
-      </div>
-
       <Card className="border-primary/20">
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">

@@ -174,16 +174,7 @@ export default function PaperTrading() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <PlayCircle className="w-6 h-6 text-primary" />
-            Paper Trading
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Practice with ₹10,00,000 virtual capital and live simulated prices — no real money at risk.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={cn("gap-1.5 px-3 py-1", isActive ? "text-success border-success/30 bg-success/10" : "text-muted-foreground")}>
             <span className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-success animate-pulse" : "bg-muted-foreground")} />

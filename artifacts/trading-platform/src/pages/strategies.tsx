@@ -151,11 +151,7 @@ export default function Strategies() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Strategies</h1>
-          <p className="text-sm text-muted-foreground">Build, manage and monitor algorithmic strategies.</p>
-        </div>
+      <div className="flex justify-end">
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) { setEditingId(null); form.reset(); }
