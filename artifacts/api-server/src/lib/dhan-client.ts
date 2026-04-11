@@ -256,6 +256,30 @@ export const dhanClient = {
     return dhanRequest("GET", "/compact/instruments");
   },
 
+  async getKillSwitchStatus() {
+    return dhanRequest("GET", "/killswitch");
+  },
+
+  async setKillSwitch(status: "ACTIVATE" | "DEACTIVATE") {
+    return dhanRequest("POST", `/killswitch?killSwitchStatus=${status}`);
+  },
+
+  async setPnlExit(data: {
+    profitValue: number;
+    lossValue: number;
+    productType: string[];
+    enableKillSwitch: boolean;
+  }) {
+    return dhanRequest("POST", "/pnlExit", {
+      dhanClientId: credentials.clientId,
+      ...data,
+    });
+  },
+
+  async stopPnlExit() {
+    return dhanRequest("DELETE", "/pnlExit");
+  },
+
   isConfigured(): boolean {
     return !!credentials.clientId && !!credentials.accessToken;
   },
