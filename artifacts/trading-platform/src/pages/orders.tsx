@@ -514,6 +514,7 @@ export default function OrdersPage() {
 
   const [orders, setOrders] = useState<DhanOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
 
   const [countdown, setCountdown] = useState(15);
@@ -528,8 +529,10 @@ export default function OrdersPage() {
   const [tradeHistory, setTradeHistory] = useState<DhanTrade[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySearched, setHistorySearched] = useState(false);
+  const lastSearchRef = useRef<{ from: string; to: string } | null>(null);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (showRefreshSpin = false) => {
+    if (showRefreshSpin) setOrdersRefreshing(true);
     try {
       const res = await fetch(`${BASE}api/orders`, { cache: "no-store" });
       if (!res.ok) {
@@ -547,6 +550,7 @@ export default function OrdersPage() {
       setOrdersError("Network error — could not reach server.");
     } finally {
       setOrdersLoading(false);
+      setOrdersRefreshing(false);
     }
   }, []);
 
@@ -570,12 +574,15 @@ export default function OrdersPage() {
     };
   }, [fetchOrders]);
 
-  async function fetchHistory() {
+  const fetchHistory = useCallback(async (from?: string, to?: string) => {
+    const fd = from ?? fromDate;
+    const td = to ?? toDate;
+    lastSearchRef.current = { from: fd, to: td };
     setHistoryLoading(true);
     setHistorySearched(true);
     try {
       const res = await fetch(
-        `${BASE}api/trades/history?fromDate=${fromDate}&toDate=${toDate}`,
+        `${BASE}api/trades/history?fromDate=${fd}&toDate=${td}`,
         { cache: "no-store" }
       );
       if (!res.ok) {
@@ -600,6 +607,26 @@ export default function OrdersPage() {
     } finally {
       setHistoryLoading(false);
     }
+  }, [fromDate, toDate, toast]);
+
+  function handleRefresh() {
+    if (activeTab === "today") {
+      setCountdown(15);
+      void fetchOrders(true);
+    } else {
+      if (lastSearchRef.current) {
+        void fetchHistory(lastSearchRef.current.from, lastSearchRef.current.to);
+      } else {
+        void fetchOrders(true);
+        setCountdown(15);
+      }
+    }
+  }
+
+  function applyQuickRange(from: string, to: string) {
+    setFromDate(from);
+    setToDate(to);
+    void fetchHistory(from, to);
   }
 
   async function handleCancel(orderId: string) {
@@ -683,14 +710,13 @@ export default function OrdersPage() {
     const rows = tradeHistory.map((t) => ({
       "Trade ID": t.exchangeTradeId,
       "Order ID": t.orderId,
-      Symbol: t.tradingSymbol,
+      Symbol: t.customSymbol || t.tradingSymbol,
       "Transaction Type": t.transactionType,
       Product: t.productType,
-      "Order Type": t.orderType,
+      "Order Type": t.orderType || "",
       "Qty Traded": t.tradedQuantity,
       "Traded Price": t.tradedPrice,
-      "Create Time": t.createTime,
-      "Exchange Time": t.exchangeTime ?? "",
+      "Exchange Time": t.exchangeTime || t.createTime || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -729,14 +755,12 @@ export default function OrdersPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              setCountdown(15);
-              void fetchOrders();
-            }}
+            onClick={handleRefresh}
+            disabled={ordersRefreshing || historyLoading}
             className="gap-1.5"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            <RefreshCw className={`h-3.5 w-3.5 ${ordersRefreshing || historyLoading ? "animate-spin" : ""}`} />
+            {ordersRefreshing || historyLoading ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
 
@@ -1014,10 +1038,8 @@ export default function OrdersPage() {
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs px-2"
-                    onClick={() => {
-                      setFromDate(todayISO());
-                      setToDate(todayISO());
-                    }}
+                    disabled={historyLoading}
+                    onClick={() => applyQuickRange(todayISO(), todayISO())}
                   >
                     Today
                   </Button>
@@ -1025,10 +1047,8 @@ export default function OrdersPage() {
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs px-2"
-                    onClick={() => {
-                      setFromDate(daysAgoISO(7));
-                      setToDate(todayISO());
-                    }}
+                    disabled={historyLoading}
+                    onClick={() => applyQuickRange(daysAgoISO(7), todayISO())}
                   >
                     7D
                   </Button>
@@ -1036,10 +1056,8 @@ export default function OrdersPage() {
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs px-2"
-                    onClick={() => {
-                      setFromDate(daysAgoISO(30));
-                      setToDate(todayISO());
-                    }}
+                    disabled={historyLoading}
+                    onClick={() => applyQuickRange(daysAgoISO(30), todayISO())}
                   >
                     30D
                   </Button>
@@ -1050,7 +1068,7 @@ export default function OrdersPage() {
                   onClick={() => void fetchHistory()}
                   disabled={historyLoading}
                 >
-                  <Search className="h-3.5 w-3.5" />
+                  <Search className={`h-3.5 w-3.5 ${historyLoading ? "animate-spin" : ""}`} />
                   {historyLoading ? "Searching…" : "Search"}
                 </Button>
                 <Button
