@@ -20,8 +20,6 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
 
   try {
     const funds = (await dhanClient.getFundLimits({ clientId: cid, accessToken: token })) as Record<string, unknown>;
-    const availableBalance = Number(funds.availabelBalance || funds.availableBalance || 0);
-    const utilizedAmount = Number(funds.utilizedAmount || 0);
 
     dhanClient.configure(cid, token);
 
@@ -29,8 +27,14 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
 
     res.json({
       success: true,
-      availableBalance,
-      utilizedAmount,
+      dhanClientId: funds.dhanClientId || cid,
+      availableBalance: Number(funds.availabelBalance ?? funds.availableBalance ?? 0),
+      sodLimit: Number(funds.sodLimit ?? 0),
+      collateralAmount: Number(funds.collateralAmount ?? 0),
+      receiveableAmount: Number(funds.receiveableAmount ?? 0),
+      utilizedAmount: Number(funds.utilizedAmount ?? 0),
+      blockedPayoutAmount: Number(funds.blockedPayoutAmount ?? 0),
+      withdrawableBalance: Number(funds.withdrawableBalance ?? 0),
       message: "Connected successfully",
     });
   } catch (err) {
@@ -73,9 +77,15 @@ router.get("/broker/status", async (_req, res): Promise<void> => {
     const { clientId: maskedClientId } = dhanClient.getCredentialsMasked();
     res.json({
       connected: true,
-      availableBalance: Number(funds.availabelBalance || funds.availableBalance || 0),
-      utilizedAmount: Number(funds.utilizedAmount || 0),
       maskedClientId,
+      dhanClientId: funds.dhanClientId || maskedClientId,
+      availableBalance: Number(funds.availabelBalance ?? funds.availableBalance ?? 0),
+      sodLimit: Number(funds.sodLimit ?? 0),
+      collateralAmount: Number(funds.collateralAmount ?? 0),
+      receiveableAmount: Number(funds.receiveableAmount ?? 0),
+      utilizedAmount: Number(funds.utilizedAmount ?? 0),
+      blockedPayoutAmount: Number(funds.blockedPayoutAmount ?? 0),
+      withdrawableBalance: Number(funds.withdrawableBalance ?? 0),
     });
   } catch {
     const { clientId: maskedClientId } = dhanClient.getCredentialsMasked();

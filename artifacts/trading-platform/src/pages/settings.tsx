@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut } from "lucide-react";
+import { CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut, RefreshCw, User } from "lucide-react";
 
 const settingsSchema = z.object({
   defaultProductType: z.string(),
@@ -33,10 +33,19 @@ const brokerSchema = z.object({
   accessToken: z.string().min(10, "Access Token is required"),
 });
 
-interface ConnectResult {
-  success: boolean;
+interface FundDetails {
+  dhanClientId?: string;
   availableBalance?: number;
+  sodLimit?: number;
+  collateralAmount?: number;
+  receiveableAmount?: number;
   utilizedAmount?: number;
+  blockedPayoutAmount?: number;
+  withdrawableBalance?: number;
+}
+
+interface ConnectResult extends FundDetails {
+  success: boolean;
   errorCode?: string;
   errorMessage?: string;
   message?: string;
@@ -99,6 +108,21 @@ export default function Settings() {
     onError: () => {
       toast({ title: "Failed to disconnect", variant: "destructive" });
     },
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/broker/status");
+      if (!res.ok) throw new Error("Request failed");
+      return res.json() as Promise<FundDetails & { connected: boolean }>;
+    },
+    onSuccess: (data) => {
+      if (data.connected) {
+        setConnectResult((prev) => prev ? { ...prev, ...data, success: true } : null);
+        toast({ title: "Balance refreshed", description: `Available: ₹${data.availableBalance?.toLocaleString("en-IN")}` });
+      }
+    },
+    onError: () => toast({ title: "Failed to refresh balance", variant: "destructive" }),
   });
 
   const form = useForm<z.infer<typeof settingsSchema>>({
@@ -234,32 +258,58 @@ export default function Settings() {
               </div>
             </div>
 
-            {connectResult && (
-              <div className={`flex items-start gap-3 p-3 rounded-lg border text-sm ${
-                connectResult.success
-                  ? "border-success/30 bg-success/10 text-success"
-                  : "border-destructive/30 bg-destructive/10 text-destructive"
-              }`}>
-                {connectResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                )}
+            {connectResult && !connectResult.success && (
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
+                <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
-                  {connectResult.success ? (
-                    <>
-                      <p className="font-medium">Connected successfully</p>
-                      <p className="text-xs opacity-80 mt-0.5">
-                        Available Balance: ₹{connectResult.availableBalance?.toLocaleString("en-IN") ?? "0"}
-                        {" · "}Used Margin: ₹{connectResult.utilizedAmount?.toLocaleString("en-IN") ?? "0"}
+                  <p className="font-medium">Error: {connectResult.errorCode}</p>
+                  <p className="text-xs opacity-80 mt-0.5">{connectResult.errorMessage}</p>
+                </div>
+              </div>
+            )}
+
+            {connectResult?.success && (
+              <div className="rounded-lg border border-success/30 bg-success/5 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-success/20 bg-success/10">
+                  <div className="flex items-center gap-2 text-success">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="font-semibold text-sm">Account Connected</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <User className="w-3.5 h-3.5" />
+                      <span className="font-mono font-medium">{connectResult.dhanClientId ?? "—"}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                      disabled={refreshMutation.isPending}
+                      onClick={() => refreshMutation.mutate()}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border/50">
+                  {[
+                    { label: "Available Balance", value: connectResult.availableBalance, highlight: true },
+                    { label: "Withdrawable", value: connectResult.withdrawableBalance },
+                    { label: "Used Margin", value: connectResult.utilizedAmount },
+                    { label: "SOD Limit", value: connectResult.sodLimit },
+                    { label: "Collateral", value: connectResult.collateralAmount },
+                    { label: "Receiveable", value: connectResult.receiveableAmount },
+                    { label: "Blocked Payout", value: connectResult.blockedPayoutAmount },
+                  ].map(({ label, value, highlight }) => (
+                    <div key={label} className={`px-4 py-3 space-y-0.5 ${highlight ? "bg-success/5" : ""}`}>
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className={`text-sm font-semibold tabular-nums ${highlight ? "text-success" : ""}`}>
+                        ₹{(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                       </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-medium">Error: {connectResult.errorCode}</p>
-                      <p className="text-xs opacity-80 mt-0.5">{connectResult.errorMessage}</p>
-                    </>
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
