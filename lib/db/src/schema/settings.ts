@@ -4,6 +4,8 @@ import { z } from "zod/v4";
 
 export const settingsTable = pgTable("settings", {
   id: serial("id").primaryKey(),
+  brokerClientId: text("broker_client_id"),
+  brokerAccessToken: text("broker_access_token"),
   defaultProductType: text("default_product_type").notNull().default("INTRA"),
   defaultOrderType: text("default_order_type").notNull().default("MARKET"),
   defaultExchange: text("default_exchange").notNull().default("NSE_EQ"),

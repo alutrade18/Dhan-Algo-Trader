@@ -1,7 +1,17 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
+import { db, settingsTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 
 const router: IRouter = Router();
+
+async function getOrCreateSettings() {
+  let [settings] = await db.select().from(settingsTable);
+  if (!settings) {
+    [settings] = await db.insert(settingsTable).values({}).returning();
+  }
+  return settings;
+}
 
 router.post("/broker/connect", async (req, res): Promise<void> => {
   const { clientId, accessToken } = req.body as Record<string, unknown>;
@@ -21,13 +31,33 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
   try {
     const funds = (await dhanClient.getFundLimits({ clientId: cid, accessToken: token })) as Record<string, unknown>;
 
+    const returnedClientId = String(funds.dhanClientId || "").trim();
+    if (returnedClientId && returnedClientId !== cid) {
+      req.log.warn(
+        { entered: "****" + cid.slice(-4), returned: "****" + returnedClientId.slice(-4) },
+        "Client ID mismatch — entered ID does not match token owner",
+      );
+      res.json({
+        success: false,
+        errorCode: "CLIENT_ID_MISMATCH",
+        errorMessage: `The Client ID you entered (${cid}) does not match the account linked to this Access Token (${returnedClientId}). Please enter the correct Client ID.`,
+      });
+      return;
+    }
+
     dhanClient.configure(cid, token);
 
-    req.log.info({ clientId: "****" + cid.slice(-4) }, "Broker credentials updated and verified");
+    const settings = await getOrCreateSettings();
+    await db
+      .update(settingsTable)
+      .set({ brokerClientId: cid, brokerAccessToken: token })
+      .where(eq(settingsTable.id, settings.id));
+
+    req.log.info({ clientId: "****" + cid.slice(-4) }, "Broker credentials verified and saved to DB");
 
     res.json({
       success: true,
-      dhanClientId: funds.dhanClientId || cid,
+      dhanClientId: returnedClientId || cid,
       availableBalance: Number(funds.availabelBalance ?? funds.availableBalance ?? 0),
       sodLimit: Number(funds.sodLimit ?? 0),
       collateralAmount: Number(funds.collateralAmount ?? 0),
@@ -56,9 +86,20 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/broker/disconnect", (req, res): void => {
+router.post("/broker/disconnect", async (req, res): Promise<void> => {
   dhanClient.disconnect();
-  req.log.info("Broker credentials cleared — disconnected");
+
+  try {
+    const settings = await getOrCreateSettings();
+    await db
+      .update(settingsTable)
+      .set({ brokerClientId: null, brokerAccessToken: null })
+      .where(eq(settingsTable.id, settings.id));
+    req.log.info("Broker credentials cleared from memory and database");
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to clear broker credentials from database");
+  }
+
   res.json({ success: true, message: "Disconnected from broker" });
 });
 
