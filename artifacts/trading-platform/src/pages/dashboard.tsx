@@ -98,26 +98,45 @@ export default function Dashboard() {
     onError: () => toast({ title: "Error", description: "Failed to pause strategies", variant: "destructive" }),
   });
 
+  const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
+    queryKey: ["killswitch-status"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/risk/killswitch`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store", "Pragma": "no-cache" },
+      });
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: true,
+    refetchInterval: 15000,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
   const emergencyStopMutation = useMutation({
     mutationFn: async () => {
       const [pauseRes, killRes] = await Promise.all([
         fetch(`${BASE}api/strategies/pause-all`, { method: "POST" }),
-        fetch(`${BASE}api/settings`, {
-          method: "PUT",
+        fetch(`${BASE}api/risk/killswitch`, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ killSwitchEnabled: true }),
+          body: JSON.stringify({ status: "ACTIVATE" }),
         }),
       ]);
       if (!pauseRes.ok || !killRes.ok) throw new Error("Failed");
     },
     onSuccess: () => {
-      toast({ title: "Emergency Stop Activated", description: "All strategies paused and kill switch enabled.", variant: "destructive" });
-      queryClient.invalidateQueries();
+      toast({ title: "Emergency Stop Activated", description: "All strategies paused and Dhan kill switch enabled.", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["killswitch-status"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
     onError: () => toast({ title: "Error", description: "Failed to activate emergency stop", variant: "destructive" }),
   });
 
-  const killTriggered = summaryExt?.killSwitchTriggered;
+  const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
+  const killTriggered = dhanKillActive || summaryExt?.killSwitchTriggered;
 
   const equityData = equityCurve?.map(p => ({
     ...p,
@@ -134,9 +153,9 @@ export default function Dashboard() {
           <div className="flex-1">
             <p className="font-semibold text-sm">Kill Switch Active — Trading Halted</p>
             <p className="text-xs mt-0.5 text-destructive/80">
-              {summaryExt?.killSwitchEnabled
-                ? "Emergency kill switch is enabled. Go to Settings to disable."
-                : `Daily loss limit of ${formatCurrency(summaryExt?.maxDailyLoss)} reached (loss: ${formatCurrency(summaryExt?.dailyLossAmount)}). Trading is blocked for today.`}
+              {dhanKillActive
+                ? `Dhan kill switch is active. ${ksStatus?.canDeactivateToday ? "Go to Settings to deactivate (1 reset remaining today)." : "Auto-resets at 8:30 AM IST tomorrow."}`
+                : `Daily loss limit of ${formatCurrency(summaryExt?.maxDailyLoss)} reached (loss: ${formatCurrency(summaryExt?.dailyLossAmount)}). Trading blocked for today.`}
             </p>
           </div>
           <Badge variant="destructive" className="text-xs">HALTED</Badge>

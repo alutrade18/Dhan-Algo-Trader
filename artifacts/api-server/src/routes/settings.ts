@@ -24,7 +24,7 @@ function serializeSettings(settings: typeof settingsTable.$inferSelect) {
     defaultOrderType: settings.defaultOrderType,
     defaultExchange: settings.defaultExchange,
     maxOrderValue: settings.maxOrderValue ? Number(settings.maxOrderValue) : null,
-    maxDailyLoss: settings.maxDailyLoss ? Number(settings.maxDailyLoss) : 5000,
+    maxDailyLoss: settings.maxDailyLoss !== null && settings.maxDailyLoss !== undefined ? Number(settings.maxDailyLoss) : 5000,
     maxDailyProfit: settings.maxDailyProfit ? Number(settings.maxDailyProfit) : null,
     enableAutoTrading: settings.enableAutoTrading,
     enableNotifications: settings.enableNotifications,
@@ -51,19 +51,22 @@ router.put("/settings", async (req, res): Promise<void> => {
 
   const existing = await getOrCreateSettings();
 
+  const body = req.body as Record<string, unknown>;
   const updateData: Record<string, unknown> = {};
   if (parsed.data.defaultProductType !== undefined) updateData.defaultProductType = parsed.data.defaultProductType;
   if (parsed.data.defaultOrderType !== undefined) updateData.defaultOrderType = parsed.data.defaultOrderType;
   if (parsed.data.defaultExchange !== undefined) updateData.defaultExchange = parsed.data.defaultExchange;
   if (parsed.data.maxOrderValue !== undefined) updateData.maxOrderValue = parsed.data.maxOrderValue?.toString();
-  if (parsed.data.maxDailyLoss !== undefined) updateData.maxDailyLoss = parsed.data.maxDailyLoss?.toString();
   if (parsed.data.maxDailyProfit !== undefined) updateData.maxDailyProfit = parsed.data.maxDailyProfit?.toString();
   if (parsed.data.enableAutoTrading !== undefined) updateData.enableAutoTrading = parsed.data.enableAutoTrading;
   if (parsed.data.enableNotifications !== undefined) updateData.enableNotifications = parsed.data.enableNotifications;
   if (parsed.data.riskPerTrade !== undefined) updateData.riskPerTrade = parsed.data.riskPerTrade?.toString();
   if (parsed.data.theme !== undefined) updateData.theme = parsed.data.theme;
 
-  const body = req.body as Record<string, unknown>;
+  if (body.maxDailyLoss !== undefined && body.maxDailyLoss !== null) {
+    const val = Number(body.maxDailyLoss);
+    if (!isNaN(val) && val >= 0) updateData.maxDailyLoss = val.toString();
+  }
   if (body.telegramBotToken !== undefined) updateData.telegramBotToken = body.telegramBotToken || null;
   if (body.telegramChatId !== undefined) updateData.telegramChatId = body.telegramChatId || null;
   if (body.killSwitchEnabled !== undefined) {

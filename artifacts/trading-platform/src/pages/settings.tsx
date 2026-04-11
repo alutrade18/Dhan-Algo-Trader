@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut, RefreshCw, User,
-  ShieldAlert, Bell, TrendingUp, TrendingDown, Power,
+  ShieldAlert, Bell, TrendingUp, TrendingDown, Power, Calendar,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -26,7 +26,7 @@ const brokerSchema = z.object({
 });
 
 const riskSchema = z.object({
-  maxDailyLoss: z.coerce.number().min(0, "Must be ≥ 0").optional(),
+  maxDailyLoss: z.coerce.number().min(0, "Must be ≥ 0"),
 });
 
 const telegramSchema = z.object({
@@ -67,7 +67,11 @@ interface SettingsData {
 
 interface KillSwitchStatus {
   dhanClientId?: string;
-  killSwitchStatus?: "ACTIVATE" | "ACTIVATED" | "DEACTIVATE" | "INACTIVE";
+  killSwitchStatus?: string;
+  isActive?: boolean;
+  canDeactivateToday?: boolean;
+  deactivationsUsed?: number;
+  error?: string;
 }
 
 export default function Settings() {
@@ -79,6 +83,7 @@ export default function Settings() {
   const [showBotToken, setShowBotToken] = useState(false);
   const [pnlProductTypes, setPnlProductTypes] = useState<string[]>(["INTRADAY"]);
   const [pnlActive, setPnlActive] = useState(false);
+  const [optimisticKsActive, setOptimisticKsActive] = useState<boolean | null>(null);
 
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
@@ -88,15 +93,24 @@ export default function Settings() {
     queryKey: ["killswitch-status"],
     queryFn: async () => {
       if (!isConnected) return {};
-      const res = await fetch(`${BASE}api/risk/killswitch`);
+      const res = await fetch(`${BASE}api/risk/killswitch`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store", "Pragma": "no-cache" },
+      });
       if (!res.ok) return {};
       return res.json();
     },
     enabled: isConnected,
-    refetchInterval: 30000,
+    refetchInterval: 15000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
-  const killSwitchActive = ksStatus?.killSwitchStatus === "ACTIVATE" || ksStatus?.killSwitchStatus === "ACTIVATED";
+  const killSwitchActive = optimisticKsActive !== null
+    ? optimisticKsActive
+    : (ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE");
+
+  const canDeactivate = ksStatus?.canDeactivateToday !== false;
 
   const brokerForm = useForm<z.infer<typeof brokerSchema>>({
     resolver: zodResolver(brokerSchema),
@@ -126,7 +140,7 @@ export default function Settings() {
         telegramChatId: settingsData.telegramChatId ?? "",
       });
     }
-  }, [settingsData]);
+  }, [settingsData?.id]);
 
   const connectMutation = useMutation({
     mutationFn: async (data: z.infer<typeof brokerSchema>) => {
@@ -183,20 +197,39 @@ export default function Settings() {
     onError: () => toast({ title: "Failed to refresh balance", variant: "destructive" }),
   });
 
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => {
+  const riskMutation = useMutation({
+    mutationFn: async (maxDailyLoss: number) => {
       const res = await fetch(`${BASE}api/settings`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ maxDailyLoss }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Daily loss limit saved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    },
+    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+  });
+
+  const telegramMutation = useMutation({
+    mutationFn: async (data: { telegramBotToken: string; telegramChatId: string }) => {
+      const res = await fetch(`${BASE}api/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     onSuccess: () => {
+      toast({ title: "Telegram settings saved", description: "Alerts will now be sent to your bot." });
       queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
+    onError: () => toast({ title: "Failed to save Telegram settings", variant: "destructive" }),
   });
 
   const killSwitchMutation = useMutation({
@@ -206,22 +239,36 @@ export default function Settings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Failed");
-      }
-      return res.json();
+      const json = await res.json() as KillSwitchStatus & { error?: string; code?: string };
+      if (!res.ok) throw { message: json.error ?? "Failed", code: json.code };
+      return json;
     },
-    onSuccess: (_data, status) => {
-      void refetchKs();
+    onSuccess: (data, status) => {
+      setOptimisticKsActive(status === "ACTIVATE");
+      setTimeout(() => {
+        setOptimisticKsActive(null);
+        void refetchKs();
+      }, 2000);
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
       toast({
         title: status === "ACTIVATE" ? "Kill Switch Activated" : "Kill Switch Deactivated",
-        description: status === "ACTIVATE" ? "All order placement is now blocked via Dhan." : "Trading resumed normally.",
+        description: status === "ACTIVATE"
+          ? `All Dhan order placement is now blocked. You have ${data.canDeactivateToday ? "1 reset available today" : "0 resets remaining today"}.`
+          : "Trading resumed. Dhan kill switch is off.",
         variant: status === "ACTIVATE" ? "destructive" : "default",
       });
     },
-    onError: (err: Error) => toast({ title: "Kill switch error", description: err.message, variant: "destructive" }),
+    onError: (err: { message?: string; code?: string }) => {
+      if (err.code === "DAILY_LIMIT_REACHED") {
+        toast({
+          title: "Daily Limit Reached",
+          description: "You've used your 1 deactivation today. Kill switch will auto-reset at 8:30 AM IST tomorrow.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Kill switch error", description: err.message ?? "Failed", variant: "destructive" });
+      }
+    },
   });
 
   const pnlExitMutation = useMutation({
@@ -242,9 +289,12 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, values) => {
       setPnlActive(true);
-      toast({ title: "P&L Exit Activated", description: "Dhan will auto-exit positions when thresholds are hit." });
+      toast({
+        title: "P&L Exit Activated",
+        description: `Dhan will exit positions at ₹${values.profitValue} profit or ₹${values.lossValue} loss.${values.enableKillSwitch ? " Kill switch will engage if triggered." : ""}`,
+      });
     },
     onError: (err: Error) => toast({ title: "Failed to set P&L exit", description: err.message, variant: "destructive" }),
   });
@@ -260,27 +310,10 @@ export default function Settings() {
     },
     onSuccess: () => {
       setPnlActive(false);
-      toast({ title: "P&L Exit Stopped", description: "Auto-exit rules have been disabled." });
+      toast({ title: "P&L Exit Stopped", description: "Auto-exit rules disabled." });
     },
     onError: (err: Error) => toast({ title: "Failed to stop P&L exit", description: err.message, variant: "destructive" }),
   });
-
-  const saveRisk = (values: z.infer<typeof riskSchema>) => {
-    updateSettingsMutation.mutate({ maxDailyLoss: values.maxDailyLoss }, {
-      onSuccess: () => toast({ title: "Risk settings saved" }),
-      onError: () => toast({ title: "Failed to save", variant: "destructive" }),
-    });
-  };
-
-  const saveTelegram = (values: z.infer<typeof telegramSchema>) => {
-    updateSettingsMutation.mutate(
-      { telegramBotToken: values.telegramBotToken, telegramChatId: values.telegramChatId },
-      {
-        onSuccess: () => toast({ title: "Telegram settings saved", description: "Alerts will now be sent to your bot." }),
-        onError: () => toast({ title: "Failed to save", variant: "destructive" }),
-      },
-    );
-  };
 
   const toggleProductType = (type: string) => {
     setPnlProductTypes(prev =>
@@ -423,9 +456,8 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Row 2 — Risk Management + Telegram Alerts side by side */}
+      {/* Row 2 — Risk Management + Telegram Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Risk Management */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -435,7 +467,7 @@ export default function Settings() {
             <CardDescription className="text-xs">Auto-reject orders when daily loss limit is hit</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={riskForm.handleSubmit(saveRisk)} className="space-y-4">
+            <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Daily Loss Limit (₹)</label>
                 <p className="text-xs text-muted-foreground">Orders blocked when today's total loss exceeds this</p>
@@ -447,7 +479,9 @@ export default function Settings() {
                     placeholder="5000"
                     {...riskForm.register("maxDailyLoss")}
                   />
-                  <Button type="submit" variant="outline" disabled={updateSettingsMutation.isPending}>Save</Button>
+                  <Button type="submit" variant="outline" disabled={riskMutation.isPending}>
+                    {riskMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
                 </div>
                 {riskForm.formState.errors.maxDailyLoss && (
                   <p className="text-xs text-destructive">{riskForm.formState.errors.maxDailyLoss.message}</p>
@@ -457,17 +491,16 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Telegram Alerts */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="w-4 h-4 text-primary" />
               Telegram Alerts
             </CardTitle>
-            <CardDescription className="text-xs">Create a bot via @BotFather and get your Chat ID via @userinfobot</CardDescription>
+            <CardDescription className="text-xs">Create a bot via @BotFather · Get Chat ID via @userinfobot</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={telegramForm.handleSubmit(saveTelegram)} className="space-y-4">
+            <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Bot Token</label>
                 <div className="relative">
@@ -488,20 +521,15 @@ export default function Settings() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Chat ID</label>
-                <Input
-                  type="text"
-                  placeholder=""
-                  autoComplete="off"
-                  {...telegramForm.register("telegramChatId")}
-                />
+                <Input type="text" placeholder="" autoComplete="off" {...telegramForm.register("telegramChatId")} />
                 {telegramForm.formState.errors.telegramChatId && (
                   <p className="text-xs text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>
                 )}
               </div>
               <div className="flex items-center justify-between">
-                <Button type="submit" variant="outline" size="sm" className="gap-2" disabled={updateSettingsMutation.isPending}>
+                <Button type="submit" variant="outline" size="sm" className="gap-2" disabled={telegramMutation.isPending}>
                   <Bell className="w-3.5 h-3.5" />
-                  {updateSettingsMutation.isPending ? "Saving..." : "Save"}
+                  {telegramMutation.isPending ? "Saving..." : "Save"}
                 </Button>
                 {settingsData?.telegramChatId && (
                   <span className="text-xs text-success">✓ Alerts active</span>
@@ -512,41 +540,59 @@ export default function Settings() {
         </Card>
       </div>
 
-      {/* Row 3 — Kill Switch + P&L Based Exit side by side */}
+      {/* Row 3 — Kill Switch + P&L Based Exit */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Kill Switch */}
-        <Card className={killSwitchActive ? "border-destructive/40" : ""}>
+        <Card className={killSwitchActive ? "border-destructive/50 bg-destructive/5" : ""}>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Power className={`w-4 h-4 ${killSwitchActive ? "text-destructive" : "text-muted-foreground"}`} />
               Emergency Kill Switch
-              {killSwitchActive && <Badge variant="destructive" className="text-[10px] ml-1">ACTIVE</Badge>}
+              {killSwitchActive && <Badge variant="destructive" className="text-[10px]">ACTIVE</Badge>}
             </CardTitle>
             <CardDescription className="text-xs">
-              Instantly block all order placement via Dhan broker
+              Instantly block all Dhan order placement · 1 manual reset per day · Auto-resets 8:30 AM IST
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             {!isConnected ? (
               <div className="rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground flex items-start gap-2">
                 <WifiOff className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span>Connect your broker account first to use the kill switch.</span>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className={`rounded-md border p-3 text-sm ${killSwitchActive ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-muted bg-muted/20 text-muted-foreground"}`}>
+              <>
+                <div className={`rounded-md border px-3 py-2.5 text-sm ${killSwitchActive ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-muted bg-muted/20 text-muted-foreground"}`}>
                   {killSwitchActive
-                    ? "⛔ Kill switch is ACTIVE — all orders are blocked on Dhan."
+                    ? "⛔ Kill switch is ACTIVE on Dhan — all order placement blocked."
                     : "✅ Kill switch is inactive — trading is allowed normally."}
                 </div>
+
+                {ksStatus?.deactivationsUsed !== undefined && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>
+                      {ksStatus.deactivationsUsed === 0
+                        ? "1 manual reset available today"
+                        : "Daily reset used — auto-resets at 8:30 AM IST tomorrow"}
+                    </span>
+                  </div>
+                )}
+
+                {!canDeactivate && killSwitchActive && (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning flex items-start gap-2">
+                    <Calendar className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>Daily deactivation limit reached. Kill switch will auto-reset at 8:30 AM IST tomorrow.</span>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   {killSwitchActive ? (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2 border-success/40 text-success hover:bg-success/10"
-                      disabled={killSwitchMutation.isPending}
-                      onClick={() => killSwitchMutation.mutate("DEACTIVATE")}
+                      className={`gap-2 ${canDeactivate ? "border-success/40 text-success hover:bg-success/10" : "opacity-50 cursor-not-allowed"}`}
+                      disabled={killSwitchMutation.isPending || !canDeactivate}
+                      onClick={() => canDeactivate && killSwitchMutation.mutate("DEACTIVATE")}
                     >
                       <Power className="w-3.5 h-3.5" />
                       {killSwitchMutation.isPending ? "Deactivating..." : "Deactivate"}
@@ -564,21 +610,20 @@ export default function Settings() {
                     </Button>
                   )}
                 </div>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
 
-        {/* P&L Based Exit */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" />
               P&L Based Exit
-              {pnlActive && <Badge variant="outline" className="text-[10px] ml-1 text-primary border-primary/30">ACTIVE</Badge>}
+              {pnlActive && <Badge variant="outline" className="text-[10px] text-primary border-primary/40">ACTIVE</Badge>}
             </CardTitle>
             <CardDescription className="text-xs">
-              Auto-exit all positions when profit or loss threshold is reached (resets daily)
+              Dhan auto-exits positions when profit or loss threshold is reached · Resets daily
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -595,13 +640,7 @@ export default function Settings() {
                       <TrendingUp className="w-3.5 h-3.5 text-success" />
                       Profit Target (₹)
                     </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={100}
-                      placeholder="1500"
-                      {...pnlForm.register("profitValue")}
-                    />
+                    <Input type="number" min={1} step={100} placeholder="1500" {...pnlForm.register("profitValue")} />
                     {pnlForm.formState.errors.profitValue && (
                       <p className="text-xs text-destructive">{pnlForm.formState.errors.profitValue.message}</p>
                     )}
@@ -611,13 +650,7 @@ export default function Settings() {
                       <TrendingDown className="w-3.5 h-3.5 text-destructive" />
                       Loss Limit (₹)
                     </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={100}
-                      placeholder="500"
-                      {...pnlForm.register("lossValue")}
-                    />
+                    <Input type="number" min={1} step={100} placeholder="500" {...pnlForm.register("lossValue")} />
                     {pnlForm.formState.errors.lossValue && (
                       <p className="text-xs text-destructive">{pnlForm.formState.errors.lossValue.message}</p>
                     )}
