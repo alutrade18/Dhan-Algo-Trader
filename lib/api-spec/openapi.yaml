@@ -3,13 +3,32 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Dhan Algo Trading Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Dashboard and portfolio overview
+  - name: orders
+    description: Order management
+  - name: positions
+    description: Position management
+  - name: holdings
+    description: Holdings management
+  - name: trades
+    description: Trade history
+  - name: strategies
+    description: Strategy management
+  - name: market
+    description: Market data
+  - name: funds
+    description: Fund management
+  - name: settings
+    description: Application settings
+
 paths:
   /healthz:
     get:
@@ -24,6 +43,547 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary
+      description: Returns portfolio summary with total P&L, positions count, and fund balance
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent activity
+      description: Returns recent orders and trades
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [orders]
+      summary: Get all orders
+      description: Fetch all orders from Dhan
+      responses:
+        "200":
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: placeOrder
+      tags: [orders]
+      summary: Place a new order
+      description: Place a new order on Dhan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceOrderBody"
+      responses:
+        "201":
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+
+  /orders/{orderId}:
+    get:
+      operationId: getOrderById
+      tags: [orders]
+      summary: Get order by ID
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+    patch:
+      operationId: modifyOrder
+      tags: [orders]
+      summary: Modify an existing order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModifyOrderBody"
+      responses:
+        "200":
+          description: Order modified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+    delete:
+      operationId: cancelOrder
+      tags: [orders]
+      summary: Cancel an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+
+  /positions:
+    get:
+      operationId: getPositions
+      tags: [positions]
+      summary: Get all positions
+      description: Fetch current positions from Dhan
+      responses:
+        "200":
+          description: Position list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Position"
+
+  /holdings:
+    get:
+      operationId: getHoldings
+      tags: [holdings]
+      summary: Get all holdings
+      description: Fetch current holdings from Dhan
+      responses:
+        "200":
+          description: Holdings list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Holding"
+
+  /trades:
+    get:
+      operationId: getTradeBook
+      tags: [trades]
+      summary: Get trade book
+      description: Fetch today's trades from Dhan
+      responses:
+        "200":
+          description: Trade list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+
+  /trades/history:
+    get:
+      operationId: getTradeHistory
+      tags: [trades]
+      summary: Get trade history
+      description: Fetch historical trades within a date range
+      parameters:
+        - name: fromDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: pageNumber
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Trade history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+
+  /funds:
+    get:
+      operationId: getFundLimits
+      tags: [funds]
+      summary: Get fund limits
+      description: Fetch fund limits from Dhan
+      responses:
+        "200":
+          description: Fund limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundLimits"
+
+  /market/quote:
+    post:
+      operationId: getMarketQuote
+      tags: [market]
+      summary: Get market quote data
+      description: Fetch OHLC and quote data for securities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarketQuoteRequest"
+      responses:
+        "200":
+          description: Market quote data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketQuoteResponse"
+
+  /market/historical:
+    post:
+      operationId: getHistoricalData
+      tags: [market]
+      summary: Get historical data
+      description: Fetch historical daily OHLC data for a security
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HistoricalDataRequest"
+      responses:
+        "200":
+          description: Historical data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoricalDataResponse"
+
+  /market/intraday:
+    post:
+      operationId: getIntradayData
+      tags: [market]
+      summary: Get intraday minute data
+      description: Fetch intraday minute-level data for a security
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntradayDataRequest"
+      responses:
+        "200":
+          description: Intraday data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntradayDataResponse"
+
+  /market/option-chain:
+    post:
+      operationId: getOptionChain
+      tags: [market]
+      summary: Get option chain
+      description: Fetch option chain data for an underlying security
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OptionChainRequest"
+      responses:
+        "200":
+          description: Option chain data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptionChainResponse"
+
+  /market/expiry-list:
+    post:
+      operationId: getExpiryList
+      tags: [market]
+      summary: Get expiry list
+      description: Fetch expiry dates for an underlying security
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpiryListRequest"
+      responses:
+        "200":
+          description: Expiry list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpiryListResponse"
+
+  /market/securities:
+    get:
+      operationId: getSecurityList
+      tags: [market]
+      summary: Get security list
+      description: Fetch available securities
+      responses:
+        "200":
+          description: Security list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityListResponse"
+
+  /strategies:
+    get:
+      operationId: getStrategies
+      tags: [strategies]
+      summary: Get all strategies
+      description: List all saved trading strategies
+      responses:
+        "200":
+          description: Strategy list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Strategy"
+    post:
+      operationId: createStrategy
+      tags: [strategies]
+      summary: Create a strategy
+      description: Create a new trading strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStrategyBody"
+      responses:
+        "201":
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+
+  /strategies/{id}:
+    get:
+      operationId: getStrategy
+      tags: [strategies]
+      summary: Get a strategy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Strategy details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+    patch:
+      operationId: updateStrategy
+      tags: [strategies]
+      summary: Update a strategy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStrategyBody"
+      responses:
+        "200":
+          description: Strategy updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+    delete:
+      operationId: deleteStrategy
+      tags: [strategies]
+      summary: Delete a strategy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Strategy deleted
+
+  /strategies/{id}/toggle:
+    post:
+      operationId: toggleStrategy
+      tags: [strategies]
+      summary: Toggle strategy active status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Strategy toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+
+  /strategies/{id}/execute:
+    post:
+      operationId: executeStrategy
+      tags: [strategies]
+      summary: Execute a strategy manually
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Strategy executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyExecutionResult"
+
+  /strategies/performance:
+    get:
+      operationId: getStrategyPerformance
+      tags: [strategies]
+      summary: Get strategy performance summary
+      description: Get aggregated performance metrics for all strategies
+      responses:
+        "200":
+          description: Performance summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategyPerformanceSummary"
+
+  /trade-logs:
+    get:
+      operationId: getTradeLogs
+      tags: [trades]
+      summary: Get algo trade logs
+      description: Get trade logs from strategy executions
+      parameters:
+        - name: strategyId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Trade logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradeLog"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get app settings
+      responses:
+        "200":
+          description: App settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update app settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsBody"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +594,892 @@ components:
       required:
         - status
 
+    DashboardSummary:
+      type: object
+      properties:
+        totalPnl:
+          type: number
+        todayPnl:
+          type: number
+        availableBalance:
+          type: number
+        usedMargin:
+          type: number
+        openPositions:
+          type: integer
+        totalHoldings:
+          type: integer
+        pendingOrders:
+          type: integer
+        activeStrategies:
+          type: integer
+        todayTrades:
+          type: integer
+        winRate:
+          type: number
+      required:
+        - totalPnl
+        - todayPnl
+        - availableBalance
+        - usedMargin
+        - openPositions
+        - totalHoldings
+        - pendingOrders
+        - activeStrategies
+        - todayTrades
+        - winRate
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [order, trade, strategy_execution]
+        action:
+          type: string
+        symbol:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+        status:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          type: string
+      required:
+        - id
+        - type
+        - action
+        - symbol
+        - quantity
+        - price
+        - status
+        - timestamp
+
+    Order:
+      type: object
+      properties:
+        orderId:
+          type: string
+        correlationId:
+          type: string
+        orderStatus:
+          type: string
+        transactionType:
+          type: string
+        exchangeSegment:
+          type: string
+        productType:
+          type: string
+        orderType:
+          type: string
+        validity:
+          type: string
+        tradingSymbol:
+          type: string
+        securityId:
+          type: string
+        quantity:
+          type: integer
+        disclosedQuantity:
+          type: integer
+        price:
+          type: number
+        triggerPrice:
+          type: number
+        afterMarketOrder:
+          type: boolean
+        boProfitValue:
+          type: number
+        boStopLossValue:
+          type: number
+        legName:
+          type: string
+        createTime:
+          type: string
+        updateTime:
+          type: string
+        exchangeTime:
+          type: string
+        drvExpiryDate:
+          type: string
+        drvOptionType:
+          type: string
+        drvStrikePrice:
+          type: number
+        omsErrorCode:
+          type: string
+        omsErrorDescription:
+          type: string
+        filledQty:
+          type: integer
+        averagePrice:
+          type: number
+      required:
+        - orderId
+        - orderStatus
+        - transactionType
+        - exchangeSegment
+        - productType
+        - orderType
+        - securityId
+        - quantity
+        - price
+
+    PlaceOrderBody:
+      type: object
+      properties:
+        securityId:
+          type: string
+        exchangeSegment:
+          type: string
+        transactionType:
+          type: string
+          enum: [BUY, SELL]
+        quantity:
+          type: integer
+        orderType:
+          type: string
+          enum: [MARKET, LIMIT, SL, SLM]
+        productType:
+          type: string
+          enum: [INTRA, CNC, MARGIN, CO, BO]
+        price:
+          type: number
+        triggerPrice:
+          type: number
+        disclosedQuantity:
+          type: integer
+        afterMarketOrder:
+          type: boolean
+        validity:
+          type: string
+          enum: [DAY, IOC]
+        boProfitValue:
+          type: number
+        boStopLossValue:
+          type: number
+        tag:
+          type: string
+      required:
+        - securityId
+        - exchangeSegment
+        - transactionType
+        - quantity
+        - orderType
+        - productType
+        - price
+
+    ModifyOrderBody:
+      type: object
+      properties:
+        orderType:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+        triggerPrice:
+          type: number
+        disclosedQuantity:
+          type: integer
+        validity:
+          type: string
+        legName:
+          type: string
+
+    OrderResponse:
+      type: object
+      properties:
+        orderId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - orderId
+        - status
+
+    Position:
+      type: object
+      properties:
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        exchangeSegment:
+          type: string
+        positionType:
+          type: string
+        productType:
+          type: string
+        quantity:
+          type: integer
+        buyAvg:
+          type: number
+        sellAvg:
+          type: number
+        buyQty:
+          type: integer
+        sellQty:
+          type: integer
+        netQty:
+          type: integer
+        realizedProfit:
+          type: number
+        unrealizedProfit:
+          type: number
+        multiplier:
+          type: number
+        costPrice:
+          type: number
+        dayBuyQty:
+          type: integer
+        daySellQty:
+          type: integer
+        dayBuyAvg:
+          type: number
+        daySellAvg:
+          type: number
+        drvExpiryDate:
+          type: string
+        drvOptionType:
+          type: string
+        drvStrikePrice:
+          type: number
+      required:
+        - securityId
+        - tradingSymbol
+        - exchangeSegment
+        - quantity
+        - buyAvg
+        - costPrice
+
+    Holding:
+      type: object
+      properties:
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        exchangeSegment:
+          type: string
+        isin:
+          type: string
+        totalQty:
+          type: integer
+        dpQty:
+          type: integer
+        t1Qty:
+          type: integer
+        availableQty:
+          type: integer
+        collateralQty:
+          type: integer
+        avgCostPrice:
+          type: number
+        lastTradedPrice:
+          type: number
+        pnl:
+          type: number
+        currentValue:
+          type: number
+        investedValue:
+          type: number
+        changePercent:
+          type: number
+      required:
+        - securityId
+        - tradingSymbol
+        - totalQty
+        - avgCostPrice
+
+    Trade:
+      type: object
+      properties:
+        orderId:
+          type: string
+        exchangeOrderId:
+          type: string
+        exchangeTradeId:
+          type: string
+        transactionType:
+          type: string
+        exchangeSegment:
+          type: string
+        productType:
+          type: string
+        orderType:
+          type: string
+        tradingSymbol:
+          type: string
+        securityId:
+          type: string
+        quantity:
+          type: integer
+        tradedQuantity:
+          type: integer
+        tradedPrice:
+          type: number
+        createTime:
+          type: string
+        updateTime:
+          type: string
+        drvExpiryDate:
+          type: string
+        drvOptionType:
+          type: string
+        drvStrikePrice:
+          type: number
+      required:
+        - orderId
+        - transactionType
+        - tradingSymbol
+        - securityId
+        - tradedQuantity
+        - tradedPrice
+
+    FundLimits:
+      type: object
+      properties:
+        availableBalance:
+          type: number
+        sodLimit:
+          type: number
+        collateralAmount:
+          type: number
+        receiveableAmount:
+          type: number
+        utilizedAmount:
+          type: number
+        blockedPayoutAmount:
+          type: number
+        withdrawableBalance:
+          type: number
+      required:
+        - availableBalance
+        - sodLimit
+        - utilizedAmount
+
+    MarketQuoteRequest:
+      type: object
+      properties:
+        securities:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        quoteType:
+          type: string
+          enum: [ltp, ohlc, full]
+      required:
+        - securities
+        - quoteType
+
+    MarketQuoteResponse:
+      type: object
+      properties:
+        data:
+          type: object
+      required:
+        - data
+
+    HistoricalDataRequest:
+      type: object
+      properties:
+        securityId:
+          type: string
+        exchangeSegment:
+          type: string
+        instrumentType:
+          type: string
+        expiryCode:
+          type: string
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+      required:
+        - securityId
+        - exchangeSegment
+        - instrumentType
+        - fromDate
+        - toDate
+
+    HistoricalDataResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CandleData"
+      required:
+        - data
+
+    CandleData:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: integer
+      required:
+        - timestamp
+        - open
+        - high
+        - low
+        - close
+        - volume
+
+    IntradayDataRequest:
+      type: object
+      properties:
+        securityId:
+          type: string
+        exchangeSegment:
+          type: string
+        instrumentType:
+          type: string
+      required:
+        - securityId
+        - exchangeSegment
+        - instrumentType
+
+    IntradayDataResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CandleData"
+      required:
+        - data
+
+    OptionChainRequest:
+      type: object
+      properties:
+        underSecurityId:
+          type: string
+        underExchangeSegment:
+          type: string
+        expiry:
+          type: string
+          format: date
+      required:
+        - underSecurityId
+        - underExchangeSegment
+        - expiry
+
+    OptionChainResponse:
+      type: object
+      properties:
+        data:
+          type: object
+      required:
+        - data
+
+    ExpiryListRequest:
+      type: object
+      properties:
+        underSecurityId:
+          type: string
+        underExchangeSegment:
+          type: string
+      required:
+        - underSecurityId
+        - underExchangeSegment
+
+    ExpiryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: string
+      required:
+        - data
+
+    SecurityListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityInfo"
+      required:
+        - data
+
+    SecurityInfo:
+      type: object
+      properties:
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        exchangeSegment:
+          type: string
+        instrumentType:
+          type: string
+        lotSize:
+          type: integer
+        tickSize:
+          type: number
+      required:
+        - securityId
+        - tradingSymbol
+        - exchangeSegment
+
+    Strategy:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [scalping, swing, positional, options, custom]
+        status:
+          type: string
+          enum: [active, paused, stopped]
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        exchangeSegment:
+          type: string
+        transactionType:
+          type: string
+        productType:
+          type: string
+        orderType:
+          type: string
+        quantity:
+          type: integer
+        entryPrice:
+          type: number
+        stopLoss:
+          type: number
+        target:
+          type: number
+        trailingStopLoss:
+          type: number
+        maxPositions:
+          type: integer
+        maxLossPerDay:
+          type: number
+        maxProfitPerDay:
+          type: number
+        timeframeMinutes:
+          type: integer
+        entryConditions:
+          type: string
+        exitConditions:
+          type: string
+        totalTrades:
+          type: integer
+        winTrades:
+          type: integer
+        lossTrades:
+          type: integer
+        totalPnl:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - status
+        - securityId
+        - tradingSymbol
+        - exchangeSegment
+        - transactionType
+        - productType
+        - orderType
+        - quantity
+        - createdAt
+        - updatedAt
+
+    CreateStrategyBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [scalping, swing, positional, options, custom]
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        exchangeSegment:
+          type: string
+        transactionType:
+          type: string
+        productType:
+          type: string
+        orderType:
+          type: string
+        quantity:
+          type: integer
+        entryPrice:
+          type: number
+        stopLoss:
+          type: number
+        target:
+          type: number
+        trailingStopLoss:
+          type: number
+        maxPositions:
+          type: integer
+        maxLossPerDay:
+          type: number
+        maxProfitPerDay:
+          type: number
+        timeframeMinutes:
+          type: integer
+        entryConditions:
+          type: string
+        exitConditions:
+          type: string
+      required:
+        - name
+        - type
+        - securityId
+        - tradingSymbol
+        - exchangeSegment
+        - transactionType
+        - productType
+        - orderType
+        - quantity
+
+    UpdateStrategyBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [scalping, swing, positional, options, custom]
+        status:
+          type: string
+          enum: [active, paused, stopped]
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        exchangeSegment:
+          type: string
+        transactionType:
+          type: string
+        productType:
+          type: string
+        orderType:
+          type: string
+        quantity:
+          type: integer
+        entryPrice:
+          type: number
+        stopLoss:
+          type: number
+        target:
+          type: number
+        trailingStopLoss:
+          type: number
+        maxPositions:
+          type: integer
+        maxLossPerDay:
+          type: number
+        maxProfitPerDay:
+          type: number
+        timeframeMinutes:
+          type: integer
+        entryConditions:
+          type: string
+        exitConditions:
+          type: string
+
+    StrategyExecutionResult:
+      type: object
+      properties:
+        strategyId:
+          type: integer
+        orderId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+        executedAt:
+          type: string
+          format: date-time
+      required:
+        - strategyId
+        - status
+        - message
+        - executedAt
+
+    StrategyPerformanceSummary:
+      type: object
+      properties:
+        totalStrategies:
+          type: integer
+        activeStrategies:
+          type: integer
+        totalTrades:
+          type: integer
+        totalPnl:
+          type: number
+        overallWinRate:
+          type: number
+        bestStrategy:
+          type: string
+        worstStrategy:
+          type: string
+        avgPnlPerTrade:
+          type: number
+      required:
+        - totalStrategies
+        - activeStrategies
+        - totalTrades
+        - totalPnl
+        - overallWinRate
+        - avgPnlPerTrade
+
+    TradeLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        strategyId:
+          type: integer
+        strategyName:
+          type: string
+        orderId:
+          type: string
+        securityId:
+          type: string
+        tradingSymbol:
+          type: string
+        transactionType:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+        status:
+          type: string
+          enum: [success, failed, pending]
+        pnl:
+          type: number
+        message:
+          type: string
+        executedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - strategyId
+        - strategyName
+        - tradingSymbol
+        - transactionType
+        - quantity
+        - price
+        - status
+        - executedAt
+
+    AppSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        dhanClientId:
+          type: string
+        apiConnected:
+          type: boolean
+        defaultProductType:
+          type: string
+        defaultOrderType:
+          type: string
+        defaultExchange:
+          type: string
+        maxOrderValue:
+          type: number
+        maxDailyLoss:
+          type: number
+        maxDailyProfit:
+          type: number
+        enableAutoTrading:
+          type: boolean
+        enableNotifications:
+          type: boolean
+        riskPerTrade:
+          type: number
+        theme:
+          type: string
+          enum: [light, dark, system]
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - apiConnected
+        - defaultProductType
+        - defaultOrderType
+        - defaultExchange
+        - enableAutoTrading
+        - enableNotifications
+
+    UpdateSettingsBody:
+      type: object
+      properties:
+        defaultProductType:
+          type: string
+        defaultOrderType:
+          type: string
+        defaultExchange:
+          type: string
+        maxOrderValue:
+          type: number
+        maxDailyLoss:
+          type: number
+        maxDailyProfit:
+          type: number
+        enableAutoTrading:
+          type: boolean
+        enableNotifications:
+          type: boolean
+        riskPerTrade:
+          type: number
+        theme:
+          type: string
+          enum: [light, dark, system]
