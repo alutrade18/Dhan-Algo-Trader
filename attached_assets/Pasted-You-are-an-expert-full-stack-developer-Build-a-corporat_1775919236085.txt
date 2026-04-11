@@ -1,0 +1,117 @@
+You are an expert full-stack developer. Build a corporate-grade Algorithmic Trading Platform for Indian retail traders (NSE/BSE, Forex, Crypto markets). Use React (frontend), Node.js + Python (backend), PostgreSQL + Redis (database), WebSocket (real-time feeds).
+
+---
+
+## PHASE 1 – CORE MODULES
+
+### 1. Strategy Builder (No-Code)
+- Drag & drop UI with indicator blocks: RSI, MACD, Bollinger Bands, EMA, SMA, ATR
+- Multi-timeframe support: 1min to 1Month
+- Visual condition builder: Entry / Exit / Stop Loss / Target
+- Strategy save, clone, version history
+- Advanced: Python script import support
+
+### 2. Backtesting Engine
+- Historical OHLCV data: NSE, BSE, Forex, Crypto (10+ years)
+- Tick-level and candle-level simulation
+- Cost modelling: brokerage, slippage, STT, GST
+- Output metrics: Equity curve, Max Drawdown, Sharpe Ratio, Win Rate, Profit Factor
+- Walk-forward optimization
+- Export report as PDF and Excel
+
+### 3. Paper Trading (Live Prices + Dummy P&L)
+- Connect to real-time market WebSocket feed
+- Simulate order execution with real prices but virtual/dummy capital
+- Live virtual P&L dashboard updating in real-time
+- Portfolio tracker with dummy capital allocation
+- Detailed trade log: entry price, exit price, reason, timestamp
+- One-click switch from Paper Trading to Live Trading mode
+
+### 4. Live Trading – Order Execution
+- Broker API integration: Zerodha Kite, Upstox, Angel Broking, 5paisa
+- Crypto exchange APIs: Binance, Bybit
+- Order types: MIS, NRML, BO, CO, Bracket Order
+- Multi-leg options strategy execution
+- Order retry logic and error handling
+- Latency monitoring dashboard
+
+---
+
+## PHASE 2 – RISK & INTELLIGENCE
+
+### 5. Risk Management
+- Auto kill-switch: stop all trading when daily loss limit is hit
+- Per-trade risk percentage control
+- Position sizing calculator (based on capital & risk %)
+- Margin utilization real-time alerts
+- Drawdown circuit breaker (pause strategy on X% drawdown)
+- Correlation risk monitor across multiple strategies
+
+### 6. Alerts & Notifications
+- Telegram Bot integration for trade alerts
+- WhatsApp alerts via Twilio API
+- Email and SMS notifications
+- Alert types: price alert, indicator signal, order fill, P&L milestone
+- Market open / close reminders
+
+### 7. Analytics & Reports
+- Live P&L dashboard broken down by strategy
+- Performance metrics: Win rate, Avg profit, Profit factor, R-multiple
+- Monthly / weekly heatmap of returns
+- Trade journal with notes and screenshot upload
+- Tax report generation (FIFO/LIFO method)
+
+### 8. AI / Smart Features
+- Strategy parameter optimizer using AI (Grid search + Bayesian)
+- Market regime detection: trending vs ranging vs volatile
+- Overfitting / curve-fitting warning system
+- Natural language strategy builder ("Buy when RSI is below 30")
+- News sentiment feed integration
+
+---
+
+## PHASE 3 – PLATFORM & SECURITY
+
+### 9. Security & Authentication
+- JWT-based auth with 2FA (Google Authenticator / OTP)
+- API key storage encrypted with AES-256
+- Session timeout and IP whitelisting
+- Full audit log of all user actions
+- Role-based access control (for future multi-user expansion)
+
+### 10. Platform & UX
+- Web app (React) + Mobile responsive design
+- TradingView-style multi-chart layout
+- Light / Dark mode toggle
+- Watchlist and market scanner with custom filters
+- One-click deploy / pause / stop for each strategy
+- Run multiple strategies concurrently
+
+### 11. Data & Connectivity
+- Real-time WebSocket feeds: NSE, BSE, Crypto (Binance), Forex
+- Historical OHLCV data storage in TimescaleDB or PostgreSQL
+- Options chain live feed
+- Corporate actions data: dividends, splits, bonuses
+- Data normalization layer for all markets
+
+---
+
+## TECH STACK
+- Frontend: React.js + Tailwind CSS + TradingView Lightweight Charts
+- Backend: Node.js (Express) + Python (FastAPI for backtesting & AI)
+- Database: PostgreSQL + TimescaleDB (time-series) + Redis (cache/real-time)
+- WebSocket: Socket.io / native WS
+- Queue: Bull.js / Celery for async jobs
+- Auth: JWT + bcrypt + 2FA
+- Deployment: Docker + Nginx
+
+---
+
+## INSTRUCTIONS FOR REPLIT
+- Start by scaffolding the full project folder structure
+- Build Phase 1 first (Strategy Builder UI + Backtesting + Paper Trading)
+- Use dummy/mock data initially for market feeds
+- Add a clean dashboard homepage showing: Live P&L, Active Strategies, Recent Trades, Market Status
+- Make the UI professional, dark-mode by default, and mobile responsive
+- Add comments in code for every major function
+- Use environment variables (.env) for all API keys and secrets

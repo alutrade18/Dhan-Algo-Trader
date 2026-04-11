@@ -591,6 +591,12 @@ components:
       properties:
         status:
           type: string
+        marketOpen:
+          type: boolean
+        brokerConnected:
+          type: boolean
+        systemOnline:
+          type: boolean
       required:
         - status
 

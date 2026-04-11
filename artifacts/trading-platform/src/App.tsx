@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/app-layout";
+import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
@@ -13,6 +14,8 @@ import Strategies from "@/pages/strategies";
 import Trades from "@/pages/trades";
 import TradeLogs from "@/pages/trade-logs";
 import Settings from "@/pages/settings";
+import Backtesting from "@/pages/backtesting";
+import PaperTrading from "@/pages/paper-trading";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +28,8 @@ function Router() {
         <Route path="/positions" component={Positions} />
         <Route path="/holdings" component={Holdings} />
         <Route path="/strategies" component={Strategies} />
+        <Route path="/backtesting" component={Backtesting} />
+        <Route path="/paper-trading" component={PaperTrading} />
         <Route path="/trades" component={Trades} />
         <Route path="/trade-logs" component={TradeLogs} />
         <Route path="/settings" component={Settings} />
@@ -36,14 +41,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

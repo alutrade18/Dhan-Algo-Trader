@@ -5,11 +5,13 @@ import {
   Briefcase, 
   Clock, 
   FileText, 
+  FlaskConical,
   LayoutDashboard, 
   List, 
   Settings, 
   ShieldAlert, 
-  TerminalSquare
+  TerminalSquare,
+  PlayCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +21,8 @@ const NAV_ITEMS = [
   { href: "/positions", label: "Positions", icon: Briefcase },
   { href: "/holdings", label: "Holdings", icon: FileText },
   { href: "/strategies", label: "Strategies", icon: TerminalSquare },
+  { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
+  { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
   { href: "/trades", label: "Trade Book", icon: Activity },
   { href: "/trade-logs", label: "Trade Logs", icon: Clock },
   { href: "/settings", label: "Settings", icon: Settings },

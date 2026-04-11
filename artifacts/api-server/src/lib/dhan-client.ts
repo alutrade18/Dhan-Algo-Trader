@@ -2,19 +2,23 @@ import { logger } from "./logger";
 
 const DHAN_BASE_URL = "https://api.dhan.co/v2";
 
-const clientId = process.env.DHAN_CLIENT_ID || "";
-const accessToken = process.env.DHAN_ACCESS_TOKEN || "";
+const credentials = {
+  clientId: process.env.DHAN_CLIENT_ID || "",
+  accessToken: process.env.DHAN_ACCESS_TOKEN || "",
+};
 
 async function dhanRequest(
   method: string,
   path: string,
   body?: unknown,
+  overrideCredentials?: { clientId: string; accessToken: string },
 ): Promise<unknown> {
+  const creds = overrideCredentials || credentials;
   const url = `${DHAN_BASE_URL}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "access-token": accessToken,
-    "client-id": clientId,
+    "access-token": creds.accessToken,
+    "client-id": creds.clientId,
   };
 
   logger.info({ method, path }, "Dhan API request");
@@ -49,12 +53,27 @@ export class DhanApiError extends Error {
   data: unknown;
   constructor(status: number, data: unknown) {
     super(`Dhan API error: ${status}`);
+    this.name = "DhanApiError";
     this.status = status;
     this.data = data;
   }
 }
 
 export const dhanClient = {
+  configure(clientId: string, accessToken: string) {
+    credentials.clientId = clientId;
+    credentials.accessToken = accessToken;
+  },
+
+  getCredentialsMasked() {
+    return {
+      clientId: credentials.clientId
+        ? "****" + credentials.clientId.slice(-4)
+        : "",
+      hasAccessToken: !!credentials.accessToken,
+    };
+  },
+
   async getOrders() {
     return dhanRequest("GET", "/orders");
   },
@@ -80,7 +99,7 @@ export const dhanClient = {
     tag?: string;
   }) {
     return dhanRequest("POST", "/orders", {
-      dhanClientId: clientId,
+      dhanClientId: credentials.clientId,
       ...orderData,
     });
   },
@@ -98,7 +117,7 @@ export const dhanClient = {
     },
   ) {
     return dhanRequest("PUT", `/orders/${orderId}`, {
-      dhanClientId: clientId,
+      dhanClientId: credentials.clientId,
       order_id: orderId,
       ...data,
     });
@@ -132,8 +151,8 @@ export const dhanClient = {
     });
   },
 
-  async getFundLimits() {
-    return dhanRequest("GET", "/fundlimit");
+  async getFundLimits(overrideCredentials?: { clientId: string; accessToken: string }) {
+    return dhanRequest("GET", "/fundlimit", undefined, overrideCredentials);
   },
 
   async getMarketQuote(
@@ -208,6 +227,6 @@ export const dhanClient = {
   },
 
   isConfigured(): boolean {
-    return !!clientId && !!accessToken;
+    return !!credentials.clientId && !!credentials.accessToken;
   },
 };

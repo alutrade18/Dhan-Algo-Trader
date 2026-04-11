@@ -7,6 +7,9 @@
  */
 export interface HealthStatus {
   status: string;
+  marketOpen?: boolean;
+  brokerConnected?: boolean;
+  systemOnline?: boolean;
 }
 
 export interface DashboardSummary {

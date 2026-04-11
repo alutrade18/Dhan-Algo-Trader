@@ -10,6 +10,7 @@ import marketRouter from "./market";
 import strategiesRouter from "./strategies";
 import tradeLogsRouter from "./trade-logs";
 import settingsRouter from "./settings";
+import brokerRouter from "./broker";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(marketRouter);
 router.use(strategiesRouter);
 router.use(tradeLogsRouter);
 router.use(settingsRouter);
+router.use(brokerRouter);
 
 export default router;
