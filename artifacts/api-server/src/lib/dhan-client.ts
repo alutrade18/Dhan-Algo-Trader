@@ -174,11 +174,21 @@ export const dhanClient = {
     toDate: string,
     pageNumber = 0,
   ) {
-    return dhanRequest("POST", "/trades/history", {
-      from_date: fromDate,
-      to_date: toDate,
-      page_number: pageNumber,
-    });
+    return dhanRequest("GET", `/trades/${fromDate}/${toDate}/${pageNumber}`);
+  },
+
+  async getAllTradeHistory(fromDate: string, toDate: string) {
+    const allTrades: unknown[] = [];
+    let page = 0;
+    while (true) {
+      const data = await dhanRequest("GET", `/trades/${fromDate}/${toDate}/${page}`);
+      const arr = Array.isArray(data) ? data : [];
+      if (arr.length === 0) break;
+      allTrades.push(...arr);
+      page++;
+      if (arr.length < 50) break;
+    }
+    return allTrades;
   },
 
   async getFundLimits(overrideCredentials?: { clientId: string; accessToken: string }) {

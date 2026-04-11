@@ -5,18 +5,31 @@ import { handleRouteError } from "../lib/route-error";
 const router: IRouter = Router();
 
 router.get("/trades/history", async (req, res): Promise<void> => {
-  const { fromDate, toDate, pageNumber = "0" } = req.query as {
+  const { fromDate, toDate, page } = req.query as {
     fromDate?: string;
     toDate?: string;
-    pageNumber?: string;
+    page?: string;
   };
   if (!fromDate || !toDate) {
-    res.status(400).json({ errorCode: "DH-905", errorMessage: "fromDate and toDate are required" });
+    res.status(400).json({
+      errorCode: "DH-905",
+      errorMessage: "fromDate and toDate are required (YYYY-MM-DD)",
+    });
     return;
   }
+
   try {
-    const history = await dhanClient.getTradeHistory(fromDate, toDate, parseInt(pageNumber, 10));
-    res.json(Array.isArray(history) ? history : []);
+    if (page !== undefined) {
+      const data = await dhanClient.getTradeHistory(
+        fromDate,
+        toDate,
+        parseInt(page, 10) || 0,
+      );
+      res.json(Array.isArray(data) ? data : []);
+    } else {
+      const data = await dhanClient.getAllTradeHistory(fromDate, toDate);
+      res.json(data);
+    }
   } catch (e) {
     handleRouteError(res, e, "GET /trades/history");
   }
@@ -26,7 +39,9 @@ router.get("/trades/:orderId", async (req, res): Promise<void> => {
   try {
     const all = await dhanClient.getTradeBook();
     const arr = Array.isArray(all) ? (all as Record<string, unknown>[]) : [];
-    const filtered = arr.filter((t) => String(t.orderId) === req.params.orderId);
+    const filtered = arr.filter(
+      (t) => String(t.orderId) === req.params.orderId,
+    );
     res.json(filtered);
   } catch (e) {
     handleRouteError(res, e, `GET /trades/${req.params.orderId}`);

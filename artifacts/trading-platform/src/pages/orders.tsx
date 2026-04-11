@@ -90,6 +90,7 @@ interface DhanTrade {
   productType: ProductType;
   orderType: OrderType;
   tradingSymbol: string;
+  customSymbol?: string;
   securityId: string;
   tradedQuantity: number;
   tradedPrice: number;
@@ -1008,6 +1009,41 @@ export default function OrdersPage() {
                     max={todayISO()}
                   />
                 </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs px-2"
+                    onClick={() => {
+                      setFromDate(todayISO());
+                      setToDate(todayISO());
+                    }}
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs px-2"
+                    onClick={() => {
+                      setFromDate(daysAgoISO(7));
+                      setToDate(todayISO());
+                    }}
+                  >
+                    7D
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs px-2"
+                    onClick={() => {
+                      setFromDate(daysAgoISO(30));
+                      setToDate(todayISO());
+                    }}
+                  >
+                    30D
+                  </Button>
+                </div>
                 <Button
                   size="sm"
                   className="gap-1.5 h-8"
@@ -1108,11 +1144,11 @@ export default function OrdersPage() {
                           className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
                         >
                           <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">
-                            {formatDateTime(trade.createTime)}
+                            {formatDateTime(trade.exchangeTime || trade.createTime)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className="font-mono font-semibold text-sm">
-                              {trade.tradingSymbol}
+                              {trade.customSymbol || trade.tradingSymbol}
                             </span>
                           </td>
                           <td className="px-4 py-3">
