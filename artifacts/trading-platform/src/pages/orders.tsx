@@ -529,6 +529,8 @@ export default function OrdersPage() {
   const [tradeHistory, setTradeHistory] = useState<DhanTrade[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySearched, setHistorySearched] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PAGE_SIZE = 100;
   const lastSearchRef = useRef<{ from: string; to: string } | null>(null);
 
   const fetchOrders = useCallback(async (showRefreshSpin = false) => {
@@ -580,6 +582,7 @@ export default function OrdersPage() {
     lastSearchRef.current = { from: fd, to: td };
     setHistoryLoading(true);
     setHistorySearched(true);
+    setHistoryPage(0);
     try {
       const res = await fetch(
         `${BASE}api/trades/history?fromDate=${fd}&toDate=${td}`,
@@ -727,6 +730,12 @@ export default function OrdersPage() {
       description: `dhan-trades-${fromDate}-to-${toDate}.xlsx`,
     });
   }
+
+  const totalHistoryPages = Math.ceil(tradeHistory.length / HISTORY_PAGE_SIZE);
+  const pagedTrades = tradeHistory.slice(
+    historyPage * HISTORY_PAGE_SIZE,
+    (historyPage + 1) * HISTORY_PAGE_SIZE
+  );
 
   const totalOrders = orders.length;
   const tradedCount = orders.filter((o) => o.orderStatus === "TRADED").length;
@@ -1088,10 +1097,15 @@ export default function OrdersPage() {
                   {historySearched
                     ? `${tradeHistory.length} trade${tradeHistory.length !== 1 ? "s" : ""} found`
                     : "Trade History"}
+                  {historySearched && tradeHistory.length > HISTORY_PAGE_SIZE && (
+                    <span className="ml-2 text-xs text-muted-foreground font-normal">
+                      (showing {historyPage * HISTORY_PAGE_SIZE + 1}–{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, tradeHistory.length)})
+                    </span>
+                  )}
                 </p>
                 {historySearched && tradeHistory.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {fromDate} → {toDate}
+                    {lastSearchRef.current?.from} → {lastSearchRef.current?.to}
                   </p>
                 )}
               </div>
@@ -1099,21 +1113,16 @@ export default function OrdersPage() {
               {!historySearched ? (
                 <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
                   <Search className="h-8 w-8 opacity-40" />
-                  <p className="text-sm">
-                    Select a date range and click Search
-                  </p>
+                  <p className="text-sm">Select a date range and click Search</p>
                 </div>
               ) : historyLoading ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <tbody>
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <tr
-                          key={i}
-                          className="border-b border-border/50 last:border-0"
-                        >
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={i} className="border-b border-border/50 last:border-0">
                           {Array.from({ length: 8 }).map((_, j) => (
-                            <td key={j} className="px-4 py-3">
+                            <td key={j} className="px-4 py-2.5">
                               <Skeleton className="h-4 w-full" />
                             </td>
                           ))}
@@ -1125,21 +1134,21 @@ export default function OrdersPage() {
               ) : tradeHistory.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
                   <TrendingDown className="h-8 w-8 opacity-40" />
-                  <p className="text-sm">
-                    No trades found for selected period
-                  </p>
+                  <p className="text-sm">No trades found for selected period</p>
                 </div>
               ) : (
+                <div>
                 <div className="overflow-x-auto">
+                  <div className="max-h-[520px] overflow-y-auto">
                   <table className="w-full text-sm">
-                    <thead>
+                    <thead className="sticky top-0 z-10 bg-card">
                       <tr className="border-b border-border bg-muted/30">
                         {[
                           { label: "Date & Time", align: "left" },
                           { label: "Symbol", align: "left" },
                           { label: "Side", align: "left" },
                           { label: "Product", align: "left" },
-                          { label: "Order Type", align: "left" },
+                          { label: "Instrument", align: "left" },
                           { label: "Qty Traded", align: "right" },
                           { label: "Traded Price", align: "right" },
                           { label: "Exchange Trade ID", align: "left" },
@@ -1154,35 +1163,35 @@ export default function OrdersPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {tradeHistory.map((trade, idx) => (
+                      {pagedTrades.map((trade, idx) => (
                         <tr
                           key={`${trade.exchangeTradeId}-${idx}`}
                           className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
                         >
-                          <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono whitespace-nowrap">
                             {formatDateTime(trade.exchangeTime || trade.createTime)}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="px-4 py-2.5 whitespace-nowrap">
                             <span className="font-mono font-semibold text-sm">
                               {trade.customSymbol || trade.tradingSymbol}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-2.5">
                             <SideBadge side={trade.transactionType} />
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-2.5">
                             <ProductBadge product={trade.productType} />
                           </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {trade.orderType}
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                            {(trade as Record<string, unknown>).instrument as string || trade.orderType || "—"}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs font-mono">
+                          <td className="px-4 py-2.5 text-right text-xs font-mono">
                             {trade.tradedQuantity}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs font-mono font-semibold">
+                          <td className="px-4 py-2.5 text-right text-xs font-mono font-semibold">
                             {formatCurrency(trade.tradedPrice)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-2.5">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="font-mono text-xs text-muted-foreground cursor-help">
@@ -1198,6 +1207,35 @@ export default function OrdersPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
+                </div>
+                {totalHistoryPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
+                    <p className="text-xs text-muted-foreground">
+                      Page {historyPage + 1} of {totalHistoryPages} &nbsp;·&nbsp; {tradeHistory.length} total trades
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-3 text-xs"
+                        disabled={historyPage === 0}
+                        onClick={() => setHistoryPage((p) => p - 1)}
+                      >
+                        ← Previous
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-3 text-xs"
+                        disabled={historyPage >= totalHistoryPages - 1}
+                        onClick={() => setHistoryPage((p) => p + 1)}
+                      >
+                        Next →
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 </div>
               )}
             </div>

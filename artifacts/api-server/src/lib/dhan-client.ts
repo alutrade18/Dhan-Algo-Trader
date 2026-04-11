@@ -180,13 +180,12 @@ export const dhanClient = {
   async getAllTradeHistory(fromDate: string, toDate: string) {
     const allTrades: unknown[] = [];
     let page = 0;
-    while (true) {
+    while (page < 100) {
       const data = await dhanRequest("GET", `/trades/${fromDate}/${toDate}/${page}`);
       const arr = Array.isArray(data) ? data : [];
       if (arr.length === 0) break;
       allTrades.push(...arr);
       page++;
-      if (arr.length < 50) break;
     }
     return allTrades;
   },
