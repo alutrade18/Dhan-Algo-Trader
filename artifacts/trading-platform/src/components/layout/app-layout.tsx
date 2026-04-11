@@ -40,18 +40,19 @@ function formatCurrency(val?: number | null) {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { refetchInterval: 30000 } });
-  const { data: funds, isLoading: isFundsLoading, refetch: refetchFunds } = useGetFundLimits({ query: { refetchInterval: 60000 } });
+  const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { refetchInterval: 60000 } });
   const { resolvedTheme, toggleTheme } = useTheme();
 
   const marketOpen = isNSEMarketOpen();
   const brokerConnected = health?.brokerConnected ?? false;
   const systemOnline = marketOpen && brokerConnected;
 
-  const availableBalance = funds?.availableBalance;
+  const fundsData = funds as (typeof funds & { availableBalance?: number | null }) | undefined;
+  const availableBalance = fundsData?.availableBalance;
+  const isRefreshing = isFundsLoading || isFundsRefetching;
 
-  const handleRefreshBalance = () => {
-    refetchFunds();
-    refetchHealth();
+  const handleRefreshBalance = async () => {
+    await Promise.all([refetchFunds(), refetchHealth()]);
   };
 
   return (
@@ -62,23 +63,27 @@ export function AppLayout({ children }: AppLayoutProps) {
           <h2 className="font-semibold text-lg tracking-tight">Market Overview</h2>
 
           <div className="flex items-center gap-3">
-            {availableBalance != null && (
-              <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
-                <span className="text-foreground/60">BAL:</span>
-                <span className="font-semibold text-foreground">
-                  {isFundsLoading ? "..." : formatCurrency(availableBalance)}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
+              <span className="text-foreground/60">BAL:</span>
+              <span className="font-semibold text-foreground min-w-[60px]">
+                {isRefreshing
+                  ? <span className="animate-pulse text-muted-foreground">···</span>
+                  : availableBalance != null
+                    ? formatCurrency(availableBalance)
+                    : <span className="text-muted-foreground/50">—</span>
+                }
+              </span>
+            </div>
 
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground hover:text-foreground"
               onClick={handleRefreshBalance}
+              disabled={isRefreshing}
               title="Refresh balance"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
             </Button>
 
             <div className="h-4 w-[1px] bg-border" />
