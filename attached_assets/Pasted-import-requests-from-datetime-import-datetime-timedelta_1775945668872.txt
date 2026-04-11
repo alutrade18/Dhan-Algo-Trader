@@ -1,0 +1,59 @@
+import requests
+from datetime import datetime, timedelta
+
+print("FILTERED TRADE VIEW")
+
+access_token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzc2MDAzODA2LCJpYXQiOjE3NzU5MTc0MDYsInRva2VuQ29uc3VtZXJUeXBlIjoiU0VMRiIsIndlYmhvb2tVcmwiOiIiLCJkaGFuQ2xpZW50SWQiOiIxMTAwODAzNjUyIn0.i35SORBF7zMKsCQql7N6iOCH-EZsvGPg4c4BD0IH1vmDq68JsBgmRR_ybpm0HoZbJEcun_tT-5gRKhtlnCGxeA"
+
+# -------- DATE RANGE --------
+to_date = datetime.now()
+from_date = to_date - timedelta(days=365*3)
+
+headers = {
+    "Accept": "application/json",
+    "access-token": access_token
+}
+
+page = 0
+
+while True:
+    url = f"https://api.dhan.co/v2/trades/{from_date.strftime('%Y-%m-%d')}/{to_date.strftime('%Y-%m-%d')}/{page}"
+    
+    res = requests.get(url, headers=headers)
+
+    if res.status_code != 200:
+        print("ERROR:", res.text)
+        break
+
+    data = res.json()
+
+    if not data:
+        print("\nNO MORE DATA")
+        break
+
+    print(f"\n========== PAGE {page} ==========")
+
+    for i, t in enumerate(data, 1):
+        print(f"\n🔹 TRADE {i}")
+        print("-" * 50)
+
+        print(f"CLIENT ID        : {t.get('dhanClientId')}")
+        print(f"ORDER ID         : {t.get('orderId')}")
+        
+        print(f"SIDE             : {t.get('transactionType')}")
+        print(f"SEGMENT          : {t.get('exchangeSegment')}")
+        print(f"PRODUCT          : {t.get('productType')}")
+
+        print(f"SYMBOL           : {t.get('customSymbol')}")
+        print(f"SECURITY ID      : {t.get('securityId')}")
+        print(f"QUANTITY         : {t.get('tradedQuantity')}")
+        print(f"PRICE            : ₹{t.get('tradedPrice')}")
+
+        print(f"INSTRUMENT       : {t.get('instrument')}")
+
+        print(f"TRADE TIME       : {t.get('exchangeTime')}")
+        print(f"EXPIRY DATE      : {t.get('drvExpiryDate')}")
+        print(f"OPTION TYPE      : {t.get('drvOptionType')}")
+        print(f"STRIKE PRICE     : {t.get('drvStrikePrice')}")
+
+    page += 1

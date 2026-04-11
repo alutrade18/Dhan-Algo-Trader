@@ -41,6 +41,20 @@ import * as XLSX from "xlsx";
 
 const BASE = import.meta.env.BASE_URL;
 
+function formatSegment(seg: string): { label: string; color: string } {
+  const map: Record<string, { label: string; color: string }> = {
+    NSE_EQ:       { label: "NSE EQ",  color: "bg-blue-500/15 text-blue-400" },
+    NSE_FNO:      { label: "NSE F&O", color: "bg-purple-500/15 text-purple-400" },
+    BSE_EQ:       { label: "BSE EQ",  color: "bg-sky-500/15 text-sky-400" },
+    BSE_FNO:      { label: "BSE F&O", color: "bg-violet-500/15 text-violet-400" },
+    MCX_COMM:     { label: "MCX",     color: "bg-orange-500/15 text-orange-400" },
+    CDS_FX:       { label: "CDS FX",  color: "bg-teal-500/15 text-teal-400" },
+    NSE_CURRENCY: { label: "NSE FX",  color: "bg-teal-500/15 text-teal-400" },
+    IDX_I:        { label: "INDEX",   color: "bg-gray-500/15 text-gray-400" },
+  };
+  return map[seg] ?? { label: seg, color: "bg-muted text-muted-foreground" };
+}
+
 type OrderStatus =
   | "TRADED"
   | "PENDING"
@@ -96,6 +110,7 @@ interface DhanTrade {
   tradedPrice: number;
   createTime: string;
   exchangeTime?: string;
+  instrument?: string;
   drvExpiryDate?: string;
   drvOptionType?: string;
   drvStrikePrice?: number;
@@ -713,12 +728,17 @@ export default function OrdersPage() {
     const rows = tradeHistory.map((t) => ({
       "Trade ID": t.exchangeTradeId,
       "Order ID": t.orderId,
+      "Exchange Segment": t.exchangeSegment,
       Symbol: t.customSymbol || t.tradingSymbol,
-      "Transaction Type": t.transactionType,
-      Product: t.productType,
-      "Order Type": t.orderType || "",
+      "Security ID": t.securityId,
+      "Instrument": t.instrument || "",
+      "Side": t.transactionType,
+      "Product": t.productType,
       "Qty Traded": t.tradedQuantity,
       "Traded Price": t.tradedPrice,
+      "Expiry Date": t.drvExpiryDate || "",
+      "Option Type": t.drvOptionType || "",
+      "Strike Price": t.drvStrikePrice ?? "",
       "Exchange Time": t.exchangeTime || t.createTime || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -1144,18 +1164,21 @@ export default function OrdersPage() {
                     <thead className="sticky top-0 z-10 bg-card">
                       <tr className="border-b border-border bg-muted/30">
                         {[
-                          { label: "Date & Time", align: "left" },
-                          { label: "Symbol", align: "left" },
-                          { label: "Side", align: "left" },
-                          { label: "Product", align: "left" },
-                          { label: "Instrument", align: "left" },
-                          { label: "Qty Traded", align: "right" },
-                          { label: "Traded Price", align: "right" },
-                          { label: "Exchange Trade ID", align: "left" },
+                          { label: "Date & Time",     align: "left"  },
+                          { label: "Segment",          align: "left"  },
+                          { label: "Symbol",           align: "left"  },
+                          { label: "Side",             align: "left"  },
+                          { label: "Product",          align: "left"  },
+                          { label: "Instrument",       align: "left"  },
+                          { label: "F&O Details",      align: "left"  },
+                          { label: "Qty",              align: "right" },
+                          { label: "Price",            align: "right" },
+                          { label: "Order ID",         align: "left"  },
+                          { label: "Trade ID",         align: "left"  },
                         ].map(({ label, align }) => (
                           <th
                             key={label}
-                            className={`px-4 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}`}
+                            className={`px-3 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}`}
                           >
                             {label}
                           </th>
@@ -1163,35 +1186,87 @@ export default function OrdersPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {pagedTrades.map((trade, idx) => (
+                      {pagedTrades.map((trade, idx) => {
+                        const seg = formatSegment(trade.exchangeSegment);
+                        const hasFno = trade.drvExpiryDate && trade.drvExpiryDate !== "NA";
+                        return (
                         <tr
                           key={`${trade.exchangeTradeId}-${idx}`}
                           className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
                         >
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                          {/* Date & Time */}
+                          <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono whitespace-nowrap">
                             {formatDateTime(trade.exchangeTime || trade.createTime)}
                           </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap">
-                            <span className="font-mono font-semibold text-sm">
-                              {trade.customSymbol || trade.tradingSymbol}
+                          {/* Segment */}
+                          <td className="px-3 py-2.5">
+                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${seg.color}`}>
+                              {seg.label}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5">
+                          {/* Symbol */}
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <div className="font-mono font-semibold text-sm leading-tight">
+                              {trade.customSymbol || trade.tradingSymbol}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground font-mono leading-tight">
+                              {trade.securityId}
+                            </div>
+                          </td>
+                          {/* Side */}
+                          <td className="px-3 py-2.5">
                             <SideBadge side={trade.transactionType} />
                           </td>
-                          <td className="px-4 py-2.5">
+                          {/* Product */}
+                          <td className="px-3 py-2.5">
                             <ProductBadge product={trade.productType} />
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {(trade as Record<string, unknown>).instrument as string || trade.orderType || "—"}
+                          {/* Instrument */}
+                          <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                            {trade.instrument || "—"}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-xs font-mono">
+                          {/* F&O Details: Expiry / Strike × Type */}
+                          <td className="px-3 py-2.5 text-xs font-mono whitespace-nowrap">
+                            {hasFno ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">{trade.drvExpiryDate}</span>
+                                <span className="font-semibold">
+                                  {trade.drvStrikePrice ? `${trade.drvStrikePrice} ` : ""}
+                                  {trade.drvOptionType ? (
+                                    <span className={trade.drvOptionType === "CALL" || trade.drvOptionType === "CE"
+                                      ? "text-green-400" : "text-red-400"}>
+                                      {trade.drvOptionType}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                          {/* Qty */}
+                          <td className="px-3 py-2.5 text-right text-xs font-mono">
                             {trade.tradedQuantity}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-xs font-mono font-semibold">
+                          {/* Price */}
+                          <td className="px-3 py-2.5 text-right text-xs font-mono font-semibold">
                             {formatCurrency(trade.tradedPrice)}
                           </td>
-                          <td className="px-4 py-2.5">
+                          {/* Order ID */}
+                          <td className="px-3 py-2.5">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="font-mono text-xs text-muted-foreground cursor-help">
+                                  …{trade.orderId.slice(-8)}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-mono">
+                                Order: {trade.orderId}
+                              </TooltipContent>
+                            </Tooltip>
+                          </td>
+                          {/* Trade ID */}
+                          <td className="px-3 py-2.5">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="font-mono text-xs text-muted-foreground cursor-help">
@@ -1199,12 +1274,13 @@ export default function OrdersPage() {
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="text-xs font-mono">
-                                {trade.exchangeTradeId}
+                                Trade: {trade.exchangeTradeId}
                               </TooltipContent>
                             </Tooltip>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                   </div>
