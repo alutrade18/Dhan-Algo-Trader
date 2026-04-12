@@ -143,13 +143,13 @@ const PRESETS: {
   mode: Exclude<DateMode, "custom">;
   days: number | null;
 }[] = [
-  { label: "7D", mode: "7d", days: 6 },
-  { label: "30D", mode: "30d", days: 29 },
-  { label: "365D", mode: "365d", days: 364 },
+  { label: "7 Days", mode: "7d", days: 6 },
+  { label: "30 Days", mode: "30d", days: 29 },
+  { label: "365 Days", mode: "365d", days: 364 },
   { label: "All-Time", mode: "alltime", days: null },
 ];
 
-const AUTO_RESET_MS = 1 * 60 * 1000; // 1 minute
+const AUTO_RESET_MS = 20 * 1000; // 20 seconds
 
 const Y_MAX = 1_500_000;
 const Y_STEP = 150_000;
