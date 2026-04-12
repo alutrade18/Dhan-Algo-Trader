@@ -19,7 +19,7 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **Broker API**: Dhan (https://dhanhq.co)
 
 ## Instrument Master Database
-- **223,285 instruments** seeded from Dhan Excel files (EQUITY, FUTIDX, FUTSTK, INDEX, OPTFUT, OPTIDX, OPTSTK)
+- **209,543 instruments** seeded from Dhan Excel files (EQUITY, FUTIDX, FUTSTK, INDEX, OPTFUT, OPTIDX, OPTSTK)
 - Seed script: `lib/db/seed-instruments.cjs` — run with `cd lib/db && NODE_PATH=./node_modules:../../node_modules node seed-instruments.cjs`
 - Re-run anytime new master files are uploaded to `attached_assets/`
 - Table: `instruments` — columns: securityId, exchId, segment, instrument, symbolName, displayName, isin, lotSize, tickSize, expiryDate, strikePrice, optionType
