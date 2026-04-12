@@ -72,93 +72,93 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME — Midnight Indigo ────────────────── */
+/* ── LIGHT THEME — Carbon Gold ────────────────────── */
 :root,
 .light {
-  --background: 245 22% 96%;        /* very light lavender-gray */
-  --foreground: 240 38% 10%;        /* near-black with indigo tint */
-  --border: 245 18% 87%;
-  --input: 0 0% 100%;               /* white inputs stand out */
-  --ring: 243 72% 50%;              /* indigo focus ring */
+  --background: 36 28% 96%;         /* warm off-white cream */
+  --foreground: 24 30% 8%;          /* deep warm near-black */
+  --border: 36 20% 86%;
+  --input: 0 0% 100%;
+  --ring: 38 90% 42%;               /* amber/gold focus ring */
   --card: 0 0% 100%;
-  --card-foreground: 240 38% 10%;
-  --card-border: 245 18% 87%;
+  --card-foreground: 24 30% 8%;
+  --card-border: 36 20% 86%;
   --popover: 0 0% 100%;
-  --popover-foreground: 240 38% 10%;
-  --popover-border: 245 18% 87%;
-  --primary: 243 72% 50%;           /* deep indigo #3d3db8 */
-  --primary-foreground: 0 0% 100%;
-  --secondary: 245 22% 92%;
-  --secondary-foreground: 240 30% 22%;
-  --muted: 245 18% 94%;
-  --muted-foreground: 245 14% 46%;
-  --accent: 243 50% 93%;            /* light indigo tint */
-  --accent-foreground: 243 72% 28%;
-  --destructive: 4 76% 50%;
+  --popover-foreground: 24 30% 8%;
+  --popover-border: 36 20% 86%;
+  --primary: 38 90% 42%;            /* warm amber gold */
+  --primary-foreground: 24 30% 8%;
+  --secondary: 36 22% 92%;
+  --secondary-foreground: 24 24% 20%;
+  --muted: 36 18% 94%;
+  --muted-foreground: 36 12% 46%;
+  --accent: 38 70% 92%;             /* light gold tint */
+  --accent-foreground: 38 90% 24%;
+  --destructive: 4 76% 48%;
   --destructive-foreground: 0 0% 100%;
   --success: 145 62% 34%;
   --success-foreground: 0 0% 100%;
-  --warning: 38 88% 40%;
+  --warning: 32 95% 44%;
   --warning-foreground: 0 0% 100%;
-  --sidebar: 245 22% 94%;           /* lavender sidebar */
-  --sidebar-foreground: 240 30% 18%;
-  --sidebar-border: 245 18% 87%;
-  --sidebar-primary: 243 72% 50%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 243 45% 90%;    /* indigo hover tint */
-  --sidebar-accent-foreground: 243 72% 28%;
-  --sidebar-ring: 243 72% 50%;
-  --chart-1: 243 72% 50%;
+  --sidebar: 36 22% 93%;            /* warm cream sidebar */
+  --sidebar-foreground: 24 24% 16%;
+  --sidebar-border: 36 20% 86%;
+  --sidebar-primary: 38 90% 42%;
+  --sidebar-primary-foreground: 24 30% 8%;
+  --sidebar-accent: 38 65% 88%;     /* gold hover tint */
+  --sidebar-accent-foreground: 38 90% 22%;
+  --sidebar-ring: 38 90% 42%;
+  --chart-1: 38 90% 42%;
   --chart-2: 145 62% 34%;
-  --chart-3: 38 88% 40%;
-  --chart-4: 280 62% 52%;
-  --chart-5: 4 76% 50%;
+  --chart-3: 4 76% 48%;
+  --chart-4: 262 60% 52%;
+  --chart-5: 200 72% 44%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
   --radius: 0.5rem;
 }
 
-/* ── DARK THEME — Zerodha Kite Green ──────────────── */
+/* ── DARK THEME — Carbon Gold ──────────────────────── */
 .dark {
-  --background: 220 20% 9%;
-  --foreground: 210 20% 92%;
-  --border: 220 15% 19%;
-  --input: 220 15% 15%;
-  --ring: 158 64% 42%;
-  --card: 220 18% 12%;
-  --card-foreground: 210 20% 92%;
-  --card-border: 220 15% 19%;
-  --popover: 220 18% 12%;
-  --popover-foreground: 210 20% 92%;
-  --popover-border: 220 15% 19%;
-  --primary: 158 64% 42%;
-  --primary-foreground: 220 20% 9%;
-  --secondary: 220 15% 15%;
-  --secondary-foreground: 210 16% 78%;
-  --muted: 220 15% 13%;
-  --muted-foreground: 210 14% 55%;
-  --accent: 220 15% 15%;
-  --accent-foreground: 210 16% 78%;
-  --destructive: 4 78% 56%;
+  --background: 0 0% 7%;            /* pure charcoal black */
+  --foreground: 36 20% 90%;         /* warm off-white text */
+  --border: 0 0% 16%;
+  --input: 0 0% 12%;
+  --ring: 38 88% 50%;               /* amber gold ring */
+  --card: 0 0% 10%;                 /* slightly lifted charcoal */
+  --card-foreground: 36 20% 90%;
+  --card-border: 0 0% 16%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 36 20% 90%;
+  --popover-border: 0 0% 16%;
+  --primary: 38 88% 50%;            /* warm amber/gold */
+  --primary-foreground: 0 0% 7%;
+  --secondary: 0 0% 13%;
+  --secondary-foreground: 36 16% 76%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 36 10% 54%;
+  --accent: 0 0% 13%;
+  --accent-foreground: 36 16% 76%;
+  --destructive: 4 76% 56%;
   --destructive-foreground: 0 0% 100%;
-  --success: 158 64% 42%;
-  --success-foreground: 220 20% 9%;
-  --warning: 42 88% 58%;
-  --warning-foreground: 220 20% 9%;
-  --sidebar: 220 22% 7%;
-  --sidebar-foreground: 210 16% 80%;
-  --sidebar-border: 220 15% 17%;
-  --sidebar-primary: 158 64% 42%;
-  --sidebar-primary-foreground: 220 20% 9%;
-  --sidebar-accent: 220 15% 13%;
-  --sidebar-accent-foreground: 210 16% 80%;
-  --sidebar-ring: 158 64% 42%;
-  --chart-1: 158 64% 42%;
-  --chart-2: 4 78% 56%;
-  --chart-3: 42 88% 58%;
-  --chart-4: 210 70% 60%;
-  --chart-5: 280 60% 62%;
+  --success: 145 60% 44%;
+  --success-foreground: 0 0% 7%;
+  --warning: 32 92% 52%;
+  --warning-foreground: 0 0% 7%;
+  --sidebar: 0 0% 5%;               /* deepest charcoal sidebar */
+  --sidebar-foreground: 36 16% 78%;
+  --sidebar-border: 0 0% 14%;
+  --sidebar-primary: 38 88% 50%;
+  --sidebar-primary-foreground: 0 0% 7%;
+  --sidebar-accent: 0 0% 12%;       /* subtle hover fill */
+  --sidebar-accent-foreground: 36 16% 82%;
+  --sidebar-ring: 38 88% 50%;
+  --chart-1: 38 88% 50%;
+  --chart-2: 145 60% 44%;
+  --chart-3: 4 76% 56%;
+  --chart-4: 262 65% 65%;
+  --chart-5: 200 72% 52%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
@@ -221,18 +221,18 @@
   }
 
   /* ── Order Book depth rows ── */
-  .depth-buy-row  { background: hsl(158 58% 38% / 0.07); }
-  .depth-sell-row { background: hsl(4 78% 50% / 0.07); }
-  .dark .depth-buy-row  { background: hsl(158 64% 42% / 0.15); }
-  .dark .depth-sell-row { background: hsl(4 78% 56% / 0.15); }
+  .depth-buy-row  { background: hsl(145 62% 34% / 0.07); }
+  .depth-sell-row { background: hsl(4 76% 48% / 0.07); }
+  .dark .depth-buy-row  { background: hsl(145 60% 44% / 0.14); }
+  .dark .depth-sell-row { background: hsl(4 76% 56% / 0.14); }
 
   /* ── Option Chain CE/PE row tints ── */
-  .oc-ce-row { background: hsl(158 58% 38% / 0.06); }
-  .oc-pe-row { background: hsl(4 78% 50% / 0.06); }
-  .oc-atm-row { background: hsl(42 88% 40% / 0.1); border-left: 2px solid hsl(var(--warning)); }
-  .dark .oc-ce-row { background: hsl(158 64% 42% / 0.15); }
-  .dark .oc-pe-row { background: hsl(4 78% 56% / 0.15); }
-  .dark .oc-atm-row { background: hsl(42 88% 30% / 0.2); border-left: 2px solid hsl(var(--warning)); }
+  .oc-ce-row { background: hsl(145 62% 34% / 0.06); }
+  .oc-pe-row { background: hsl(4 76% 48% / 0.06); }
+  .oc-atm-row { background: hsl(38 90% 42% / 0.12); border-left: 2px solid hsl(var(--warning)); }
+  .dark .oc-ce-row { background: hsl(145 60% 44% / 0.14); }
+  .dark .oc-pe-row { background: hsl(4 76% 56% / 0.14); }
+  .dark .oc-atm-row { background: hsl(38 88% 50% / 0.18); border-left: 2px solid hsl(var(--warning)); }
 
   /* ── Position P&L colours ── */
   .pnl-positive { color: hsl(var(--success)); font-weight: 500; }
