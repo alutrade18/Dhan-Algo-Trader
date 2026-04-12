@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -113,6 +113,8 @@ function LogRow({ log }: { log: AppLog }) {
   );
 }
 
+const LIMIT = 500;
+
 export default function Logs() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -122,11 +124,12 @@ export default function Logs() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchRef = useRef<HTMLInputElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery<LogsResponse>({
     queryKey: ["app-logs", level, category, search, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: "100" });
+      const params = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (level !== "all") params.set("level", level);
       if (category !== "all") params.set("category", category);
       if (search) params.set("search", search);
@@ -136,6 +139,13 @@ export default function Logs() {
     },
     refetchInterval: 10000,
   });
+
+  // Scroll to top (newest entry) whenever new data arrives
+  useEffect(() => {
+    if (data && tableScrollRef.current) {
+      tableScrollRef.current.scrollTop = 0;
+    }
+  }, [data]);
 
   const clearMutation = useMutation({
     mutationFn: async () => {
@@ -156,7 +166,6 @@ export default function Logs() {
 
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
-  const LIMIT = 100;
 
   return (
     <div className="space-y-4">
@@ -238,10 +247,14 @@ export default function Logs() {
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-md border border-border">
+          <div
+            ref={tableScrollRef}
+            className="overflow-auto rounded-md border border-border"
+            style={{ maxHeight: "calc(100vh - 320px)", minHeight: "240px" }}
+          >
             <table className="w-full table-auto text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
                   <th className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Time</th>
                   <th className="px-2 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Level</th>
                   <th className="px-2 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Category</th>
