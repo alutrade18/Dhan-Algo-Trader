@@ -60,26 +60,30 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
         let prevBal = 0;
         let deposits = 0;
         let withdrawals = 0;
-        let finalBal = 0;
         for (const e of entries) {
           const narr = String(e.narration ?? e.particulars ?? "").toUpperCase();
           const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
           if (isNaN(bal)) continue;
           const delta = bal - prevBal;
-          if (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT"))) {
-            deposits += delta > 0 ? delta : 0;
-          } else if (narr.includes("WITHDRAW") || narr.includes("PAYOUT") || narr.includes("TRANSFER OUT")) {
-            withdrawals += delta < 0 ? Math.abs(delta) : 0;
+          // Use amount field if available (more accurate than runbal diff)
+          const amt = parseFloat(String(e.amount ?? "0").replace(/,/g, ""));
+          const txnAmt = !isNaN(amt) && amt !== 0 ? Math.abs(amt) : Math.abs(delta);
+          if (
+            narr.includes("FUNDS DEPOSIT") || narr.includes("FUNDS RECEIV") ||
+            (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT") || narr.includes("TRANSFER IN")))
+          ) {
+            if (delta > 0) deposits += txnAmt;
+          } else if (
+            narr.includes("FUNDS WITHDRAW") || narr.includes("PAYOUT") || narr.includes("TRANSFER OUT") ||
+            (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"))
+          ) {
+            if (delta < 0) withdrawals += txnAmt;
           }
           prevBal = bal;
-          finalBal = bal;
         }
-        totalPnl = Math.round((finalBal + withdrawals - deposits) * 100) / 100;
-        if (deposits === 0 && withdrawals === 0 && entries.length >= 2) {
-          const first = parseFloat(String(entries[0].runbal ?? "0").replace(/,/g, ""));
-          const last = parseFloat(String(entries[entries.length - 1].runbal ?? "0").replace(/,/g, ""));
-          totalPnl = Math.round((last - first) * 100) / 100;
-        }
+        // Use live availableBalance (from fund limits) as the ground-truth current balance.
+        // This prevents the ledger's stale "closing balance" entry from corrupting the calc.
+        totalPnl = Math.round((availableBalance + withdrawals - deposits) * 100) / 100;
       }
     } else {
       req.log.warn({ err: (ledgerResult as PromiseRejectedResult).reason }, "Ledger fetch failed");
