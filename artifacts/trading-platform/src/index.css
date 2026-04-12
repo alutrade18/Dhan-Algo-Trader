@@ -41,6 +41,9 @@
 
   --color-success: hsl(var(--success));
   --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
   
   --color-chart-1: hsl(var(--chart-1));
   --color-chart-2: hsl(var(--chart-2));
@@ -69,137 +72,97 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME: Dark-chrome professional terminal ─────────────────── */
+/* ── LIGHT THEME ─────────────────────────────────── */
 :root,
 .light {
-  /* Page — clean neutral canvas */
-  --background: 220 16% 95%;        /* #eef0f5 — cool light gray */
-  --foreground: 220 35% 10%;        /* #101828 — near-black */
-
-  /* Borders & inputs */
-  --border: 220 14% 87%;            /* #d5d9e4 */
-  --input: 0 0% 100%;               /* white input fields */
-  --ring: 214 80% 46%;              /* bright blue focus ring */
-
-  /* Cards — pure white lifted from background */
+  --background: 210 28% 97%;
+  --foreground: 214 40% 12%;
+  --border: 213 22% 86%;
+  --input: 213 22% 86%;
+  --ring: 214 72% 44%;
   --card: 0 0% 100%;
-  --card-foreground: 220 35% 10%;
-  --card-border: 220 14% 87%;
-
-  /* Popovers / dropdowns */
+  --card-foreground: 214 40% 12%;
+  --card-border: 213 22% 86%;
   --popover: 0 0% 100%;
-  --popover-foreground: 220 35% 10%;
-  --popover-border: 220 14% 87%;
-
-  /* Primary — deep corporate navy blue */
-  --primary: 214 80% 38%;           /* #1550b8 */
+  --popover-foreground: 214 40% 12%;
+  --popover-border: 213 22% 86%;
+  --primary: 214 72% 44%;
   --primary-foreground: 0 0% 100%;
-
-  /* Secondary — soft gray chip */
-  --secondary: 220 14% 92%;
-  --secondary-foreground: 220 25% 22%;
-
-  /* Muted */
-  --muted: 220 14% 93%;
-  --muted-foreground: 220 14% 46%;  /* mid gray readable text */
-
-  /* Accent */
-  --accent: 214 60% 92%;
-  --accent-foreground: 214 60% 20%;
-
-  /* Status */
-  --destructive: 0 76% 48%;
+  --secondary: 211 28% 92%;
+  --secondary-foreground: 214 35% 18%;
+  --muted: 210 24% 95%;
+  --muted-foreground: 214 18% 42%;
+  --accent: 211 32% 90%;
+  --accent-foreground: 214 40% 12%;
+  --destructive: 0 78% 47%;
   --destructive-foreground: 0 0% 100%;
   --success: 145 62% 34%;
   --success-foreground: 0 0% 100%;
-
-  /* Sidebar — DARK NAVY CHROME (Bloomberg / Kite / Schwab pattern) */
-  --sidebar: 220 34% 14%;           /* #181f30 — deep navy chrome */
-  --sidebar-foreground: 214 22% 78%; /* #b4c2d6 — readable off-white */
-  --sidebar-border: 220 28% 20%;    /* #242e42 */
-  --sidebar-primary: 210 82% 62%;   /* #3e8ef5 — bright blue active */
-  --sidebar-primary-foreground: 220 34% 10%;
-  --sidebar-accent: 220 28% 20%;    /* hover fill */
-  --sidebar-accent-foreground: 214 22% 90%;
-  --sidebar-ring: 210 82% 62%;
-
+  --warning: 38 92% 35%;
+  --warning-foreground: 0 0% 100%;
+  --sidebar: 213 30% 94%;
+  --sidebar-foreground: 214 35% 18%;
+  --sidebar-border: 213 22% 86%;
+  --sidebar-primary: 214 72% 44%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 211 28% 90%;
+  --sidebar-accent-foreground: 214 35% 18%;
+  --sidebar-ring: 214 72% 44%;
+  --chart-1: 214 72% 44%;
+  --chart-2: 145 62% 34%;
+  --chart-3: 38 90% 48%;
+  --chart-4: 262 60% 52%;
+  --chart-5: 340 72% 50%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-
   --radius: 0.375rem;
-
-  --chart-1: 214 80% 38%;
-  --chart-2: 145 62% 34%;
-  --chart-3: 32 90% 48%;
-  --chart-4: 262 60% 52%;
-  --chart-5: 340 72% 50%;
 }
 
-/* ── DARK THEME: Bloomberg/Refinitiv terminal palette ───────────────── */
+/* ── DARK THEME — Bloomberg Terminal ──────────────── */
 .dark {
-  /* Page — deep navy-charcoal, NOT pure black */
-  --background: 222 24% 8%;         /* #0e1420 — deep navy */
-  --foreground: 210 28% 90%;        /* #dae4ef — warm off-white */
-
-  /* Borders & inputs */
-  --border: 220 18% 20%;            /* #252f40 — blue-tinted dark border */
-  --input: 220 18% 16%;             /* #1c2435 — dark input bg */
-  --ring: 210 82% 62%;              /* #3e8ef5 — bright electric blue */
-
-  /* Cards — slightly lifted from background */
-  --card: 220 22% 11%;              /* #141c2b — card surface */
+  --background: 222 24% 8%;
+  --foreground: 210 28% 90%;
+  --border: 220 18% 20%;
+  --input: 220 18% 16%;
+  --ring: 210 82% 62%;
+  --card: 220 22% 11%;
   --card-foreground: 210 28% 90%;
   --card-border: 220 18% 20%;
-
-  /* Popovers */
   --popover: 220 22% 11%;
   --popover-foreground: 210 28% 90%;
   --popover-border: 220 18% 20%;
-
-  /* Primary — electric corporate blue */
-  --primary: 210 82% 62%;           /* #3e8ef5 */
+  --primary: 210 82% 62%;
   --primary-foreground: 222 24% 8%;
-
-  /* Secondary — dark blue-gray chip */
-  --secondary: 220 18% 16%;         /* #1c2435 */
-  --secondary-foreground: 210 24% 80%; /* #b8cfe0 */
-
-  /* Muted */
-  --muted: 220 18% 14%;             /* #18202f */
-  --muted-foreground: 213 20% 58%;  /* #7b9ab5 — readable slate-blue */
-
-  /* Accent */
+  --secondary: 220 18% 16%;
+  --secondary-foreground: 210 24% 80%;
+  --muted: 220 18% 14%;
+  --muted-foreground: 213 20% 58%;
   --accent: 220 18% 16%;
   --accent-foreground: 210 24% 80%;
-
-  /* Status — bright enough to read on dark bg */
-  --destructive: 0 72% 55%;         /* #e03a3a — vivid red */
+  --destructive: 0 72% 55%;
   --destructive-foreground: 0 0% 100%;
-  --success: 145 60% 44%;           /* #2dab63 — vivid green */
+  --success: 145 60% 44%;
   --success-foreground: 0 0% 100%;
-
-  /* Sidebar — unified with header, slightly darker than background */
-  --sidebar: 222 24% 9%;            /* #0e1622 — one step darker than bg */
-  --sidebar-foreground: 210 24% 84%;
-  --sidebar-border: 220 18% 19%;
+  --warning: 38 85% 58%;
+  --warning-foreground: 222 24% 8%;
+  --sidebar: 222 26% 6%;
+  --sidebar-foreground: 210 24% 82%;
+  --sidebar-border: 220 18% 18%;
   --sidebar-primary: 210 82% 62%;
   --sidebar-primary-foreground: 222 24% 8%;
-  --sidebar-accent: 220 18% 15%;
-  --sidebar-accent-foreground: 210 24% 84%;
+  --sidebar-accent: 220 18% 14%;
+  --sidebar-accent-foreground: 210 24% 82%;
   --sidebar-ring: 210 82% 62%;
-
+  --chart-1: 210 82% 62%;
+  --chart-2: 145 60% 44%;
+  --chart-3: 38 85% 58%;
+  --chart-4: 262 65% 65%;
+  --chart-5: 340 72% 58%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-
   --radius: 0.375rem;
-
-  --chart-1: 210 82% 62%;
-  --chart-2: 145 60% 44%;
-  --chart-3: 32 85% 58%;
-  --chart-4: 262 65% 65%;
-  --chart-5: 340 72% 58%;
 }
 
 @layer base {
@@ -256,4 +219,105 @@
   .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
   }
+
+  /* ── Order Book depth rows ── */
+  .depth-buy-row  { background: hsl(145 60% 44% / 0.08); }
+  .depth-sell-row { background: hsl(0 72% 55% / 0.08); }
+  .dark .depth-buy-row  { background: hsl(145 60% 20% / 0.25); }
+  .dark .depth-sell-row { background: hsl(0 72% 30% / 0.25); }
+
+  /* ── Option Chain CE/PE row tints ── */
+  .oc-ce-row { background: hsl(145 60% 44% / 0.06); }
+  .oc-pe-row { background: hsl(0 72% 55% / 0.06); }
+  .oc-atm-row { background: hsl(38 85% 58% / 0.12); border-left: 2px solid hsl(var(--warning)); }
+  .dark .oc-ce-row { background: hsl(145 60% 20% / 0.18); }
+  .dark .oc-pe-row { background: hsl(0 72% 30% / 0.18); }
+  .dark .oc-atm-row { background: hsl(38 85% 30% / 0.20); border-left: 2px solid hsl(var(--warning)); }
+
+  /* ── Position P&L colours ── */
+  .pnl-positive { color: hsl(var(--success)); font-weight: 500; }
+  .pnl-negative { color: hsl(var(--destructive)); font-weight: 500; }
+
+  /* ── Log level badges ── */
+  .log-info  { background: hsl(var(--primary)/0.15); color: hsl(var(--primary)); }
+  .log-warn  { background: hsl(var(--warning)/0.15); color: hsl(var(--warning)); }
+  .log-error { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+  .dark .log-info  { background: hsl(var(--primary)/0.2); }
+  .dark .log-warn  { background: hsl(var(--warning)/0.2); }
+  .dark .log-error { background: hsl(var(--destructive)/0.2); }
+
+  /* ── Search input with icon ── */
+  .search-input {
+    background: hsl(var(--input));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    border-radius: var(--radius-md);
+    padding: 0 0.75rem 0 2.25rem;
+    height: 36px;
+    width: 100%;
+    font-size: 0.875rem;
+  }
+  .search-input::placeholder { color: hsl(var(--muted-foreground)); }
+  .search-input:focus { outline: none; border-color: hsl(var(--ring)); box-shadow: 0 0 0 2px hsl(var(--ring)/0.2); }
+  .search-btn {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0 1rem;
+    height: 36px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .search-btn:hover { opacity: 0.88; }
+
+  /* ── Status order badges ── */
+  .badge-traded    { background: hsl(var(--success)/0.15);     color: hsl(var(--success)); }
+  .badge-pending   { background: hsl(var(--warning)/0.15);     color: hsl(var(--warning)); }
+  .badge-rejected  { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+  .badge-cancelled { background: hsl(var(--muted));            color: hsl(var(--muted-foreground)); }
+  .badge-part      { background: hsl(210 82% 62% / 0.15);      color: hsl(210 82% 62%); }
+
+  /* ── Strategy status ── */
+  .status-active  { background: hsl(var(--success)/0.15);  color: hsl(var(--success)); }
+  .status-paused  { background: hsl(var(--warning)/0.15);  color: hsl(var(--warning)); }
+  .status-stopped { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+
+  /* ── Kill switch banner ── */
+  .killswitch-banner {
+    background: hsl(var(--destructive)/0.12);
+    border-bottom: 1px solid hsl(var(--destructive)/0.3);
+    color: hsl(var(--destructive));
+  }
+
+  /* ── Engine running indicator ── */
+  .engine-dot-on  { background: hsl(var(--success)); animation: pulse 2s infinite; }
+  .engine-dot-off { background: hsl(var(--muted-foreground)); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Token expiry warning ── */
+  .token-warn-banner {
+    background: hsl(var(--warning)/0.1);
+    border: 1px solid hsl(var(--warning)/0.35);
+    color: hsl(var(--warning));
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  /* ── Table rows ── */
+  .table-row-hover:hover { background: hsl(var(--muted)/0.6); }
+  .table-header-cell { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+
+  /* ── Sidebar active item ── */
+  .sidebar-item-active {
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+  }
+  .sidebar-item-active svg { color: hsl(var(--sidebar-primary)); }
 }

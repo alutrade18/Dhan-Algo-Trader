@@ -1,0 +1,200 @@
+Replace the entire content of file:
+artifacts/trading-platform/src/index.css
+
+Keep all @import, @plugin, @custom-variant, @theme inline, @layer base sections EXACTLY as they are.
+Only replace the :root/.light block and the .dark block with these values:
+
+/* ── LIGHT THEME ─────────────────────────────────── */
+:root,
+.light {
+  --background: 210 28% 97%;
+  --foreground: 214 40% 12%;
+  --border: 213 22% 86%;
+  --input: 213 22% 86%;
+  --ring: 214 72% 44%;
+  --card: 0 0% 100%;
+  --card-foreground: 214 40% 12%;
+  --card-border: 213 22% 86%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 214 40% 12%;
+  --popover-border: 213 22% 86%;
+  --primary: 214 72% 44%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 211 28% 92%;
+  --secondary-foreground: 214 35% 18%;
+  --muted: 210 24% 95%;
+  --muted-foreground: 214 18% 42%;
+  --accent: 211 32% 90%;
+  --accent-foreground: 214 40% 12%;
+  --destructive: 0 78% 47%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 145 62% 34%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 35%;
+  --warning-foreground: 0 0% 100%;
+  --sidebar: 213 30% 94%;
+  --sidebar-foreground: 214 35% 18%;
+  --sidebar-border: 213 22% 86%;
+  --sidebar-primary: 214 72% 44%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 211 28% 90%;
+  --sidebar-accent-foreground: 214 35% 18%;
+  --sidebar-ring: 214 72% 44%;
+  --chart-1: 214 72% 44%;
+  --chart-2: 145 62% 34%;
+  --chart-3: 38 90% 48%;
+  --chart-4: 262 60% 52%;
+  --chart-5: 340 72% 50%;
+  --app-font-sans: 'Inter', sans-serif;
+  --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  --radius: 0.375rem;
+}
+
+/* ── DARK THEME — Bloomberg Terminal ──────────────── */
+.dark {
+  --background: 222 24% 8%;
+  --foreground: 210 28% 90%;
+  --border: 220 18% 20%;
+  --input: 220 18% 16%;
+  --ring: 210 82% 62%;
+  --card: 220 22% 11%;
+  --card-foreground: 210 28% 90%;
+  --card-border: 220 18% 20%;
+  --popover: 220 22% 11%;
+  --popover-foreground: 210 28% 90%;
+  --popover-border: 220 18% 20%;
+  --primary: 210 82% 62%;
+  --primary-foreground: 222 24% 8%;
+  --secondary: 220 18% 16%;
+  --secondary-foreground: 210 24% 80%;
+  --muted: 220 18% 14%;
+  --muted-foreground: 213 20% 58%;
+  --accent: 220 18% 16%;
+  --accent-foreground: 210 24% 80%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 145 60% 44%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 85% 58%;
+  --warning-foreground: 222 24% 8%;
+  --sidebar: 222 26% 6%;
+  --sidebar-foreground: 210 24% 82%;
+  --sidebar-border: 220 18% 18%;
+  --sidebar-primary: 210 82% 62%;
+  --sidebar-primary-foreground: 222 24% 8%;
+  --sidebar-accent: 220 18% 14%;
+  --sidebar-accent-foreground: 210 24% 82%;
+  --sidebar-ring: 210 82% 62%;
+  --chart-1: 210 82% 62%;
+  --chart-2: 145 60% 44%;
+  --chart-3: 38 85% 58%;
+  --chart-4: 262 65% 65%;
+  --chart-5: 340 72% 58%;
+  --app-font-sans: 'Inter', sans-serif;
+  --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  --radius: 0.375rem;
+}
+
+After replacing CSS variables, also add these custom utility classes
+at the END of the file inside @layer base:
+
+  /* ── Order Book depth rows ── */
+  .depth-buy-row  { background: hsl(145 60% 44% / 0.08); }
+  .depth-sell-row { background: hsl(0 72% 55% / 0.08); }
+  .dark .depth-buy-row  { background: hsl(145 60% 20% / 0.25); }
+  .dark .depth-sell-row { background: hsl(0 72% 30% / 0.25); }
+
+  /* ── Option Chain CE/PE row tints ── */
+  .oc-ce-row { background: hsl(145 60% 44% / 0.06); }
+  .oc-pe-row { background: hsl(0 72% 55% / 0.06); }
+  .oc-atm-row { background: hsl(38 85% 58% / 0.12); border-left: 2px solid hsl(var(--warning)); }
+  .dark .oc-ce-row { background: hsl(145 60% 20% / 0.18); }
+  .dark .oc-pe-row { background: hsl(0 72% 30% / 0.18); }
+  .dark .oc-atm-row { background: hsl(38 85% 30% / 0.20); border-left: 2px solid hsl(var(--warning)); }
+
+  /* ── Position P&L colours ── */
+  .pnl-positive { color: hsl(var(--success)); font-weight: 500; }
+  .pnl-negative { color: hsl(var(--destructive)); font-weight: 500; }
+
+  /* ── Log level badges ── */
+  .log-info  { background: hsl(var(--primary)/0.15); color: hsl(var(--primary)); }
+  .log-warn  { background: hsl(var(--warning)/0.15); color: hsl(var(--warning)); }
+  .log-error { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+  .dark .log-info  { background: hsl(var(--primary)/0.2); }
+  .dark .log-warn  { background: hsl(var(--warning)/0.2); }
+  .dark .log-error { background: hsl(var(--destructive)/0.2); }
+
+  /* ── Search input with icon ── */
+  .search-input {
+    background: hsl(var(--input));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    border-radius: var(--radius-md);
+    padding: 0 0.75rem 0 2.25rem;
+    height: 36px;
+    width: 100%;
+    font-size: 0.875rem;
+  }
+  .search-input::placeholder { color: hsl(var(--muted-foreground)); }
+  .search-input:focus { outline: none; border-color: hsl(var(--ring)); box-shadow: 0 0 0 2px hsl(var(--ring)/0.2); }
+  .search-btn {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0 1rem;
+    height: 36px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .search-btn:hover { opacity: 0.88; }
+
+  /* ── Status order badges ── */
+  .badge-traded    { background: hsl(var(--success)/0.15);     color: hsl(var(--success)); }
+  .badge-pending   { background: hsl(var(--warning)/0.15);     color: hsl(var(--warning)); }
+  .badge-rejected  { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+  .badge-cancelled { background: hsl(var(--muted));            color: hsl(var(--muted-foreground)); }
+  .badge-part      { background: hsl(210 82% 62% / 0.15);      color: hsl(210 82% 62%); }
+
+  /* ── Strategy status ── */
+  .status-active  { background: hsl(var(--success)/0.15);  color: hsl(var(--success)); }
+  .status-paused  { background: hsl(var(--warning)/0.15);  color: hsl(var(--warning)); }
+  .status-stopped { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+
+  /* ── Kill switch banner ── */
+  .killswitch-banner {
+    background: hsl(var(--destructive)/0.12);
+    border-bottom: 1px solid hsl(var(--destructive)/0.3);
+    color: hsl(var(--destructive));
+  }
+
+  /* ── Engine running indicator ── */
+  .engine-dot-on  { background: hsl(var(--success)); animation: pulse 2s infinite; }
+  .engine-dot-off { background: hsl(var(--muted-foreground)); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Token expiry warning ── */
+  .token-warn-banner {
+    background: hsl(var(--warning)/0.1);
+    border: 1px solid hsl(var(--warning)/0.35);
+    color: hsl(var(--warning));
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  /* ── Table rows ── */
+  .table-row-hover:hover { background: hsl(var(--muted)/0.6); }
+  .table-header-cell { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+
+  /* ── Sidebar active item ── */
+  .sidebar-item-active {
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+  }
+  .sidebar-item-active svg { color: hsl(var(--sidebar-primary)); }
