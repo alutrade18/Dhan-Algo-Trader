@@ -1142,22 +1142,22 @@ export default function OrdersPage() {
                       <tr className="border-b border-border bg-muted/30">
                         {([
                           ["Trade Time",   "left" ],
-                          ["Segment",      "left" ],
                           ["Symbol",       "left" ],
-                          ["Instrument",   "left" ],
-                          ["Side",         "left" ],
                           ["Option Type",  "left" ],
-                          ["Strike Price", "right"],
-                          ["Expiry Date",  "left" ],
+                          ["Side",         "left" ],
+                          ["Instrument",   "left" ],
                           ["Product",      "left" ],
+                          ["Strike Price", "left" ],
+                          ["Expiry Date",  "left" ],
                           ["Qty",          "right"],
                           ["Price",        "right"],
+                          ["Segment",      "left" ],
                           ["Order ID",     "left" ],
                           ["Security ID",  "left" ],
                           ["Client ID",    "left" ],
                         ] as [string, string][]).map(([label, align]) => (
                           <th key={label}
-                            className={`px-2.5 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}`}
+                            className={`px-2.5 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}${label === "Order ID" ? " min-w-[160px]" : ""}`}
                           >{label}</th>
                         ))}
                       </tr>
@@ -1175,25 +1175,11 @@ export default function OrdersPage() {
                           <td className="px-2.5 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
                             {formatDateTime(trade.exchangeTime || trade.createTime)}
                           </td>
-                          {/* Segment */}
-                          <td className="px-2.5 py-2">
-                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${seg.color}`}>
-                              {seg.label}
-                            </span>
-                          </td>
                           {/* Symbol */}
                           <td className="px-2.5 py-2 whitespace-nowrap">
                             <span className="font-mono font-semibold text-xs">
                               {trade.customSymbol || trade.tradingSymbol}
                             </span>
-                          </td>
-                          {/* Instrument */}
-                          <td className="px-2.5 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                            {trade.instrument || "—"}
-                          </td>
-                          {/* Side */}
-                          <td className="px-2.5 py-2">
-                            <SideBadge side={trade.transactionType} />
                           </td>
                           {/* Option Type */}
                           <td className="px-2.5 py-2 text-xs font-semibold whitespace-nowrap">
@@ -1204,8 +1190,20 @@ export default function OrdersPage() {
                               </span>
                             ) : <span className="text-muted-foreground/40">—</span>}
                           </td>
+                          {/* Side */}
+                          <td className="px-2.5 py-2">
+                            <SideBadge side={trade.transactionType} />
+                          </td>
+                          {/* Instrument */}
+                          <td className="px-2.5 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                            {trade.instrument || "—"}
+                          </td>
+                          {/* Product */}
+                          <td className="px-2.5 py-2">
+                            <ProductBadge product={trade.productType} />
+                          </td>
                           {/* Strike Price */}
-                          <td className="px-2.5 py-2 text-right text-xs font-mono">
+                          <td className="px-2.5 py-2 text-left text-xs font-mono">
                             {trade.drvStrikePrice && trade.drvStrikePrice !== 0
                               ? trade.drvStrikePrice.toLocaleString("en-IN")
                               : <span className="text-muted-foreground/40">—</span>}
@@ -1216,10 +1214,6 @@ export default function OrdersPage() {
                               ? trade.drvExpiryDate
                               : <span className="text-muted-foreground/40">—</span>}
                           </td>
-                          {/* Product */}
-                          <td className="px-2.5 py-2">
-                            <ProductBadge product={trade.productType} />
-                          </td>
                           {/* Qty */}
                           <td className="px-2.5 py-2 text-right text-xs font-mono">
                             {trade.tradedQuantity.toLocaleString("en-IN")}
@@ -1228,18 +1222,17 @@ export default function OrdersPage() {
                           <td className="px-2.5 py-2 text-right text-xs font-mono font-semibold">
                             {formatCurrency(trade.tradedPrice)}
                           </td>
-                          {/* Order ID */}
+                          {/* Segment */}
                           <td className="px-2.5 py-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="font-mono text-xs text-muted-foreground cursor-help">
-                                  …{trade.orderId.slice(-9)}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs font-mono">
-                                {trade.orderId}
-                              </TooltipContent>
-                            </Tooltip>
+                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${seg.color}`}>
+                              {seg.label}
+                            </span>
+                          </td>
+                          {/* Order ID — full width, no truncation */}
+                          <td className="px-2.5 py-2 min-w-[160px]">
+                            <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                              {trade.orderId}
+                            </span>
                           </td>
                           {/* Security ID */}
                           <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
