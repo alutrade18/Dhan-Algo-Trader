@@ -5,11 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { IndianRupee, TrendingUp, Briefcase, Activity, ShieldAlert, CalendarIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { IndianRupee, TrendingUp, Briefcase, Activity, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DateRange } from "react-day-picker";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -28,10 +26,6 @@ function daysAgo(n: number) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d;
-}
-function fmtDate(d?: Date) {
-  if (!d) return "—";
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function StatCard({ title, value, inlineTag, icon: Icon, isLoading, valueClass }: {
@@ -87,11 +81,8 @@ export default function Dashboard() {
   const fundsData = funds as (typeof funds & { availableBalance?: number; utilizedAmount?: number }) | undefined;
 
   const [dateMode, setDateMode] = useState<DateMode>("7d");
-  const [calOpen, setCalOpen] = useState(false);
-  const [range, setRange] = useState<DateRange | undefined>({
-    from: daysAgo(6),
-    to: new Date(),
-  });
+  const [fromInput, setFromInput] = useState(toYMD(daysAgo(29)));
+  const [toInput, setToInput] = useState(toYMD(new Date()));
   const [activeQuery, setActiveQuery] = useState<{ mode: DateMode; from: string; to: string }>({
     mode: "7d", from: toYMD(daysAgo(6)), to: toYMD(new Date()),
   });
@@ -150,20 +141,16 @@ export default function Dashboard() {
     const from = daysAgo(preset.days);
     const to = new Date();
     setDateMode(preset.mode);
-    setRange({ from, to });
+    setFromInput(toYMD(from));
+    setToInput(toYMD(to));
     setActiveQuery({ mode: preset.mode, from: toYMD(from), to: toYMD(to) });
   }
 
   function applyCustomRange() {
-    if (!range?.from || !range?.to) return;
+    if (!fromInput || !toInput || fromInput > toInput) return;
     setDateMode("custom");
-    setActiveQuery({ mode: "custom", from: toYMD(range.from), to: toYMD(range.to) });
-    setCalOpen(false);
+    setActiveQuery({ mode: "custom", from: fromInput, to: toInput });
   }
-
-  const dateLabel = activeQuery.mode !== "custom"
-    ? `${fmtDate(range?.from)} — ${fmtDate(range?.to)}`
-    : `${fmtDate(range?.from)} — ${fmtDate(range?.to)}`;
 
   return (
     <div className="space-y-4">
@@ -221,8 +208,8 @@ export default function Dashboard() {
 
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-            <CardTitle className="text-sm">Equity Curve — Dhan Ledger</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between flex-wrap">
+            <CardTitle className="text-sm shrink-0">Equity Curve — Dhan Ledger</CardTitle>
             <div className="flex items-center gap-1.5 flex-wrap">
               {PRESETS.map(p => (
                 <Button
@@ -233,40 +220,33 @@ export default function Dashboard() {
                 >{p.label}</Button>
               ))}
 
-              <Popover open={calOpen} onOpenChange={setCalOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={dateMode === "custom" ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 px-2.5 text-xs gap-1.5 max-w-[260px]"
-                  >
-                    <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{dateLabel}</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="range"
-                    selected={range}
-                    onSelect={setRange}
-                    numberOfMonths={2}
-                    disabled={{ after: new Date() }}
-                    captionLayout="label"
-                  />
-                  <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
-                    <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setCalOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm" className="text-xs h-7"
-                      onClick={applyCustomRange}
-                      disabled={!range?.from || !range?.to}
-                    >
-                      Apply Range
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <div className="flex items-center gap-1 border border-border rounded-md px-2 py-1 bg-background">
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">From</span>
+                <Input
+                  type="date"
+                  value={fromInput}
+                  max={toInput}
+                  onChange={e => { setFromInput(e.target.value); setDateMode("custom"); }}
+                  className="h-6 border-0 p-0 text-xs w-[110px] bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <span className="text-[11px] text-muted-foreground">—</span>
+                <Input
+                  type="date"
+                  value={toInput}
+                  min={fromInput}
+                  max={toYMD(new Date())}
+                  onChange={e => { setToInput(e.target.value); setDateMode("custom"); }}
+                  className="h-6 border-0 p-0 text-xs w-[110px] bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <Button
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={applyCustomRange}
+                  disabled={!fromInput || !toInput || fromInput > toInput}
+                >
+                  Go
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
