@@ -301,8 +301,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             <div className="hidden md:flex items-center gap-1.5">
               <Activity className={cn("w-4 h-4", marketOpen ? "text-success" : "text-muted-foreground")} />
-              <span className={cn("text-xs font-mono", marketOpen ? "text-success" : "text-muted-foreground")}>
-                {market.name}: {marketOpen ? "OPEN" : "CLOSED"}
+              <span className="text-xs font-mono text-muted-foreground">
+                {market.name}:{" "}
+                <span className={cn("font-bold", marketOpen ? "text-success" : "text-destructive")}>
+                  {marketOpen ? "OPEN" : "CLOSED"}
+                </span>
               </span>
             </div>
 
