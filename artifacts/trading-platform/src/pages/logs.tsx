@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RotateCcw, ChevronDown, ChevronRight, Eye, EyeOff, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -173,16 +173,12 @@ function getResetTs(): string | null {
 function setResetTs(ts: string) {
   try { localStorage.setItem(LS_KEY, ts); } catch {}
 }
-function clearResetTs() {
-  try { localStorage.removeItem(LS_KEY); } catch {}
-}
 
 export default function Logs() {
   const [level, setLevel] = useState("all");
   const [category, setCategory] = useState("all");
   const [page, setPage] = useState(0);
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
-  const isFiltered = resetTs !== null;
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -222,14 +218,7 @@ export default function Logs() {
     setResetTsState(now);
     setPage(0);
     queryClient.invalidateQueries({ queryKey: ["app-logs"] });
-    toast({ title: "View cleared", description: "UI shows only new logs. Nothing deleted from database." });
-  }
-
-  function handleShowAll() {
-    clearResetTs();
-    setResetTsState(null);
-    setPage(0);
-    queryClient.invalidateQueries({ queryKey: ["app-logs"] });
+    toast({ title: "Logs deleted from view", description: "All logs remain permanently stored in the database." });
   }
 
   const logs = data?.logs ?? [];
@@ -269,39 +258,17 @@ export default function Logs() {
                     </span>
                   )}
 
-                  {isFiltered ? (
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-8 gap-1.5 text-xs text-emerald-400 border-emerald-400/30 hover:bg-emerald-400/10"
-                      onClick={handleShowAll}
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      Show All History
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                      onClick={handleClearView}
-                      title="Hides existing logs in UI — nothing is deleted from the database"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Clear View
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline" size="sm"
+                    className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={handleClearView}
+                    title="Clears UI view only — all logs remain permanently in the database"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
                 </div>
               </div>
-
-              {isFiltered && resetTs && (
-                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded px-2.5 py-1.5">
-                  <RotateCcw className="h-3 w-3 shrink-0" />
-                  Showing logs since{" "}
-                  {new Date(resetTs).toLocaleString("en-IN", {
-                    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
-                  })}
-                  {" "}· Older logs are safe in the database — click &ldquo;Show All History&rdquo; to restore.
-                </div>
-              )}
             </CardHeader>
 
             <CardContent className="px-4 pb-4 space-y-3">
