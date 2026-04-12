@@ -30,14 +30,30 @@ const PAGE_TITLES: Record<string, string> = {
   "/logs": "Logs",
 };
 
-function isNSEMarketOpen(): boolean {
+type MarketStatus = { name: string; isOpen: boolean };
+
+function getMarketStatus(): MarketStatus {
   const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istNow = new Date(now.getTime() + istOffset);
-  const dayOfWeek = istNow.getUTCDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
-  const totalMinutes = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
-  return totalMinutes >= 9 * 60 && totalMinutes < 15 * 60 + 30;
+  const dayOfWeek = istNow.getUTCDay(); // 0=Sun 1=Mon … 5=Fri 6=Sat
+
+  // Weekend — all markets closed
+  if (dayOfWeek === 0 || dayOfWeek === 6) return { name: "NSE Market", isOpen: false };
+
+  const mins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
+  const NSE_OPEN  = 9 * 60;        // 09:00 AM IST
+  const NSE_CLOSE = 15 * 60 + 30;  // 03:30 PM IST
+  const MCX_CLOSE = 23 * 60 + 30;  // 11:30 PM IST
+
+  if (mins >= NSE_OPEN && mins < NSE_CLOSE) {
+    return { name: "NSE Market", isOpen: true };
+  } else if (mins >= NSE_CLOSE && mins < MCX_CLOSE) {
+    return { name: "MCX Market", isOpen: true };
+  } else {
+    // Before NSE opens (midnight–9 AM) or after MCX closes (11:30 PM+)
+    return { name: "NSE Market", isOpen: false };
+  }
 }
 
 function formatCurrency(val?: number | null) {
@@ -77,7 +93,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [location]);
 
-  const marketOpen = isNSEMarketOpen();
+  const [market, setMarket] = useState<MarketStatus>(getMarketStatus);
+  useEffect(() => {
+    // Re-evaluate every 30 seconds so transitions happen promptly
+    const id = setInterval(() => setMarket(getMarketStatus()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const marketOpen = market.isOpen;
   const brokerConnected = health?.brokerConnected ?? false;
   const systemOnline = marketOpen && brokerConnected;
 
@@ -279,7 +302,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="hidden md:flex items-center gap-1.5">
               <Activity className={cn("w-4 h-4", marketOpen ? "text-success" : "text-muted-foreground")} />
               <span className={cn("text-xs font-mono", marketOpen ? "text-success" : "text-muted-foreground")}>
-                Market: {marketOpen ? "OPEN" : "CLOSED"}
+                {market.name}: {marketOpen ? "OPEN" : "CLOSED"}
               </span>
             </div>
 
