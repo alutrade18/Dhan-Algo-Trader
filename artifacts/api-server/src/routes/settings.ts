@@ -5,6 +5,45 @@ import { UpdateSettingsBody } from "@workspace/api-zod";
 import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
 
+async function sendTelegramPing(botToken: string, chatId: string): Promise<void> {
+  try {
+    const now = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: true,
+    });
+    const message = [
+      "━━━━━━━━━━━━━━━━━━━━━━━",
+      "🤖  *RAJESH ALGO TRADING*",
+      "━━━━━━━━━━━━━━━━━━━━━━━",
+      "",
+      "✅  *Bot Connected Successfully*",
+      "",
+      "Your Telegram channel is now linked to the platform. You will receive real-time notifications for:",
+      "",
+      "  • Order executions & fills",
+      "  • Strategy signals & triggers",
+      "  • Kill switch activations",
+      "  • Risk management alerts",
+      "  • Daily P&L summaries",
+      "",
+      `🕐  *Connected at:* ${now} IST`,
+      "",
+      "━━━━━━━━━━━━━━━━━━━━━━━",
+      "_Rajesh Algo Platform — Powered by Dhan_",
+    ].join("\n");
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "Markdown" }),
+    });
+  } catch {
+    // fire-and-forget — ignore errors
+  }
+}
+
 const router: IRouter = Router();
 
 async function getOrCreateSettings() {
@@ -67,8 +106,23 @@ router.put("/settings", async (req, res): Promise<void> => {
     const val = Number(body.maxDailyLoss);
     if (!isNaN(val) && val >= 0) updateData.maxDailyLoss = val.toString();
   }
-  if (body.telegramBotToken !== undefined) updateData.telegramBotToken = body.telegramBotToken || null;
-  if (body.telegramChatId !== undefined) updateData.telegramChatId = body.telegramChatId || null;
+  const newToken = body.telegramBotToken !== undefined
+    ? (body.telegramBotToken as string | null) || null
+    : undefined;
+  const newChatId = body.telegramChatId !== undefined
+    ? (body.telegramChatId as string | null) || null
+    : undefined;
+  if (newToken !== undefined) updateData.telegramBotToken = newToken;
+  if (newChatId !== undefined) updateData.telegramChatId = newChatId;
+
+  const effectiveToken = newToken !== undefined ? newToken : existing.telegramBotToken;
+  const effectiveChatId = newChatId !== undefined ? newChatId : existing.telegramChatId;
+  const bothProvided = effectiveToken && effectiveChatId;
+  const credentialsChanged = (newToken !== undefined && newToken !== null) || (newChatId !== undefined && newChatId !== null);
+  if (bothProvided && credentialsChanged) {
+    void sendTelegramPing(effectiveToken, effectiveChatId);
+  }
+
   if (body.killSwitchEnabled !== undefined) {
     updateData.killSwitchEnabled = Boolean(body.killSwitchEnabled);
     if (Boolean(body.killSwitchEnabled) && !existing.killSwitchEnabled) {
