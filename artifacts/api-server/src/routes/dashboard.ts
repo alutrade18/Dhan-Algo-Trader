@@ -130,15 +130,39 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
-    const days = parseInt(String(req.query.days || "7"), 10);
     const points: Array<{ date: string; pnl: number; cumulative: number }> = [];
 
-    for (let i = days - 1; i >= 0; i--) {
-      const day = new Date();
-      day.setHours(0, 0, 0, 0);
-      day.setDate(day.getDate() - i);
+    let startDate: Date;
+    let endDate: Date;
 
-      const nextDay = new Date(day);
+    if (req.query.fromDate && req.query.toDate) {
+      startDate = new Date(String(req.query.fromDate) + "T00:00:00Z");
+      endDate = new Date(String(req.query.toDate) + "T00:00:00Z");
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+        res.status(400).json({ error: "Invalid date range" });
+        return;
+      }
+    } else if (req.query.allTime === "true") {
+      const [firstRow] = await db
+        .select({ minDate: sql<string>`min(${tradeLogsTable.executedAt})::date::text` })
+        .from(tradeLogsTable)
+        .where(sql`${tradeLogsTable.status} = 'success'`);
+      const minDate = firstRow?.minDate;
+      if (!minDate) { res.json([]); return; }
+      startDate = new Date(minDate + "T00:00:00Z");
+      endDate = new Date();
+      endDate.setHours(0, 0, 0, 0);
+    } else {
+      const days = parseInt(String(req.query.days || "7"), 10);
+      endDate = new Date();
+      endDate.setHours(0, 0, 0, 0);
+      startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - (days - 1));
+    }
+
+    const cur = new Date(startDate);
+    while (cur <= endDate) {
+      const nextDay = new Date(cur);
       nextDay.setDate(nextDay.getDate() + 1);
 
       const [row] = await db
@@ -147,14 +171,16 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
         })
         .from(tradeLogsTable)
         .where(
-          sql`${tradeLogsTable.executedAt} >= ${day.toISOString()} AND ${tradeLogsTable.executedAt} < ${nextDay.toISOString()} AND ${tradeLogsTable.status} = 'success'`
+          sql`${tradeLogsTable.executedAt} >= ${cur.toISOString()} AND ${tradeLogsTable.executedAt} < ${nextDay.toISOString()} AND ${tradeLogsTable.status} = 'success'`
         );
 
       points.push({
-        date: day.toISOString().split("T")[0],
+        date: cur.toISOString().split("T")[0],
         pnl: row?.dailyPnl ?? 0,
         cumulative: 0,
       });
+
+      cur.setDate(cur.getDate() + 1);
     }
 
     let cumulative = 0;

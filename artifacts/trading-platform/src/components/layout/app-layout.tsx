@@ -2,10 +2,12 @@ import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Sidebar } from "./sidebar";
 import { useHealthCheck, useGetFundLimits } from "@workspace/api-client-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, RefreshCw, Menu } from "lucide-react";
+import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, ShieldAlert } from "lucide-react";
 import { useTheme } from "@/lib/theme";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
@@ -41,11 +43,15 @@ function formatCurrency(val?: number | null) {
   }).format(val);
 }
 
+const BASE = import.meta.env.BASE_URL;
+
 export function AppLayout({ children }: AppLayoutProps) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { refetchInterval: 30000 } });
   const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { refetchInterval: 60000 } });
@@ -69,6 +75,59 @@ export function AppLayout({ children }: AppLayoutProps) {
     await Promise.all([refetchFunds(), refetchHealth()]);
   };
 
+  const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
+    queryKey: ["killswitch-status"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/risk/killswitch`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store", "Pragma": "no-cache" },
+      });
+      if (!res.ok) return {};
+      return res.json();
+    },
+    refetchInterval: 15000,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  const pauseAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}api/strategies/pause-all`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "All strategies paused", description: "All active strategies have been paused." });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to pause strategies", variant: "destructive" }),
+  });
+
+  const emergencyStopMutation = useMutation({
+    mutationFn: async () => {
+      const [pauseRes, killRes] = await Promise.all([
+        fetch(`${BASE}api/strategies/pause-all`, { method: "POST" }),
+        fetch(`${BASE}api/risk/killswitch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "ACTIVATE" }),
+        }),
+      ]);
+      if (!pauseRes.ok || !killRes.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      toast({ title: "Emergency Stop Activated", description: "All strategies paused and Dhan kill switch enabled.", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["killswitch-status"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to activate emergency stop", variant: "destructive" }),
+  });
+
+  const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
+  const isDashboard = location === "/";
+
   const pageTitle = PAGE_TITLES[location] ?? "Dashboard";
 
   return (
@@ -88,6 +147,33 @@ export function AppLayout({ children }: AppLayoutProps) {
               <Menu className="w-4 h-4" />
             </Button>
             <h2 className="font-semibold text-base md:text-lg tracking-tight truncate">{pageTitle}</h2>
+
+            {isDashboard && (
+              <div className="flex items-center gap-1.5 ml-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1.5 border-muted-foreground/30 hidden sm:flex"
+                  onClick={() => pauseAllMutation.mutate()}
+                  disabled={pauseAllMutation.isPending}
+                  title="Pause All Strategies"
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">Pause All</span>
+                </Button>
+                <Button
+                  variant={dhanKillActive ? "secondary" : "destructive"}
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1.5"
+                  onClick={() => emergencyStopMutation.mutate()}
+                  disabled={emergencyStopMutation.isPending || dhanKillActive}
+                  title="Emergency Stop — pause all strategies and activate Dhan kill switch"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">{dhanKillActive ? "Kill Active" : "Emergency Stop"}</span>
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
