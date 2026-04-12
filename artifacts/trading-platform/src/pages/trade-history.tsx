@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Wallet } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -19,13 +19,17 @@ function daysAgo(n: number) {
 function formatDisplayDate(raw: string): string {
   if (!raw || raw === "—") return "—";
   const d = new Date(raw);
-  if (!isNaN(d.getTime())) {
+  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
     const dd = String(d.getDate()).padStart(2, "0");
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
   }
-  return raw;
+  return "—";
+}
+
+function parseAmount(val: string | undefined): number {
+  return Number(String(val ?? "0").replace(/,/g, ""));
 }
 
 interface LedgerEntry {
@@ -41,10 +45,20 @@ interface LedgerEntry {
   [key: string]: unknown;
 }
 
+function isSummaryRow(row: LedgerEntry): boolean {
+  const narr = String(row.narration ?? "").toUpperCase();
+  return narr.includes("OPENING BALANCE") || narr.includes("CLOSING BALANCE");
+}
+
+function isClosingBalance(row: LedgerEntry): boolean {
+  return String(row.narration ?? "").toUpperCase().includes("CLOSING BALANCE");
+}
+
 export default function TradeHistory() {
   const [fromDate, setFromDate] = useState(toYMD(daysAgo(29)));
   const [toDate, setToDate] = useState(toYMD(new Date()));
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
+  const [closingBalance, setClosingBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
@@ -53,6 +67,7 @@ export default function TradeHistory() {
     setLoading(true);
     setError(null);
     setFetched(true);
+    setClosingBalance(null);
     try {
       const res = await fetch(
         `${BASE}api/trades/ledger?fromDate=${fromDate}&toDate=${toDate}`
@@ -62,7 +77,15 @@ export default function TradeHistory() {
         throw new Error(err.errorMessage ?? err.error ?? "Failed to load ledger");
       }
       const data = await res.json() as LedgerEntry[] | { data?: LedgerEntry[] };
-      setLedgerData(Array.isArray(data) ? data : (data.data ?? []));
+      const all: LedgerEntry[] = Array.isArray(data) ? data : (data.data ?? []);
+
+      const closingRow = all.find(isClosingBalance);
+      if (closingRow) {
+        const cb = parseAmount(closingRow.credit) || parseAmount(closingRow.runbal);
+        setClosingBalance(cb);
+      }
+
+      setLedgerData(all.filter(r => !isSummaryRow(r)));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
       setLedgerData([]);
@@ -73,12 +96,11 @@ export default function TradeHistory() {
 
   function exportCSV() {
     if (!ledgerData.length) return;
-    const headers = ["Date", "Narration", "Exchange", "Voucher Desc", "Voucher No.", "Debit", "Credit", "Balance"];
+    const headers = ["Date", "Narration", "Exchange", "Voucher No.", "Debit", "Credit", "Balance"];
     const rows = ledgerData.map(r => [
       formatDisplayDate(String(r.voucherdate ?? "")),
       String(r.narration ?? ""),
       String(r.exchange ?? ""),
-      String(r.voucherdesc ?? ""),
       String(r.vouchernumber ?? ""),
       String(r.debit ?? "0"),
       String(r.credit ?? "0"),
@@ -93,8 +115,8 @@ export default function TradeHistory() {
     URL.revokeObjectURL(a.href);
   }
 
-  const totalDebit = ledgerData.reduce((s, r) => s + Number(String(r.debit ?? "0").replace(/,/g, "")), 0);
-  const totalCredit = ledgerData.reduce((s, r) => s + Number(String(r.credit ?? "0").replace(/,/g, "")), 0);
+  const totalDebit = ledgerData.reduce((s, r) => s + parseAmount(r.debit), 0);
+  const totalCredit = ledgerData.reduce((s, r) => s + parseAmount(r.credit), 0);
 
   return (
     <div className="space-y-4">
@@ -124,6 +146,18 @@ export default function TradeHistory() {
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           {loading ? "Loading…" : "Fetch Ledger"}
         </Button>
+
+        {/* Closing balance pill — appears after fetch */}
+        {closingBalance !== null && (
+          <div className="flex items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 h-9 text-xs">
+            <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-muted-foreground">Closing Balance:</span>
+            <span className="font-mono font-semibold text-emerald-400">
+              ₹{closingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        )}
+
         <Button
           variant="outline"
           size="sm"
@@ -202,9 +236,9 @@ export default function TradeHistory() {
             </thead>
             <tbody>
               {ledgerData.map((row, i) => {
-                const debit = Number(String(row.debit ?? "0").replace(/,/g, ""));
-                const credit = Number(String(row.credit ?? "0").replace(/,/g, ""));
-                const balance = Number(String(row.runbal ?? "0").replace(/,/g, ""));
+                const debit = parseAmount(row.debit);
+                const credit = parseAmount(row.credit);
+                const balance = parseAmount(row.runbal);
                 return (
                   <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
