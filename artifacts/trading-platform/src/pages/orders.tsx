@@ -856,7 +856,7 @@ export default function OrdersPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="text-sm w-max min-w-full">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
                         {[
@@ -1137,21 +1137,21 @@ export default function OrdersPage() {
                 <div>
                 <div className="overflow-x-auto">
                   <div className="max-h-[520px] overflow-y-auto">
-                  <table className="w-full text-sm">
+                  <table className="text-sm w-max min-w-full">
                     <thead className="sticky top-0 z-10 bg-card">
                       <tr className="border-b border-border bg-muted/30">
                         {[
-                          { label: "Date & Time",     align: "left"  },
-                          { label: "Segment",          align: "left"  },
-                          { label: "Symbol",           align: "left"  },
-                          { label: "Side",             align: "left"  },
-                          { label: "Product",          align: "left"  },
-                          { label: "Instrument",       align: "left"  },
-                          { label: "F&O Details",      align: "left"  },
-                          { label: "Qty",              align: "right" },
-                          { label: "Price",            align: "right" },
-                          { label: "Order ID",         align: "left"  },
-                          { label: "Trade ID",         align: "left"  },
+                          { label: "Date & Time",  align: "left"  },
+                          { label: "Segment",      align: "left"  },
+                          { label: "Symbol",       align: "left"  },
+                          { label: "Side",         align: "left"  },
+                          { label: "Product",      align: "left"  },
+                          { label: "Instrument",   align: "left"  },
+                          { label: "F&O Details",  align: "left"  },
+                          { label: "Qty",          align: "right" },
+                          { label: "Price",        align: "right" },
+                          { label: "Order ID",     align: "left"  },
+                          { label: "Trade ID",     align: "left"  },
                         ].map(({ label, align }) => (
                           <th
                             key={label}
