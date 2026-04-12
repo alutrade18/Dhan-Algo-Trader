@@ -349,22 +349,31 @@ export default function OptionChain() {
 
   return (
     <div className="space-y-4">
-      {/* ── Market closed banner (replaces the subtitle row when market is closed) ── */}
-      {!marketStatus.isOpen && expiry && !chainError && (
-        <div className="flex items-center gap-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-amber-400">Market is closed — live refresh paused</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {marketStatus.label} · Manual Refresh still works. Auto-refresh resumes at 8:50 AM IST on next trading day.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* ── Header row: status (left) + controls (right) ── */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
 
-      {/* ── Controls row ── */}
-      <div className="flex items-center gap-2 flex-wrap">
-          {/* Index / Stock toggle */}
+        {/* Left: market closed status — hidden when market is open */}
+        {!marketStatus.isOpen && expiry && !chainError ? (
+          <div className="flex items-start gap-2 min-w-0">
+            <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-400 leading-snug">
+                Market is closed — live refresh paused
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                {marketStatus.label} · Manual Refresh still works.
+              </p>
+              <p className="text-xs text-muted-foreground leading-snug">
+                Auto-refresh resumes at 8:50 AM IST on next trading day.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div />
+        )}
+
+        {/* Right: controls — always visible */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <div className="flex rounded-md overflow-hidden border border-border text-xs">
             <button
               className={`px-3 py-1.5 ${mode === "index" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -424,6 +433,7 @@ export default function OptionChain() {
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
+        </div>
       </div>
 
       {/* ── Stats bar ── */}
