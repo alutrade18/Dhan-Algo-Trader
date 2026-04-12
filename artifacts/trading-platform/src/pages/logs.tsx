@@ -4,13 +4,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChevronDown,
@@ -255,8 +248,6 @@ function setResetTs(ts: string) {
 }
 
 export default function Logs() {
-  const [level, setLevel] = useState("all");
-  const [category, setCategory] = useState("all");
   const [page, setPage] = useState(0);
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
 
@@ -265,14 +256,9 @@ export default function Logs() {
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<LogsResponse>({
-    queryKey: ["app-logs", level, category, page, resetTs],
+    queryKey: ["app-logs", page, resetTs],
     queryFn: async () => {
-      const p = new URLSearchParams({
-        page: String(page),
-        limit: String(LIMIT),
-      });
-      if (level !== "all") p.set("level", level);
-      if (category !== "all") p.set("category", category);
+      const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (resetTs) p.set("fromTimestamp", resetTs);
       const res = await fetch(`${BASE}api/logs?${p}`);
       if (!res.ok) throw new Error("Failed");
@@ -354,50 +340,9 @@ export default function Logs() {
         {/* ── APPLICATION LOGS ── */}
         <TabsContent value="app" className="mt-3">
           <Card>
-            <CardContent className="px-4 pb-4 pt-4 space-y-3">
-              {/* Level + Category filters */}
-              <div className="flex flex-wrap gap-2 items-center">
-                <Select
-                  value={level}
-                  onValueChange={(v) => {
-                    setLevel(v);
-                    setPage(0);
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[110px] text-xs">
-                    <SelectValue placeholder="Level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Levels</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
-                    <SelectItem value="warn">Warn</SelectItem>
-                    <SelectItem value="error">Error</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={category}
-                  onValueChange={(v) => {
-                    setCategory(v);
-                    setPage(0);
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[130px] text-xs">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="broker">Broker</SelectItem>
-                    <SelectItem value="order">Order</SelectItem>
-                    <SelectItem value="strategy">Strategy</SelectItem>
-                    <SelectItem value="settings">Settings</SelectItem>
-                    <SelectItem value="risk">Risk</SelectItem>
-                    <SelectItem value="api">API</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <span className="text-xs text-muted-foreground ml-auto shrink-0">
+            <CardContent className="px-4 pb-4 pt-3">
+              <div className="flex items-center justify-end mb-2">
+                <span className="text-xs text-muted-foreground">
                   {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
                 </span>
               </div>
@@ -406,7 +351,7 @@ export default function Logs() {
               <div
                 ref={tableScrollRef}
                 className="overflow-auto rounded-md border border-border"
-                style={{ maxHeight: "calc(100vh - 340px)", minHeight: "240px" }}
+                style={{ maxHeight: "calc(100vh - 210px)", minHeight: "300px" }}
               >
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
