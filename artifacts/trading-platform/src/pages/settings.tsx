@@ -129,7 +129,7 @@ export default function Settings() {
 
   const pnlForm = useForm<z.infer<typeof pnlExitSchema>>({
     resolver: zodResolver(pnlExitSchema),
-    defaultValues: { profitValue: 1500, lossValue: 500, enableKillSwitch: false },
+    defaultValues: { profitValue: undefined, lossValue: undefined, enableKillSwitch: false },
   });
 
   useEffect(() => {
@@ -627,7 +627,7 @@ export default function Settings() {
                       <TrendingUp className="w-3.5 h-3.5 text-success" />
                       Profit Target (₹)
                     </label>
-                    <Input type="number" min={1} step={100} placeholder="1500" {...pnlForm.register("profitValue")} />
+                    <Input type="number" min={1} step={1} placeholder="e.g. 1500" {...pnlForm.register("profitValue")} />
                     {pnlForm.formState.errors.profitValue && (
                       <p className="text-xs text-destructive">{pnlForm.formState.errors.profitValue.message}</p>
                     )}
@@ -637,7 +637,7 @@ export default function Settings() {
                       <TrendingDown className="w-3.5 h-3.5 text-destructive" />
                       Loss Limit (₹)
                     </label>
-                    <Input type="number" min={1} step={100} placeholder="500" {...pnlForm.register("lossValue")} />
+                    <Input type="number" min={1} step={1} placeholder="e.g. 500" {...pnlForm.register("lossValue")} />
                     {pnlForm.formState.errors.lossValue && (
                       <p className="text-xs text-destructive">{pnlForm.formState.errors.lossValue.message}</p>
                     )}
