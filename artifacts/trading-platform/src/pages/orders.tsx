@@ -98,6 +98,7 @@ interface DhanOrder {
 interface DhanTrade {
   exchangeTradeId: string;
   orderId: string;
+  dhanClientId?: string;
   correlationId?: string;
   transactionType: TransactionType;
   exchangeSegment: string;
@@ -717,20 +718,20 @@ export default function OrdersPage() {
       return;
     }
     const rows = tradeHistory.map((t) => ({
-      "Trade ID": t.exchangeTradeId,
-      "Order ID": t.orderId,
-      "Exchange Segment": t.exchangeSegment,
-      Symbol: t.customSymbol || t.tradingSymbol,
-      "Security ID": t.securityId,
-      "Instrument": t.instrument || "",
-      "Side": t.transactionType,
-      "Product": t.productType,
-      "Qty Traded": t.tradedQuantity,
-      "Traded Price": t.tradedPrice,
-      "Expiry Date": t.drvExpiryDate || "",
-      "Option Type": t.drvOptionType || "",
+      "Trade Time":   t.exchangeTime || t.createTime || "",
+      "Segment":      t.exchangeSegment,
+      "Symbol":       t.customSymbol || t.tradingSymbol,
+      "Instrument":   t.instrument || "",
+      "Side":         t.transactionType,
+      "Option Type":  t.drvOptionType || "",
       "Strike Price": t.drvStrikePrice ?? "",
-      "Exchange Time": t.exchangeTime || t.createTime || "",
+      "Expiry Date":  t.drvExpiryDate || "",
+      "Product":      t.productType,
+      "Qty":          t.tradedQuantity,
+      "Price":        t.tradedPrice,
+      "Order ID":     t.orderId,
+      "Security ID":  t.securityId,
+      "Client ID":    t.dhanClientId || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -1135,124 +1136,118 @@ export default function OrdersPage() {
                 </div>
               ) : (
                 <div>
-                <div className="overflow-x-scroll overflow-y-auto max-h-[520px]">
-                  <table className="table-auto text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full table-auto text-sm">
                     <thead className="sticky top-0 z-10 bg-card">
                       <tr className="border-b border-border bg-muted/30">
-                        {[
-                          { label: "Date & Time",  align: "left"  },
-                          { label: "Segment",      align: "left"  },
-                          { label: "Symbol",       align: "left"  },
-                          { label: "Side",         align: "left"  },
-                          { label: "Product",      align: "left"  },
-                          { label: "Instrument",   align: "left"  },
-                          { label: "F&O Details",  align: "left"  },
-                          { label: "Qty",          align: "right" },
-                          { label: "Price",        align: "right" },
-                          { label: "Order ID",     align: "left"  },
-                          { label: "Trade ID",     align: "left"  },
-                        ].map(({ label, align }) => (
-                          <th
-                            key={label}
-                            className={`px-3 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}`}
-                          >
-                            {label}
-                          </th>
+                        {([
+                          ["Trade Time",   "left" ],
+                          ["Segment",      "left" ],
+                          ["Symbol",       "left" ],
+                          ["Instrument",   "left" ],
+                          ["Side",         "left" ],
+                          ["Option Type",  "left" ],
+                          ["Strike Price", "right"],
+                          ["Expiry Date",  "left" ],
+                          ["Product",      "left" ],
+                          ["Qty",          "right"],
+                          ["Price",        "right"],
+                          ["Order ID",     "left" ],
+                          ["Security ID",  "left" ],
+                          ["Client ID",    "left" ],
+                        ] as [string, string][]).map(([label, align]) => (
+                          <th key={label}
+                            className={`px-2.5 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}`}
+                          >{label}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {pagedTrades.map((trade, idx) => {
                         const seg = formatSegment(trade.exchangeSegment);
-                        const hasFno = trade.drvExpiryDate && trade.drvExpiryDate !== "NA";
+                        const optType = trade.drvOptionType && trade.drvOptionType !== "NA"
+                          ? trade.drvOptionType : null;
                         return (
-                        <tr
-                          key={`${trade.exchangeTradeId}-${idx}`}
+                        <tr key={`${trade.exchangeTradeId}-${idx}`}
                           className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
                         >
-                          {/* Date & Time */}
-                          <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                          {/* Trade Time */}
+                          <td className="px-2.5 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
                             {formatDateTime(trade.exchangeTime || trade.createTime)}
                           </td>
                           {/* Segment */}
-                          <td className="px-3 py-2.5">
+                          <td className="px-2.5 py-2">
                             <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${seg.color}`}>
                               {seg.label}
                             </span>
                           </td>
                           {/* Symbol */}
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            <div className="font-mono font-semibold text-sm leading-tight">
+                          <td className="px-2.5 py-2 whitespace-nowrap">
+                            <span className="font-mono font-semibold text-xs">
                               {trade.customSymbol || trade.tradingSymbol}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground font-mono leading-tight">
-                              {trade.securityId}
-                            </div>
-                          </td>
-                          {/* Side */}
-                          <td className="px-3 py-2.5">
-                            <SideBadge side={trade.transactionType} />
-                          </td>
-                          {/* Product */}
-                          <td className="px-3 py-2.5">
-                            <ProductBadge product={trade.productType} />
+                            </span>
                           </td>
                           {/* Instrument */}
-                          <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                          <td className="px-2.5 py-2 text-xs text-muted-foreground whitespace-nowrap">
                             {trade.instrument || "—"}
                           </td>
-                          {/* F&O Details: Expiry / Strike × Type */}
-                          <td className="px-3 py-2.5 text-xs font-mono whitespace-nowrap">
-                            {hasFno ? (
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-muted-foreground">{trade.drvExpiryDate}</span>
-                                <span className="font-semibold">
-                                  {trade.drvStrikePrice ? `${trade.drvStrikePrice} ` : ""}
-                                  {trade.drvOptionType ? (
-                                    <span className={trade.drvOptionType === "CALL" || trade.drvOptionType === "CE"
-                                      ? "text-green-400" : "text-red-400"}>
-                                      {trade.drvOptionType}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground/40">—</span>
-                            )}
+                          {/* Side */}
+                          <td className="px-2.5 py-2">
+                            <SideBadge side={trade.transactionType} />
+                          </td>
+                          {/* Option Type */}
+                          <td className="px-2.5 py-2 text-xs font-semibold whitespace-nowrap">
+                            {optType ? (
+                              <span className={optType === "CALL" || optType === "CE"
+                                ? "text-green-400" : "text-red-400"}>
+                                {optType}
+                              </span>
+                            ) : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          {/* Strike Price */}
+                          <td className="px-2.5 py-2 text-right text-xs font-mono">
+                            {trade.drvStrikePrice && trade.drvStrikePrice !== 0
+                              ? trade.drvStrikePrice.toLocaleString("en-IN")
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          {/* Expiry Date */}
+                          <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                            {trade.drvExpiryDate && trade.drvExpiryDate !== "NA"
+                              ? trade.drvExpiryDate
+                              : <span className="text-muted-foreground/40">—</span>}
+                          </td>
+                          {/* Product */}
+                          <td className="px-2.5 py-2">
+                            <ProductBadge product={trade.productType} />
                           </td>
                           {/* Qty */}
-                          <td className="px-3 py-2.5 text-right text-xs font-mono">
-                            {trade.tradedQuantity}
+                          <td className="px-2.5 py-2 text-right text-xs font-mono">
+                            {trade.tradedQuantity.toLocaleString("en-IN")}
                           </td>
                           {/* Price */}
-                          <td className="px-3 py-2.5 text-right text-xs font-mono font-semibold">
+                          <td className="px-2.5 py-2 text-right text-xs font-mono font-semibold">
                             {formatCurrency(trade.tradedPrice)}
                           </td>
                           {/* Order ID */}
-                          <td className="px-3 py-2.5">
+                          <td className="px-2.5 py-2">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="font-mono text-xs text-muted-foreground cursor-help">
-                                  …{trade.orderId.slice(-8)}
+                                  …{trade.orderId.slice(-9)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="text-xs font-mono">
-                                Order: {trade.orderId}
+                                {trade.orderId}
                               </TooltipContent>
                             </Tooltip>
                           </td>
-                          {/* Trade ID */}
-                          <td className="px-3 py-2.5">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="font-mono text-xs text-muted-foreground cursor-help">
-                                  …{trade.exchangeTradeId.slice(-8)}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs font-mono">
-                                Trade: {trade.exchangeTradeId}
-                              </TooltipContent>
-                            </Tooltip>
+                          {/* Security ID */}
+                          <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                            {trade.securityId}
+                          </td>
+                          {/* Client ID */}
+                          <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                            {trade.dhanClientId || "—"}
                           </td>
                         </tr>
                         );
