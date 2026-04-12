@@ -10,14 +10,16 @@ import { RefreshCw, WifiOff, Search, X } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
+// dhanSecId  = security ID used in Dhan's option-chain & expiry-list API calls
+// dbSecId    = underlying_security_id stored in our instruments DB (for local expiry query)
 const INDEX_UNDERLYINGS = [
-  { label: "NIFTY 50",       symbol: "NIFTY",      underlyingSecId: 26000, segment: "IDX_I" },
-  { label: "BANK NIFTY",     symbol: "BANKNIFTY",  underlyingSecId: 26009, segment: "IDX_I" },
-  { label: "FIN NIFTY",      symbol: "FINNIFTY",   underlyingSecId: 26037, segment: "IDX_I" },
-  { label: "MIDCAP NIFTY",   symbol: "MIDCPNIFTY", underlyingSecId: 26074, segment: "IDX_I" },
-  { label: "SENSEX",         symbol: "SENSEX",     underlyingSecId: 1,     segment: "IDX_I" },
-  { label: "BANKEX",         symbol: "BANKEX",     underlyingSecId: 12,    segment: "IDX_I" },
-  { label: "NIFTYNXT50",     symbol: "NIFTYNXT50", underlyingSecId: 26013, segment: "IDX_I" },
+  { label: "NIFTY 50",       symbol: "NIFTY",      dhanSecId: 13,   dbSecId: 26000, segment: "IDX_I" },
+  { label: "BANK NIFTY",     symbol: "BANKNIFTY",  dhanSecId: 25,   dbSecId: 26009, segment: "IDX_I" },
+  { label: "FIN NIFTY",      symbol: "FINNIFTY",   dhanSecId: 27,   dbSecId: 26037, segment: "IDX_I" },
+  { label: "MIDCAP NIFTY",   symbol: "MIDCPNIFTY", dhanSecId: 442,  dbSecId: 26074, segment: "IDX_I" },
+  { label: "SENSEX",         symbol: "SENSEX",     dhanSecId: 1,    dbSecId: 1,     segment: "IDX_I" },
+  { label: "BANKEX",         symbol: "BANKEX",     dhanSecId: 12,   dbSecId: 12,    segment: "IDX_I" },
+  { label: "NIFTYNXT50",     symbol: "NIFTYNXT50", dhanSecId: 26013,dbSecId: 26013, segment: "IDX_I" },
 ];
 
 type Mode = "index" | "stock";
@@ -130,8 +132,13 @@ export default function OptionChain() {
   const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
 
-  const activeSecId = mode === "index"
-    ? indexUnderlying.underlyingSecId
+  // dbSecId → used for local DB expiry list query (matches instruments.underlying_security_id)
+  // dhanSecId → used for Dhan API calls (option chain, expiry list from Dhan)
+  const activeDbSecId = mode === "index"
+    ? indexUnderlying.dbSecId
+    : (stockUnderlying?.underlyingSecurityId ?? null);
+  const activeDhanSecId = mode === "index"
+    ? indexUnderlying.dhanSecId
     : (stockUnderlying?.underlyingSecurityId ?? null);
   const activeInstrument = mode === "index" ? "OPTIDX" : "OPTSTK";
   const activeSegment = mode === "index"
@@ -142,35 +149,35 @@ export default function OptionChain() {
     : (stockUnderlying?.underlyingSymbol ?? "");
 
   const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
-    queryKey: ["expiry-list-db", activeSecId, activeInstrument],
+    queryKey: ["expiry-list-db", activeDbSecId, activeInstrument],
     queryFn: async () => {
-      if (!activeSecId) return [];
-      const res = await fetch(`${BASE}api/market/expiry-list?underlyingSecId=${activeSecId}&instrument=${activeInstrument}`);
+      if (!activeDbSecId) return [];
+      const res = await fetch(`${BASE}api/market/expiry-list?underlyingSecId=${activeDbSecId}&instrument=${activeInstrument}`);
       if (!res.ok) throw new Error("Failed to load expiry list");
       const json = await res.json() as { data?: string[] };
       return json.data ?? [];
     },
-    enabled: !!activeSecId,
+    enabled: !!activeDbSecId,
     staleTime: 600_000,
   });
 
   useEffect(() => {
     setExpiry("");
-  }, [activeSecId, activeInstrument]);
+  }, [activeDbSecId, activeInstrument]);
 
   useEffect(() => {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
   }, [expiryList, expiry]);
 
   const { data: chain, isLoading: chainLoading, refetch, isFetching, error: chainError } = useQuery({
-    queryKey: ["option-chain", activeSecId, activeSegment, expiry],
+    queryKey: ["option-chain", activeDhanSecId, activeSegment, expiry],
     queryFn: async () => {
-      if (!expiry || !activeSecId) return null;
+      if (!expiry || !activeDhanSecId) return null;
       const res = await fetch(`${BASE}api/market/option-chain`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          underSecurityId: String(activeSecId),
+          underSecurityId: String(activeDhanSecId),
           underExchangeSegment: activeSegment,
           expiry,
         }),
@@ -181,26 +188,32 @@ export default function OptionChain() {
       }
       return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
-    enabled: !!expiry && !!activeSecId,
+    enabled: !!expiry && !!activeDhanSecId,
     refetchInterval: 180_000,
     staleTime: 60_000,
     retry: 0,
   });
 
+  // rawChain is now the oc object: { "25650.000000": { ce: {...}, pe: {...} }, ... }
   const rawChain = chain?.data ?? {};
-  const underlyingLtp = Number(chain?.ltp ?? rawChain?.last_price ?? 0);
+  const underlyingLtp = Number(chain?.ltp ?? 0);
   const entries: OptionEntry[] = [];
 
-  const strikes = Object.keys(rawChain)
-    .map(Number)
+  // Dhan uses float string keys like "25650.000000" — parseFloat them, then find by value
+  const strikeKeys = Object.keys(rawChain);
+  const strikes = strikeKeys
+    .map(k => parseFloat(k))
     .filter(n => !isNaN(n) && n > 0)
     .sort((a, b) => a - b);
 
   let maxOI = 1;
   for (const strike of strikes) {
-    const s = rawChain[String(strike)] as Record<string, Record<string, unknown>> | undefined;
-    const ce = s?.["CE"] ?? {};
-    const pe = s?.["PE"] ?? {};
+    // Find original key that matches this float value (handles "25650.000000" → 25650)
+    const key = strikeKeys.find(k => parseFloat(k) === strike) ?? String(strike);
+    const s = rawChain[key] as Record<string, Record<string, unknown>> | undefined;
+    // Dhan returns lowercase ce/pe
+    const ce = s?.["ce"] ?? s?.["CE"] ?? {};
+    const pe = s?.["pe"] ?? s?.["PE"] ?? {};
     const callOI = Number(ce.oi ?? ce.openInterest ?? 0);
     const putOI  = Number(pe.oi ?? pe.openInterest ?? 0);
     if (callOI > maxOI) maxOI = callOI;
@@ -210,11 +223,11 @@ export default function OptionChain() {
       callLTP:    Number(ce.last_price ?? ce.ltp ?? 0),
       callOI,
       callVolume: Number(ce.volume ?? 0),
-      callIV:     Number(ce.iv ?? ce.impliedVolatility ?? 0),
+      callIV:     Number(ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0),
       putLTP:     Number(pe.last_price ?? pe.ltp ?? 0),
       putOI,
       putVolume:  Number(pe.volume ?? 0),
-      putIV:      Number(pe.iv ?? pe.impliedVolatility ?? 0),
+      putIV:      Number(pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0),
     });
   }
 
@@ -257,16 +270,16 @@ export default function OptionChain() {
 
           {mode === "index" ? (
             <Select
-              value={String(indexUnderlying.underlyingSecId)}
+              value={String(indexUnderlying.dhanSecId)}
               onValueChange={v => {
-                const u = INDEX_UNDERLYINGS.find(u => String(u.underlyingSecId) === v);
+                const u = INDEX_UNDERLYINGS.find(u => String(u.dhanSecId) === v);
                 if (u) { setIndexUnderlying(u); setExpiry(""); }
               }}
             >
               <SelectTrigger className="w-36 text-xs h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {INDEX_UNDERLYINGS.map(u => (
-                  <SelectItem key={u.underlyingSecId} value={String(u.underlyingSecId)}>{u.label}</SelectItem>
+                  <SelectItem key={u.dhanSecId} value={String(u.dhanSecId)}>{u.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -277,7 +290,7 @@ export default function OptionChain() {
           <Select
             value={expiry}
             onValueChange={setExpiry}
-            disabled={expiryLoading || expiryList.length === 0 || !activeSecId}
+            disabled={expiryLoading || expiryList.length === 0 || !activeDbSecId}
           >
             <SelectTrigger className="w-32 text-xs font-mono h-9">
               <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
@@ -294,7 +307,7 @@ export default function OptionChain() {
             size="sm"
             className="gap-1.5 h-9"
             onClick={() => void refetch()}
-            disabled={isFetching || !expiry || !activeSecId}
+            disabled={isFetching || !expiry || !activeDhanSecId}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
             Refresh

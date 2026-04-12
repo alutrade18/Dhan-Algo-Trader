@@ -143,9 +143,13 @@ router.post("/market/option-chain", async (req, res): Promise<void> => {
       underExchangeSegment: parsed.data.underExchangeSegment,
       expiry: parsed.data.expiry instanceof Date ? parsed.data.expiry.toISOString().slice(0, 10) : String(parsed.data.expiry),
     });
+    // Dhan response: { data: { last_price: X, oc: { "25650.000000": { ce: {...}, pe: {...} } } }, status: "..." }
     const r = raw as Record<string, unknown>;
-    const chainData = (r.data ?? r) as Record<string, unknown>;
-    res.json({ data: chainData, ltp: r.last_price ?? chainData.last_price ?? 0 });
+    const inner = (r.data ?? r) as Record<string, unknown>;
+    const ltp = Number(inner.last_price ?? 0);
+    // Expose oc directly as data so frontend can iterate strike keys
+    const oc = (inner.oc ?? inner) as Record<string, unknown>;
+    res.json({ data: oc, ltp });
   } catch (e: unknown) {
     req.log.error({ err: e }, "Failed to fetch option chain");
     const dhanErr = e as { data?: { data?: Record<string, string> } };
