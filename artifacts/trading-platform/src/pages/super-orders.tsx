@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,10 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Plus, X, Layers, TrendingUp, TrendingDown, WifiOff } from "lucide-react";
+import { RefreshCw, Plus, X, Layers, TrendingUp, TrendingDown, WifiOff, AlertTriangle, Loader2 } from "lucide-react";
 import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
+
+const TARGET_PCT  = 2;
+const SL_PCT      = 1;
+const DEFAULT_QTY = 5;
 
 interface SuperOrder {
   orderId?: string;
@@ -28,6 +32,28 @@ interface SuperOrder {
   [key: string]: unknown;
 }
 
+interface FormState {
+  security_id: string;
+  exchange_segment: string;
+  transaction_type: string;
+  order_type: string;
+  quantity: string;
+  price: string;
+  target_price: string;
+  stop_loss_price: string;
+}
+
+const BLANK_FORM: FormState = {
+  security_id: "",
+  exchange_segment: "NSE_EQ",
+  transaction_type: "BUY",
+  order_type: "LIMIT",
+  quantity: String(DEFAULT_QTY),
+  price: "",
+  target_price: "",
+  stop_loss_price: "",
+};
+
 function statusColor(status: string) {
   const s = status?.toUpperCase();
   if (s === "TRADED" || s === "PARTIALLY_TRADED") return "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
@@ -36,27 +62,102 @@ function statusColor(status: string) {
   return "text-muted-foreground border-muted";
 }
 
+function segToExch(exchSeg: string): string {
+  return exchSeg.split("_")[0];
+}
+
 export default function SuperOrders() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
-  const [form, setForm] = useState({
-    security_id: "", exchange_segment: "NSE_EQ", transaction_type: "BUY",
-    order_type: "LIMIT", quantity: "", price: "", target_price: "", stop_loss_price: "",
+  const [form, setForm] = useState<FormState>(BLANK_FORM);
+  const [ltpLoading, setLtpLoading] = useState(false);
+
+  const { data: fundsData } = useQuery<{ availableBalance?: number; availabelBalance?: number }>({
+    queryKey: ["funds-limit"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/funds`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<{ availableBalance?: number; availabelBalance?: number }>;
+    },
+    refetchInterval: 30000,
+    staleTime: 20000,
   });
+  const availableBalance = Number(fundsData?.availableBalance ?? fundsData?.availabelBalance ?? 0);
+
+  const entryPrice  = parseFloat(form.price)            || 0;
+  const qty         = parseInt(form.quantity)            || 0;
+  const marginRequired = entryPrice * qty;
+  const shortfall      = marginRequired - availableBalance;
+  const insufficientFunds = marginRequired > 0 && availableBalance > 0 && shortfall > 0;
+
+  function applyDefaults(price: number) {
+    const target = parseFloat((price * (1 + TARGET_PCT / 100)).toFixed(2));
+    const sl     = parseFloat((price * (1 - SL_PCT    / 100)).toFixed(2));
+    setForm(p => ({ ...p, price: String(price), target_price: String(target), stop_loss_price: String(sl) }));
+  }
+
+  function handlePriceChange(raw: string) {
+    const price = parseFloat(raw) || 0;
+    const target = price > 0 ? parseFloat((price * (1 + TARGET_PCT / 100)).toFixed(2)) : 0;
+    const sl     = price > 0 ? parseFloat((price * (1 - SL_PCT    / 100)).toFixed(2)) : 0;
+    setForm(p => ({
+      ...p,
+      price: raw,
+      target_price: price > 0 ? String(target) : p.target_price,
+      stop_loss_price: price > 0 ? String(sl) : p.stop_loss_price,
+    }));
+  }
+
+  const fetchLtp = useCallback(async (exchSeg: string, secId: string) => {
+    if (!secId) return;
+    setLtpLoading(true);
+    try {
+      const exchKey = exchSeg.replace("_", "_");
+      const res = await fetch(`${BASE}api/market/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ securities: { [exchKey]: [secId] }, quoteType: "ltp" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as Record<string, Record<string, { last_price?: number }>>;
+      const segData = data[exchKey] ?? data[Object.keys(data)[0]];
+      const entry = segData?.[secId] ?? segData?.[Object.keys(segData ?? {})[0]];
+      const ltp = entry?.last_price;
+      if (ltp && ltp > 0) {
+        applyDefaults(parseFloat(ltp.toFixed(2)));
+      }
+    } catch {
+    } finally {
+      setLtpLoading(false);
+    }
+  }, []);
 
   function handleInstrumentSelect(inst: InstrumentResult | null) {
     setSelectedInstrument(inst);
     if (inst) {
-      const segMap: Record<string, string> = { E: "NSE_EQ", F: "NSE_FNO", I: "IDX_I", D: "NSE_CURR", C: "NSE_COMM" };
-      const exchSeg = `${inst.exchId}_${inst.segment === "E" ? "EQ" : inst.segment === "F" ? "FNO" : inst.segment}`;
+      const segMap: Record<string, string> = {
+        E: `${inst.exchId}_EQ`,
+        F: `${inst.exchId}_FNO`,
+        I: `IDX_I`,
+        D: `${inst.exchId}_CURR`,
+        C: `${inst.exchId}_COMM`,
+      };
+      const exchSeg = segMap[inst.segment] ?? `${inst.exchId}_${inst.segment}`;
+      const defaultQty = inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : String(DEFAULT_QTY);
       setForm(p => ({
         ...p,
         security_id: String(inst.securityId),
-        exchange_segment: segMap[inst.segment] ?? exchSeg,
-        quantity: inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : p.quantity,
+        exchange_segment: exchSeg,
+        quantity: defaultQty,
+        price: "",
+        target_price: "",
+        stop_loss_price: "",
       }));
+      void fetchLtp(exchSeg, String(inst.securityId));
+    } else {
+      setForm(BLANK_FORM);
     }
   }
 
@@ -92,16 +193,16 @@ export default function SuperOrders() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { errorMessage?: string };
-        throw new Error(err.errorMessage ?? "Order failed");
+        const err = await res.json().catch(() => ({})) as { errorMessage?: string; error?: string };
+        throw new Error(err.errorMessage ?? err.error ?? "Order failed");
       }
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Super Order Placed" });
+      toast({ title: "Super Order Placed", description: `${selectedInstrument?.symbolName ?? ""} order placed successfully` });
       setShowForm(false);
       setSelectedInstrument(null);
-      setForm({ security_id: "", exchange_segment: "NSE_EQ", transaction_type: "BUY", order_type: "LIMIT", quantity: "", price: "", target_price: "", stop_loss_price: "" });
+      setForm(BLANK_FORM);
       void queryClient.invalidateQueries({ queryKey: ["super-orders"] });
     },
     onError: (e: Error) => toast({ title: "Order Failed", description: e.message, variant: "destructive" }),
@@ -121,6 +222,7 @@ export default function SuperOrders() {
   });
 
   const notConnected = (error as Error | null)?.message === "Broker not connected";
+  const canPlace = !insufficientFunds && !!form.security_id && !!form.quantity && !!form.price && !placeMutation.isPending && !ltpLoading;
 
   return (
     <div className="space-y-4">
@@ -129,7 +231,9 @@ export default function SuperOrders() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Layers className="w-5 h-5 text-primary" /> Super Orders
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Entry + Target + Stop-Loss in a single order</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Entry + Target + Stop-Loss in a single order — Default: {TARGET_PCT}% Target &amp; {SL_PCT}% Stop Loss
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refetch()} disabled={isFetching}>
@@ -155,33 +259,43 @@ export default function SuperOrders() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Plus className="w-4 h-4" /> Place Super Order
-              <Badge variant="outline" className="ml-auto text-[10px]">INTRADAY</Badge>
+              <Badge variant="outline" className="ml-auto text-[10px] text-amber-400 border-amber-400/30 bg-amber-400/10">INTRADAY</Badge>
             </CardTitle>
-            <CardDescription className="text-xs">Bracket order with automatic target and stop-loss</CardDescription>
+            <CardDescription className="text-xs">
+              Bracket order with automatic {TARGET_PCT}% target and {SL_PCT}% stop-loss
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Symbol</label>
+              <label className="text-xs font-medium">Search Symbol</label>
               <SymbolSearch
                 value={selectedInstrument}
                 onChange={handleInstrumentSelect}
-                placeholder="Search by name or security ID..."
+                placeholder="Search by name (e.g. RELIANCE, NIFTY)..."
               />
             </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Security ID</label>
-                <Input placeholder="e.g. 1333" value={form.security_id} onChange={e => setForm(p => ({ ...p, security_id: e.target.value }))} className="font-mono text-xs" />
+                <label className="text-xs font-medium">Symbol</label>
+                <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-xs font-mono min-h-[34px] flex items-center">
+                  {selectedInstrument
+                    ? <span className="font-semibold">{selectedInstrument.symbolName}</span>
+                    : <span className="text-muted-foreground">—</span>
+                  }
+                </div>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Exchange</label>
-                <Select value={form.exchange_segment} onValueChange={v => setForm(p => ({ ...p, exchange_segment: v }))}>
-                  <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["NSE_EQ", "NSE_FNO", "BSE_EQ", "BSE_FNO", "MCX_COMM"].map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-xs font-mono min-h-[34px] flex items-center">
+                  <span className={selectedInstrument ? "font-semibold" : "text-muted-foreground"}>
+                    {selectedInstrument ? form.exchange_segment : "—"}
+                  </span>
+                </div>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Side</label>
                 <Select value={form.transaction_type} onValueChange={v => setForm(p => ({ ...p, transaction_type: v }))}>
@@ -192,28 +306,112 @@ export default function SuperOrders() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Qty</label>
-                <Input type="number" placeholder="0" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} className="font-mono text-xs" />
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.quantity}
+                  onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))}
+                  className="font-mono text-xs"
+                />
               </div>
-              <div className="space-y-1.5">
+
+              <div className="space-y-1.5 relative">
                 <label className="text-xs font-medium">Entry Price ₹</label>
-                <Input type="number" placeholder="0.00" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className="font-mono text-xs" />
+                <div className="relative">
+                  <Input
+                    type="number"
+                    step="0.05"
+                    placeholder="0.00"
+                    value={form.price}
+                    onChange={e => handlePriceChange(e.target.value)}
+                    className="font-mono text-xs pr-8"
+                  />
+                  {ltpLoading && (
+                    <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {selectedInstrument && !ltpLoading && !form.price && (
+                  <p className="text-[10px] text-muted-foreground">Fetching live price...</p>
+                )}
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-emerald-400">Target ₹</label>
-                <Input type="number" placeholder="0.00" value={form.target_price} onChange={e => setForm(p => ({ ...p, target_price: e.target.value }))} className="font-mono text-xs border-emerald-400/30 focus-visible:ring-emerald-400/50" />
+                <label className="text-xs font-medium text-emerald-400">Target ₹ <span className="text-muted-foreground font-normal">({TARGET_PCT}%)</span></label>
+                <Input
+                  type="number"
+                  step="0.05"
+                  placeholder="0.00"
+                  value={form.target_price}
+                  onChange={e => setForm(p => ({ ...p, target_price: e.target.value }))}
+                  className="font-mono text-xs border-emerald-400/30 focus-visible:ring-emerald-400/50"
+                />
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-red-400">Stop Loss ₹</label>
-                <Input type="number" placeholder="0.00" value={form.stop_loss_price} onChange={e => setForm(p => ({ ...p, stop_loss_price: e.target.value }))} className="font-mono text-xs border-red-400/30 focus-visible:ring-red-400/50" />
+                <label className="text-xs font-medium text-red-400">Stop Loss ₹ <span className="text-muted-foreground font-normal">({SL_PCT}%)</span></label>
+                <Input
+                  type="number"
+                  step="0.05"
+                  placeholder="0.00"
+                  value={form.stop_loss_price}
+                  onChange={e => setForm(p => ({ ...p, stop_loss_price: e.target.value }))}
+                  className="font-mono text-xs border-red-400/30 focus-visible:ring-red-400/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-blue-400">Margin Required ₹</label>
+                <div className={`px-3 py-2 rounded-md border text-xs font-mono min-h-[34px] flex items-center font-semibold ${
+                  insufficientFunds
+                    ? "border-red-400/40 bg-red-400/10 text-red-400"
+                    : "border-blue-400/30 bg-blue-400/10 text-blue-400"
+                }`}>
+                  {marginRequired > 0
+                    ? `₹${marginRequired.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : "—"
+                  }
+                </div>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => placeMutation.mutate()} disabled={placeMutation.isPending || !form.security_id || !form.quantity}>
-                {placeMutation.isPending ? "Placing..." : `Place ${form.transaction_type}`}
+
+            {insufficientFunds && (
+              <div className="flex items-start gap-2.5 rounded-md border border-red-400/30 bg-red-400/10 px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-red-400">
+                  <p className="font-semibold">Insufficient Balance — Cannot Place Order</p>
+                  <p className="mt-0.5 text-red-400/80">
+                    Available: ₹{availableBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
+                    Required: ₹{marginRequired.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
+                    Shortfall: <span className="font-semibold">₹{shortfall.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span> — Please add funds to place this trade.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 items-center">
+              <Button
+                size="sm"
+                className={form.transaction_type === "SELL" ? "bg-red-500 hover:bg-red-600" : ""}
+                onClick={() => placeMutation.mutate()}
+                disabled={!canPlace}
+                title={insufficientFunds ? "Insufficient balance" : ""}
+              >
+                {placeMutation.isPending
+                  ? "Placing..."
+                  : ltpLoading
+                  ? "Loading price..."
+                  : `Place ${form.transaction_type}`}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setSelectedInstrument(null); setForm(BLANK_FORM); }}>Cancel</Button>
+              {availableBalance > 0 && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  Available: ₹{availableBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -235,11 +433,13 @@ export default function SuperOrders() {
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground">Symbol</th>
+                <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground">Exchange</th>
                 <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground">Side</th>
                 <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground">Qty</th>
                 <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground">Entry</th>
                 <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground">Target</th>
                 <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground">SL</th>
+                <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground">Margin</th>
                 <th className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground">Status</th>
                 <th className="text-right px-3 py-2.5 text-xs font-medium text-muted-foreground">Action</th>
               </tr>
@@ -248,18 +448,25 @@ export default function SuperOrders() {
               {orders.map((o, i) => {
                 const id = String(o.orderId ?? o.orderNo ?? i);
                 const side = String(o.transactionType ?? o.TxnType ?? "");
+                const entryP = Number(o.price ?? 0);
+                const orderQty = Number(o.quantity ?? 0);
+                const orderMargin = entryP * orderQty;
                 return (
                   <tr key={id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                     <td className="px-3 py-2.5 font-mono text-xs font-semibold">{o.tradingSymbol ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{o.exchangeSegment ? segToExch(String(o.exchangeSegment)) : "—"}</td>
                     <td className="px-3 py-2.5">
                       {side === "BUY"
                         ? <span className="flex items-center gap-1 text-emerald-400 text-xs font-medium"><TrendingUp className="w-3 h-3" />BUY</span>
                         : <span className="flex items-center gap-1 text-red-400 text-xs font-medium"><TrendingDown className="w-3 h-3" />SELL</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs">{o.quantity ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs">₹{Number(o.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs">₹{entryP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-emerald-400">₹{Number(o.targetPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-red-400">₹{Number(o.stopLossPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-blue-400">
+                      {orderMargin > 0 ? `₹${orderMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—"}
+                    </td>
                     <td className="px-3 py-2.5">
                       <Badge variant="outline" className={`text-[10px] ${statusColor(String(o.orderStatus ?? ""))}`}>
                         {o.orderStatus ?? "—"}
