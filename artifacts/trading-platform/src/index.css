@@ -72,97 +72,97 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME — Carbon Gold ────────────────────── */
+/* ── LIGHT THEME — Slate Ember ────────────────────── */
 :root,
 .light {
-  --background: 36 28% 96%;         /* warm off-white cream */
-  --foreground: 24 30% 8%;          /* deep warm near-black */
-  --border: 36 20% 86%;
+  --background: 20 8% 95%;          /* neutral warm gray */
+  --foreground: 20 12% 8%;          /* near-black warm */
+  --border: 20 8% 84%;
   --input: 0 0% 100%;
-  --ring: 38 90% 42%;               /* amber/gold focus ring */
+  --ring: 16 90% 50%;               /* vivid orange-red ring */
   --card: 0 0% 100%;
-  --card-foreground: 24 30% 8%;
-  --card-border: 36 20% 86%;
+  --card-foreground: 20 12% 8%;
+  --card-border: 20 8% 84%;
   --popover: 0 0% 100%;
-  --popover-foreground: 24 30% 8%;
-  --popover-border: 36 20% 86%;
-  --primary: 38 90% 42%;            /* warm amber gold */
-  --primary-foreground: 24 30% 8%;
-  --secondary: 36 22% 92%;
-  --secondary-foreground: 24 24% 20%;
-  --muted: 36 18% 94%;
-  --muted-foreground: 36 12% 46%;
-  --accent: 38 70% 92%;             /* light gold tint */
-  --accent-foreground: 38 90% 24%;
-  --destructive: 4 76% 48%;
+  --popover-foreground: 20 12% 8%;
+  --popover-border: 20 8% 84%;
+  --primary: 16 90% 50%;            /* rich orange */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 20 8% 91%;
+  --secondary-foreground: 20 10% 20%;
+  --muted: 20 6% 93%;
+  --muted-foreground: 20 8% 46%;
+  --accent: 16 70% 93%;             /* light orange tint */
+  --accent-foreground: 16 90% 28%;
+  --destructive: 0 78% 50%;
   --destructive-foreground: 0 0% 100%;
   --success: 145 62% 34%;
   --success-foreground: 0 0% 100%;
   --warning: 32 95% 44%;
   --warning-foreground: 0 0% 100%;
-  --sidebar: 36 22% 93%;            /* warm cream sidebar */
-  --sidebar-foreground: 24 24% 16%;
-  --sidebar-border: 36 20% 86%;
-  --sidebar-primary: 38 90% 42%;
-  --sidebar-primary-foreground: 24 30% 8%;
-  --sidebar-accent: 38 65% 88%;     /* gold hover tint */
-  --sidebar-accent-foreground: 38 90% 22%;
-  --sidebar-ring: 38 90% 42%;
-  --chart-1: 38 90% 42%;
+  --sidebar: 20 8% 92%;             /* warm gray sidebar */
+  --sidebar-foreground: 20 10% 16%;
+  --sidebar-border: 20 8% 84%;
+  --sidebar-primary: 16 90% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 16 60% 90%;     /* orange hover tint */
+  --sidebar-accent-foreground: 16 90% 26%;
+  --sidebar-ring: 16 90% 50%;
+  --chart-1: 16 90% 50%;
   --chart-2: 145 62% 34%;
-  --chart-3: 4 76% 48%;
-  --chart-4: 262 60% 52%;
-  --chart-5: 200 72% 44%;
+  --chart-3: 0 78% 50%;
+  --chart-4: 200 72% 44%;
+  --chart-5: 262 60% 52%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-  --radius: 0.5rem;
+  --radius: 0.375rem;
 }
 
-/* ── DARK THEME — Carbon Gold ──────────────────────── */
+/* ── DARK THEME — Slate Ember ──────────────────────── */
 .dark {
-  --background: 0 0% 7%;            /* pure charcoal black */
-  --foreground: 36 20% 90%;         /* warm off-white text */
-  --border: 0 0% 16%;
-  --input: 0 0% 12%;
-  --ring: 38 88% 50%;               /* amber gold ring */
-  --card: 0 0% 10%;                 /* slightly lifted charcoal */
-  --card-foreground: 36 20% 90%;
-  --card-border: 0 0% 16%;
-  --popover: 0 0% 10%;
-  --popover-foreground: 36 20% 90%;
-  --popover-border: 0 0% 16%;
-  --primary: 38 88% 50%;            /* warm amber/gold */
-  --primary-foreground: 0 0% 7%;
-  --secondary: 0 0% 13%;
-  --secondary-foreground: 36 16% 76%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 36 10% 54%;
-  --accent: 0 0% 13%;
-  --accent-foreground: 36 16% 76%;
-  --destructive: 4 76% 56%;
+  --background: 220 8% 10%;         /* dark cool gray */
+  --foreground: 20 10% 90%;         /* warm off-white */
+  --border: 220 6% 20%;
+  --input: 220 6% 15%;
+  --ring: 16 92% 54%;               /* vivid orange-red */
+  --card: 220 8% 13%;
+  --card-foreground: 20 10% 90%;
+  --card-border: 220 6% 20%;
+  --popover: 220 8% 13%;
+  --popover-foreground: 20 10% 90%;
+  --popover-border: 220 6% 20%;
+  --primary: 16 92% 54%;            /* vivid orange-red */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 6% 16%;
+  --secondary-foreground: 20 8% 74%;
+  --muted: 220 6% 14%;
+  --muted-foreground: 220 6% 54%;
+  --accent: 220 6% 16%;
+  --accent-foreground: 20 8% 74%;
+  --destructive: 0 76% 56%;
   --destructive-foreground: 0 0% 100%;
   --success: 145 60% 44%;
-  --success-foreground: 0 0% 7%;
-  --warning: 32 92% 52%;
-  --warning-foreground: 0 0% 7%;
-  --sidebar: 0 0% 5%;               /* deepest charcoal sidebar */
-  --sidebar-foreground: 36 16% 78%;
-  --sidebar-border: 0 0% 14%;
-  --sidebar-primary: 38 88% 50%;
-  --sidebar-primary-foreground: 0 0% 7%;
-  --sidebar-accent: 0 0% 12%;       /* subtle hover fill */
-  --sidebar-accent-foreground: 36 16% 82%;
-  --sidebar-ring: 38 88% 50%;
-  --chart-1: 38 88% 50%;
+  --success-foreground: 0 0% 100%;
+  --warning: 32 90% 56%;
+  --warning-foreground: 0 0% 100%;
+  --sidebar: 220 10% 8%;            /* deepest slate sidebar */
+  --sidebar-foreground: 220 8% 78%;
+  --sidebar-border: 220 8% 18%;
+  --sidebar-primary: 16 92% 54%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 8% 14%;
+  --sidebar-accent-foreground: 20 8% 82%;
+  --sidebar-ring: 16 92% 54%;
+  --chart-1: 16 92% 54%;
   --chart-2: 145 60% 44%;
-  --chart-3: 4 76% 56%;
-  --chart-4: 262 65% 65%;
-  --chart-5: 200 72% 52%;
+  --chart-3: 0 76% 56%;
+  --chart-4: 200 72% 52%;
+  --chart-5: 262 65% 65%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-  --radius: 0.5rem;
+  --radius: 0.375rem;
 }
 
 @layer base {
