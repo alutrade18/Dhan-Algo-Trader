@@ -276,12 +276,18 @@ export const dhanClient = {
   async setPnlExit(data: {
     profitValue: number;
     lossValue: number;
-    productType: string[];
+    productType: string | string[];
     enableKillSwitch: boolean;
   }) {
+    const productType = Array.isArray(data.productType)
+      ? data.productType[0]
+      : data.productType;
     return dhanRequest("POST", "/pnlExit", {
       dhanClientId: credentials.clientId,
-      ...data,
+      profitValue: data.profitValue,
+      lossValue: data.lossValue,
+      productType,
+      enableKillSwitch: data.enableKillSwitch,
     });
   },
 

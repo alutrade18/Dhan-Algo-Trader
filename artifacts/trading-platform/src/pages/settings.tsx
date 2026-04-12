@@ -284,8 +284,8 @@ export default function Settings() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Failed");
+        const err = await res.json().catch(() => ({})) as { error?: string; errorMessage?: string; errorCode?: string };
+        throw new Error(err.errorMessage ?? err.error ?? "Request rejected by broker");
       }
       return res.json();
     },
