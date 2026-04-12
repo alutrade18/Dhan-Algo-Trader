@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
+import { marketFeedWS } from "../lib/market-feed-ws";
+import { orderUpdateWS } from "../lib/order-update-ws";
 
 const router: IRouter = Router();
 
@@ -46,6 +48,10 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
     }
 
     dhanClient.configure(cid, token);
+    marketFeedWS.configure(cid, token);
+    orderUpdateWS.configure(cid, token);
+    marketFeedWS.connect();
+    orderUpdateWS.connect();
 
     const settings = await getOrCreateSettings();
     await db
@@ -88,6 +94,8 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
 
 router.post("/broker/disconnect", async (req, res): Promise<void> => {
   dhanClient.disconnect();
+  marketFeedWS.disconnect();
+  orderUpdateWS.disconnect();
 
   try {
     const settings = await getOrCreateSettings();

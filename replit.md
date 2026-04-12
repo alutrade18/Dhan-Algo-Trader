@@ -22,8 +22,10 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 
 ### Frontend (artifacts/trading-platform)
 - React + Vite web app with dark-mode fintech terminal theme
-- Pages: Dashboard, Orders, Positions, Strategies, Backtesting, Paper Trading, Settings
+- Pages: Dashboard, Orders, Positions, Strategies, Backtesting, Paper Trading, Settings, Logs, Super Orders, Forever Orders, Conditional Triggers, Option Chain, Trade History
+- Sidebar organized into sections: OVERVIEW, TRADING, PORTFOLIO, MARKET DATA, AUTOMATION, REPORTS, SYSTEM
 - Uses Orval-generated React Query hooks for all API calls
+- Socket.io client (lib/market-socket.ts) for real-time market ticks and order updates
 - Recharts for equity curve, backtesting charts, and P&L visualizations
 
 ### Backend (artifacts/api-server)

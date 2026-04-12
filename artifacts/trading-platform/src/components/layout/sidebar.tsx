@@ -10,18 +10,63 @@ import {
   ShieldAlert,
   X,
   ScrollText,
+  Layers,
+  Clock,
+  Zap,
+  LineChart,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/orders", label: "Orders", icon: List },
-  { href: "/positions", label: "Positions", icon: Briefcase },
-  { href: "/strategies", label: "Strategies", icon: TerminalSquare },
-  { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
-  { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/logs", label: "Logs", icon: ScrollText },
+const NAV_SECTIONS = [
+  {
+    label: "OVERVIEW",
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "TRADING",
+    items: [
+      { href: "/orders", label: "Orders", icon: List },
+      { href: "/super-orders", label: "Super Orders", icon: Layers },
+      { href: "/forever-orders", label: "Forever Orders", icon: Clock },
+      { href: "/conditional", label: "Conditional", icon: Zap },
+    ],
+  },
+  {
+    label: "PORTFOLIO",
+    items: [
+      { href: "/positions", label: "Positions", icon: Briefcase },
+    ],
+  },
+  {
+    label: "MARKET DATA",
+    items: [
+      { href: "/option-chain", label: "Option Chain", icon: LineChart },
+    ],
+  },
+  {
+    label: "AUTOMATION",
+    items: [
+      { href: "/strategies", label: "Strategies", icon: TerminalSquare },
+      { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
+      { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
+    ],
+  },
+  {
+    label: "REPORTS",
+    items: [
+      { href: "/trade-history", label: "Trade History", icon: BookOpen },
+    ],
+  },
+  {
+    label: "SYSTEM",
+    items: [
+      { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/logs", label: "Logs", icon: ScrollText },
+    ],
+  },
 ];
 
 function BullIcon({ className }: { className?: string }) {
@@ -79,26 +124,35 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link key={item.href} href={item.href}>
-                <div
-                  onClick={() => { if (window.innerWidth < 768) onClose(); }}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "")} />
-                  {item.label}
-                </div>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-3 space-y-3 overflow-y-auto">
+          {NAV_SECTIONS.map((section) => (
+            <div key={section.label}>
+              <p className="px-3 py-1 text-[10px] font-semibold tracking-widest text-sidebar-foreground/30 uppercase">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const isActive = location === item.href;
+                  return (
+                    <Link key={item.href} href={item.href}>
+                      <div
+                        onClick={() => { if (window.innerWidth < 768) onClose(); }}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <item.icon className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "")} />
+                        {item.label}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-sidebar-border shrink-0">

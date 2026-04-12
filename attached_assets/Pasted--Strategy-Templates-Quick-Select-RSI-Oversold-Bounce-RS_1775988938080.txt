@@ -1,0 +1,339 @@
+
+Strategy Templates Quick-Select:
+- RSI Oversold Bounce: RSI(14) < 30 → BUY
+- MACD Bullish Crossover: MACD crosses above Signal → BUY
+- MACD Bearish Crossover: MACD crosses below Signal → SELL
+- EMA50 Price Crossover: Price crosses below EMA(50) → SELL
+- Bollinger Band Lower Touch: Price < BB_Lower → BUY
+- VWAP Reclaim: Price crosses above VWAP → BUY
+- Click template → pre-fill create form
+
+Create Strategy form:
+- Name, Description
+- ScripSearch → auto-fills securityId, tradingSymbol, exchangeSegment
+- Instrument Type: EQUITY/FUTIDX/FUTSTK/OPTIDX/OPTSTK
+- BUY/SELL toggle
+- Order Type: LIMIT/MARKET/STOP_LOSS
+- Quantity
+- Entry Price (if LIMIT)
+- Stop Loss (₹ or %)
+- Target (₹ or %)
+- Timeframe: 1min/5min/15min/25min/60min
+- ConditionBuilder for Entry Conditions (add/remove rows)
+- ConditionBuilder for Exit Conditions (add/remove rows)
+- Max Daily Loss for this strategy
+- Save button → POST /api/strategies
+
+ConditionBuilder row format:
+[Indicator▼] [Period input] [Comparator▼] [Value input] [× remove]
+Helper text below each row:
+"RSI(14) < 30 → Stock is oversold — bullish reversal expected"
+"MACD crosses_above Signal → Bullish momentum confirmed"
+
+Strategy cards list:
+- Name, Symbol, Side badge, Status badge (ACTIVE=green/PAUSED=amber/STOPPED=red)
+- Performance: Total Trades | Win Rate | Total P&L
+- Entry conditions preview (first 2 shown)
+- Actions: Start/Pause toggle, Execute Now, Edit, Delete
+
+### 7H: Paper Trading (/paper-trading)
+Real Dhan prices via WebSocket, dummy capital (₹10,00,000 default).
+
+Controls:
+- ScripSearch to select symbol
+- Exchange selector (NSE_EQ/NSE_FNO/BSE_EQ)
+- Subscribe to live feed button → emit market:subscribe to Socket.io
+- Live price badge (green/red flash on update): "₹2,892.50 ▲ +12.30 (+0.43%)"
+- LIVE indicator (pulsing green dot)
+
+Order Panel:
+- BUY/SELL tabs
+- Qty input
+- Order Type: MARKET/LIMIT (if LIMIT → price input)
+- Show margin required (calculated from virtual capital)
+- Place Paper Trade button → save to paper_trades table
+
+Open Positions table:
+- Symbol | Side | Qty | Entry Price | LTP (live) | P&L (live recalculated)
+- Close button per position → saves to closed trades
+
+Closed Trades table:
+- Symbol | Side | Qty | Entry | Exit | P&L | Result (WIN/LOSS)
+
+Summary cards:
+- Virtual Capital: ₹10,00,000
+- Used Margin: ₹X
+- Available: ₹Y
+- Today's P&L: ₹Z (live)
+- Win Rate: X%
+
+### 7I: Backtesting (/backtesting)
+Uses REAL Dhan intraday candle data.
+
+Setup form:
+- ScripSearch → auto-fills securityId, exchangeSegment
+- Instrument type
+- From Date / To Date (max 90 days for intraday, any range for daily)
+- Interval: 1min/5min/15min/25min/60min/Daily
+- Strategy selector (from saved strategies) OR custom conditions builder
+- Initial Capital input (₹)
+- Risk per trade (%)
+- Stop Loss % per trade
+- Take Profit %
+
+Run Backtest button:
+1. Fetch candles from POST /api/charts/intraday (or /historical for daily)
+2. Convert columnar format to Candle[] array
+3. Run strategy conditions on each candle (frontend calculation)
+4. Show progress bar while running
+5. Display results
+
+Results section:
+- Metric cards: Total Trades, Win Rate %, Total P&L, Max Drawdown %, Sharpe Ratio, Profit Factor
+- Equity Curve chart (recharts AreaChart, green if positive)
+- Monthly Returns heatmap (grid: months × years, green/red intensity)
+- Trade Log table: Date | Action | Price | P&L | Cumulative P&L
+
+Export report to Excel button.
+
+### 7J: Option Chain (/option-chain)
+Underlying selector: NIFTY (secId:13, IDX_I) | BANKNIFTY (secId:25, IDX_I) | SENSEX | FINNIFTY etc.
+Expiry dropdown → GET /api/optionchain/expirylist
+Fetch chain → POST /api/optionchain
+Auto-refresh every 60 seconds (rate limit: 1 per 3 sec)
+
+Display as standard option chain table:
+Left side (CE): OI | OI Change | Volume | LTP | Bid | Ask | IV | Delta
+Center: Strike Price (ATM highlighted in amber)
+Right side (PE): IV | Delta | Ask | Bid | LTP | Volume | OI Change | OI
+
+OI bar visualization on each side.
+Click CE/PE price → open quick order dialog (INTRADAY)
+Show PCR (Put-Call Ratio) at top.
+
+### 7K: Trade History / Statement (/trade-history)
+Two tabs: Trade History | Ledger
+
+Trade History tab:
+- From Date, To Date, Page number
+- Search button → GET /api/trades/{from}/{to}/{page}
+- Table: Date | Symbol | Side | Type | Qty | Price | Charges breakdown
+- Show STT, Brokerage, Exchange charges, SEBI tax, Stamp duty per trade
+- Total charges summary
+- Load More (pagination)
+- Export to Excel
+
+Ledger tab:
+- From Date, To Date → GET /api/ledger
+- Table: Date | Narration | Exchange | Voucher | Debit | Credit | Running Balance
+- Export to Excel
+
+=============================================================
+MODULE 8: SHARED COMPONENTS
+=============================================================
+
+### ScripSearch Component (components/scrip-search.tsx):
+Smart symbol search using the scrip_master DB table (232,590 instruments).
+- Type 2-3 chars → debounced 250ms → GET /api/scrip/search?q=...
+- Show dropdown: Symbol | Instrument type badge | Exchange | Security ID
+- On select → emit: { securityId, symbolName, exchId, segment, instrument, lotSize, displayName }
+- Props: filterInstrument, filterExchange, value, onChange
+- Show selected scrip as chip with × clear button
+
+### MarginCalculator Component (components/margin-calculator.tsx):
+Reusable widget — debounced 500ms, shows:
+- Total Margin Required
+- Available Balance  
+- Brokerage
+- Leverage
+- Color: green if available ≥ required, red if insufficient
+
+### OrderStatusBadge (components/order-status-badge.tsx):
+Status → color mapping:
+TRADED = green | PENDING/TRANSIT = amber | REJECTED = red
+CANCELLED/EXPIRED = gray | PART_TRADED = blue | CLOSED = teal
+
+### LivePriceTicker (components/live-price-ticker.tsx):
+Shows LTP from WebSocket subscription.
+- Green/red flash animation on price change
+- Shows change amount and % from prev close
+- LIVE pulsing indicator
+
+=============================================================
+MODULE 9: POSTBACK WEBHOOK RECEIVER
+=============================================================
+
+File: artifacts/api-server/src/routes/postback.ts
+
+POST /api/postback — Dhan sends order updates here
+
+```typescript
+router.post("/postback", async (req, res) => {
+  const payload = req.body; // DhanOrderUpdate
+  
+  // Save to DB
+  await db.insert(postbackLogsTable).values({ ...payload, receivedAt: new Date() });
+  
+  // Emit to frontend via Socket.io
+  io.emit("order:update", payload);
+  
+  // Update trade_logs if this order was from a strategy
+  if (payload.correlationId) {
+    await db.update(tradeLogsTable)
+      .set({ status: payload.orderStatus === "TRADED" ? "executed" : payload.orderStatus.toLowerCase(), 
+             orderId: payload.orderId })
+      .where(eq(tradeLogsTable.correlationId, payload.correlationId));
+  }
+  
+  // Send Telegram alert
+  if (payload.orderStatus === "TRADED") {
+    await telegramService.sendAlert("ORDER_TRADED", payload);
+  } else if (payload.orderStatus === "REJECTED") {
+    await telegramService.sendAlert("ORDER_REJECTED", payload);
+  }
+  
+  res.status(200).json({ status: "ok" });
+});
+```
+
+Also create postback_logs table in DB for audit trail.
+Show recent postback events in Settings page.
+
+=============================================================
+MODULE 10: TELEGRAM ALERTS
+=============================================================
+
+File: artifacts/api-server/src/lib/telegram.ts
+
+Install: pnpm add node-telegram-bot-api @types/node-telegram-bot-api --filter @workspace/api-server
+
+Alert types and message formats:
+
+ORDER_TRADED:
+"✅ ORDER EXECUTED
+Strategy: {name}
+Symbol: {symbol} | {exchange}
+Side: {BUY/SELL} | Qty: {qty}
+Price: ₹{price}
+Time: {IST time}"
+
+ORDER_REJECTED:
+"❌ ORDER REJECTED
+Symbol: {symbol}
+Reason: {omsErrorDescription}
+Time: {IST time}"
+
+STRATEGY_FIRED:
+"🎯 STRATEGY TRIGGERED
+Strategy: {name}
+Symbol: {symbol}
+Signal: {entryConditions summary}
+Order Placed: {orderId}"
+
+KILL_SWITCH:
+"🔴 KILL SWITCH ACTIVATED
+Reason: {reason}
+All auto-trading disabled
+Time: {IST time}"
+
+DAILY_LOSS_HIT:
+"⚠️ DAILY LOSS LIMIT HIT
+Loss: ₹{amount}
+Limit: ₹{limit}
+All strategies paused"
+
+ENGINE_START/STOP:
+"🟢 Strategy Engine Started / 🔴 Engine Stopped"
+
+POST /api/settings/telegram/test → send test message
+
+=============================================================
+MODULE 11: SIDEBAR NAVIGATION
+=============================================================
+
+File: artifacts/trading-platform/src/components/layout/sidebar.tsx
+
+Nav sections:
+OVERVIEW:
+  Dashboard (/)
+
+TRADING:
+  Orders (/orders)
+  Super Orders (/super-orders)
+  Forever Orders (/forever-orders)
+  Conditional Triggers (/conditional)
+
+PORTFOLIO:
+  Positions (/positions)   ← INTRADAY only, NO holdings link
+
+AUTOMATION:
+  Strategies (/strategies)
+  Paper Trading (/paper-trading)
+  Backtesting (/backtesting)
+
+MARKET DATA:
+  Option Chain (/option-chain)
+
+REPORTS:
+  Trade History (/trade-history)
+
+  Settings (/settings)
+
+Bottom of sidebar:
+- Engine status indicator (● green if running)
+- Kill switch status
+- Available balance (live)
+
+=============================================================
+MODULE 12: GLOBAL ERROR HANDLING
+=============================================================
+
+### DH-911 (Invalid IP) handler:
+When any order API returns DH-911:
+Show persistent red banner at top of ALL pages:
+"⚠️ Static IP Required: Your IP is not whitelisted for order placement.
+ Go to Dhan Web → My Profile → API → Static IP. [Learn More]"
+
+### DH-901 (Token expired):
+Show dialog: "Session Expired — Your Dhan access token has expired. 
+Please generate a new token or use auto-renew. [Go to Settings]"
+
+### Rate limit (DH-904):
+Toast: "Rate limit hit. Slowing down requests..."
+Implement exponential backoff in dhanClient.
+
+### Not connected:
+Any API call when not configured → show: "Connect your Dhan account in Settings first"
+
+=============================================================
+FINAL INSTRUCTIONS
+=============================================================
+
+1. Build all modules in priority order:
+   Phase 1: Auth + DhanClient + Basic routes + Settings page
+   Phase 2: Orders page + Positions page + Dashboard
+   Phase 3: Strategy Engine + Strategies page
+   Phase 4: WebSockets (market feed + order updates)
+   Phase 5: Super Orders + Forever Orders + Conditional Triggers
+   Phase 6: Paper Trading + Backtesting + Option Chain
+   Phase 7: Trade History + Postback + Telegram
+
+2. INTRADAY ENFORCEMENT: Every single order placed anywhere in the app
+   must have productType: "INTRADAY". Add a validation check in the
+   dhanClient.placeOrder() method that throws if productType is not INTRADAY.
+
+3. No holdings page, no CNC orders, no portfolio section anywhere.
+
+4. All monetary values: Indian Rupee format (en-IN locale, ₹ symbol)
+   All times: IST timezone display
+
+5. Dark terminal theme throughout. All cards dark bg, monospace fonts for prices.
+
+6. TypeScript strict mode — no `any` types except for Dhan API responses.
+
+7. After implementation: pnpm run typecheck
+
+8. Install all required packages:
+   pnpm add socket.io ws @types/ws node-telegram-bot-api @types/node-telegram-bot-api --filter @workspace/api-server
+   pnpm add socket.io-client --filter @workspace/trading-platform
+   pnpm add xlsx --filter @workspace/trading-platform

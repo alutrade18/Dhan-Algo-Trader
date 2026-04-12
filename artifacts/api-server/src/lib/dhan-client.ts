@@ -306,6 +306,58 @@ export const dhanClient = {
     return dhanRequest("DELETE", "/pnlExit");
   },
 
+  async getSuperOrders() {
+    return dhanRequest("GET", "/superorder");
+  },
+
+  async placeSuperOrder(body: Record<string, unknown>) {
+    return dhanRequest("POST", "/superorder", { dhanClientId: credentials.clientId, ...body });
+  },
+
+  async modifySuperOrder(orderId: string, body: Record<string, unknown>) {
+    return dhanRequest("PUT", `/superorder/${orderId}`, { dhanClientId: credentials.clientId, order_id: orderId, ...body });
+  },
+
+  async cancelSuperOrder(orderId: string, leg: "ENTRY_LEG" | "TARGET_LEG" | "STOP_LOSS_LEG") {
+    return dhanRequest("DELETE", `/superorder/${orderId}?leg_name=${leg}`);
+  },
+
+  async getForeverOrders() {
+    return dhanRequest("GET", "/forever/orders");
+  },
+
+  async placeForeverOrder(body: Record<string, unknown>) {
+    return dhanRequest("POST", "/forever/orders", { dhanClientId: credentials.clientId, ...body });
+  },
+
+  async modifyForeverOrder(orderId: string, body: Record<string, unknown>) {
+    return dhanRequest("PUT", `/forever/orders/${orderId}`, { dhanClientId: credentials.clientId, order_id: orderId, ...body });
+  },
+
+  async cancelForeverOrder(orderId: string) {
+    return dhanRequest("DELETE", `/forever/orders/${orderId}`);
+  },
+
+  async getAllConditionalTriggers() {
+    return dhanRequest("GET", "/alerts/pending");
+  },
+
+  async placeConditionalTrigger(body: Record<string, unknown>) {
+    return dhanRequest("POST", "/alerts", { dhanClientId: credentials.clientId, ...body });
+  },
+
+  async modifyConditionalTrigger(alertId: string, body: Record<string, unknown>) {
+    return dhanRequest("PUT", `/alerts/${alertId}`, { dhanClientId: credentials.clientId, ...body });
+  },
+
+  async deleteConditionalTrigger(alertId: string) {
+    return dhanRequest("DELETE", `/alerts/${alertId}`);
+  },
+
+  getCredentials() {
+    return { clientId: credentials.clientId, accessToken: credentials.accessToken };
+  },
+
   isConfigured(): boolean {
     return !!credentials.clientId && !!credentials.accessToken;
   },

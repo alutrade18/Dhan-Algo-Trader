@@ -12,6 +12,11 @@ import paperTradesRouter from "./paper-trades";
 import riskRouter from "./risk";
 import tradesRouter from "./trades";
 import logsRouter from "./logs";
+import superOrdersRouter from "./super-orders";
+import foreverOrdersRouter from "./forever-orders";
+import conditionalRouter from "./conditional";
+import { createPostbackRouter } from "./postback";
+import { getIO } from "../lib/io";
 import {
   orderRateLimit,
   dataRateLimit,
@@ -58,5 +63,16 @@ router.use(paperTradesRouter);
 router.use(riskRouter);
 router.use(tradesRouter);
 router.use(logsRouter);
+router.use(superOrdersRouter);
+router.use(foreverOrdersRouter);
+router.use(conditionalRouter);
+router.use((req, res, next) => {
+  const io = getIO();
+  if (io) {
+    createPostbackRouter(io)(req, res, next);
+  } else {
+    next();
+  }
+});
 
 export default router;
