@@ -18,8 +18,8 @@ import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut, RefreshCw, User,
   ShieldAlert, Bell, TrendingUp, TrendingDown, Power, Calendar,
-  Clock, Ban, LayoutDashboard, Settings2, History, Lock, Smartphone,
-  ChevronRight, Trash2, Plus, Save,
+  Clock, Ban, LayoutDashboard, Settings2, Lock, Smartphone,
+  Trash2, Plus, Save,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -77,7 +77,6 @@ interface SettingsData {
 }
 interface KillSwitchStatus { killSwitchStatus?: string; isActive?: boolean; canDeactivateToday?: boolean; deactivationsUsed?: number }
 interface PnlExitStatus { pnlExitStatus?: string; profit?: string; loss?: string; productType?: string[]; enable_kill_switch?: boolean }
-interface AuditEntry { id: number; action: string; field: string | null; oldValue: string | null; newValue: string | null; description: string | null; changedAt: string }
 
 function TokenExpiryWarning() {
   const [info, setInfo] = useState<{ hasToken: boolean; tokenUpdatedAt?: string } | null>(null);
@@ -176,11 +175,6 @@ export default function Settings() {
     queryKey: ["pnl-exit-status"], enabled: isConnected, staleTime: 0, gcTime: 0,
     queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/pnl-exit`, { cache: "no-store" }); if (!r.ok) return {}; return r.json(); },
   });
-  const { data: auditLogs } = useQuery<AuditEntry[]>({
-    queryKey: ["audit-log"], refetchInterval: 30000,
-    queryFn: async () => { const r = await fetch(`${BASE}api/settings/audit-log`); if (!r.ok) return []; return r.json(); },
-  });
-
   const brokerForm = useForm<z.infer<typeof brokerSchema>>({ resolver: zodResolver(brokerSchema), defaultValues: { clientId: "", accessToken: "" } });
   const riskForm = useForm<z.infer<typeof riskSchema>>({ resolver: zodResolver(riskSchema), defaultValues: { maxDailyLoss: 5000 } });
   const telegramForm = useForm<z.infer<typeof telegramSchema>>({ resolver: zodResolver(telegramSchema), defaultValues: { telegramBotToken: "", telegramChatId: "" } });
@@ -304,7 +298,7 @@ export default function Settings() {
 
   const genericSaveMutation = useMutation({
     mutationFn: saveSettings,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); queryClient.invalidateQueries({ queryKey: ["audit-log"] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
@@ -914,43 +908,6 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── Row 8 — Audit Log ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2"><History className="w-4 h-4 text-primary" />Audit Log</CardTitle>
-          <CardDescription className="text-xs">Last 50 settings changes with timestamps</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!auditLogs || auditLogs.length === 0 ? (
-            <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">No changes recorded yet. Save any setting to start the log.</div>
-          ) : (
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full table-auto text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {["Time (IST)", "Action", "Field", "Old Value", "New Value"].map(h => (
-                      <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLogs.map(log => (
-                    <tr key={log.id} className="border-b border-border/50 hover:bg-muted/20">
-                      <td className="px-3 py-2 font-mono text-muted-foreground whitespace-nowrap">
-                        {new Date(log.changedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
-                      </td>
-                      <td className="px-3 py-2 font-mono"><Badge variant="outline" className="text-[10px]">{log.action}</Badge></td>
-                      <td className="px-3 py-2 text-foreground">{log.field ?? "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground max-w-[120px] truncate" title={log.oldValue ?? ""}>{log.oldValue ?? "—"}</td>
-                      <td className="px-3 py-2 text-foreground max-w-[120px] truncate" title={log.newValue ?? ""}>{log.newValue ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

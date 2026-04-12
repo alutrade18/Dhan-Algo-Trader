@@ -21,6 +21,7 @@ import {
   TrendingUp,
   TrendingDown,
   Trash2,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +61,15 @@ interface TradeLog {
   message?: string | null;
   executedAt: string;
 }
+interface AuditEntry {
+  id: number;
+  action: string;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  description: string | null;
+  changedAt: string;
+}
 
 const LEVEL_STYLES: Record<string, string> = {
   info: "bg-blue-500/10 text-blue-400 border-blue-400/30",
@@ -86,6 +96,19 @@ function fmtTime(iso: string) {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
+  });
+}
+
+function fmtIST(iso: string) {
+  return new Date(iso).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
   });
 }
 
@@ -312,6 +335,17 @@ export default function Logs() {
     refetchInterval: 15_000,
   });
 
+  const { data: auditLogs = [], isLoading: auditLoading } = useQuery<AuditEntry[]>({
+    queryKey: ["audit-log"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/settings/audit-log`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 30_000,
+    enabled: activeTab === "audit",
+  });
+
   useEffect(() => {
     if (data && tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
   }, [data]);
@@ -323,13 +357,13 @@ export default function Logs() {
       setResetTsState(now);
       setPage(0);
       queryClient.invalidateQueries({ queryKey: ["app-logs"] });
-    } else {
+    } else if (activeTab === "trade") {
       setTradeResetTs(now);
       setResetTradeTsState(now);
       queryClient.invalidateQueries({ queryKey: ["trade-logs"] });
     }
     toast({
-      title: "Logs deleted",
+      title: "Logs cleared",
       description: "All logs permanently stored in the database.",
     });
   }
@@ -339,7 +373,6 @@ export default function Logs() {
   const errorCount = logs.filter((l) => l.level === "error").length;
   const warnCount = logs.filter((l) => l.level === "warn").length;
 
-  // Same height constant for both tables — keeps them identical in size
   const TABLE_H = "calc(100vh - 230px)";
 
   return (
@@ -352,34 +385,52 @@ export default function Logs() {
               Application Logs
             </TabsTrigger>
             <TabsTrigger value="trade" className="text-xs px-3">
-              Strategy Trade Logs
+              Strategy Logs
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="text-xs px-3 gap-1.5">
+              <History className="w-3 h-3" />
+              Audit Log
             </TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-muted-foreground">
-              {activeTab === "app"
-                ? `${total.toLocaleString()} ${total === 1 ? "entry" : "entries"}`
-                : `${tradeLogs.length.toLocaleString()} ${tradeLogs.length === 1 ? "entry" : "entries"}`}
-            </span>
-            {errorCount > 0 && (
-              <span className="text-[10px] font-mono rounded border border-destructive/30 bg-destructive/10 text-destructive px-2 py-0.5">
-                {errorCount} error{errorCount > 1 ? "s" : ""}
+            {activeTab === "app" && (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
+                </span>
+                {errorCount > 0 && (
+                  <span className="text-[10px] font-mono rounded border border-destructive/30 bg-destructive/10 text-destructive px-2 py-0.5">
+                    {errorCount} error{errorCount > 1 ? "s" : ""}
+                  </span>
+                )}
+                {warnCount > 0 && (
+                  <span className="text-[10px] font-mono rounded border border-yellow-400/30 bg-yellow-400/10 text-yellow-400 px-2 py-0.5">
+                    {warnCount} warn{warnCount > 1 ? "s" : ""}
+                  </span>
+                )}
+              </>
+            )}
+            {activeTab === "trade" && (
+              <span className="text-xs text-muted-foreground">
+                {tradeLogs.length.toLocaleString()} {tradeLogs.length === 1 ? "entry" : "entries"}
               </span>
             )}
-            {warnCount > 0 && (
-              <span className="text-[10px] font-mono rounded border border-yellow-400/30 bg-yellow-400/10 text-yellow-400 px-2 py-0.5">
-                {warnCount} warn{warnCount > 1 ? "s" : ""}
+            {activeTab === "audit" && (
+              <span className="text-xs text-muted-foreground">
+                {auditLogs.length.toLocaleString()} {auditLogs.length === 1 ? "change" : "changes"} · last 50
               </span>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-              onClick={() => setConfirmOpen(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </Button>
+            {activeTab !== "audit" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => setConfirmOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 
@@ -395,15 +446,7 @@ export default function Logs() {
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
-                      {[
-                        "Time",
-                        "Level",
-                        "Category",
-                        "Action",
-                        "Status",
-                        "Code",
-                        "",
-                      ].map((h) => (
+                      {["Time", "Level", "Category", "Action", "Status", "Code", ""].map((h) => (
                         <th
                           key={h}
                           className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap"
@@ -424,10 +467,7 @@ export default function Logs() {
                       ))
                     ) : logs.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-16 text-center text-sm text-muted-foreground"
-                        >
+                        <td colSpan={7} className="px-4 py-16 text-center text-sm text-muted-foreground">
                           No logs found.
                         </td>
                       </tr>
@@ -477,17 +517,7 @@ export default function Logs() {
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
-                      {[
-                        "Time",
-                        "Symbol",
-                        "Side",
-                        "Qty",
-                        "Price",
-                        "Status",
-                        "P&L",
-                        "Strategy",
-                        "Order ID",
-                      ].map((h) => (
+                      {["Time", "Symbol", "Side", "Qty", "Price", "Status", "P&L", "Strategy", "Order ID"].map((h) => (
                         <th
                           key={h}
                           className={cn(
@@ -511,16 +541,80 @@ export default function Logs() {
                       ))
                     ) : tradeLogs.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={9}
-                          className="px-4 py-16 text-center text-sm text-muted-foreground"
-                        >
+                        <td colSpan={9} className="px-4 py-16 text-center text-sm text-muted-foreground">
                           No logs found.
                         </td>
                       </tr>
                     ) : (
-                      tradeLogs.map((log) => (
-                        <TradeLogRow key={log.id} log={log} />
+                      tradeLogs.map((log) => <TradeLogRow key={log.id} log={log} />)
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── AUDIT LOG ── */}
+        <TabsContent value="audit" className="mt-0">
+          <Card>
+            <CardContent className="px-3 pb-3 pt-3">
+              <div
+                className="overflow-auto rounded-md border border-border"
+                style={{ height: TABLE_H }}
+              >
+                <table className="w-full table-auto text-sm">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
+                      {["Time (IST)", "Action", "Field", "Old Value", "New Value", "Description"].map((h) => (
+                        <th
+                          key={h}
+                          className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLoading ? (
+                      Array.from({ length: 12 }).map((_, i) => (
+                        <tr key={i} className="border-b border-border/40">
+                          <td colSpan={6} className="px-3 py-2">
+                            <Skeleton className="h-4 w-full" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : auditLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                          No settings changes recorded yet. Save any setting to start the log.
+                        </td>
+                      </tr>
+                    ) : (
+                      auditLogs.map((log) => (
+                        <tr key={log.id} className="border-b border-border/40 hover:bg-muted/20 text-xs">
+                          <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                            {fmtIST(log.changedAt)}
+                          </td>
+                          <td className="px-2 py-2">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                              {log.action}
+                            </Badge>
+                          </td>
+                          <td className="px-2 py-2 font-medium text-foreground">
+                            {log.field ?? "—"}
+                          </td>
+                          <td className="px-2 py-2 text-muted-foreground font-mono text-[10px] max-w-[140px] truncate" title={log.oldValue ?? ""}>
+                            {log.oldValue ?? "—"}
+                          </td>
+                          <td className="px-2 py-2 text-foreground font-mono text-[10px] max-w-[140px] truncate" title={log.newValue ?? ""}>
+                            {log.newValue ?? "—"}
+                          </td>
+                          <td className="px-2 py-2 text-muted-foreground max-w-[180px] truncate">
+                            {log.description ?? "—"}
+                          </td>
+                        </tr>
                       ))
                     )}
                   </tbody>
@@ -541,8 +635,7 @@ export default function Logs() {
               <strong>
                 {activeTab === "app" ? "Application" : "Strategy Trade"} Logs
               </strong>{" "}
-              from your screen.<div> </div> All logs permanently saved in the
-              database.
+              from your screen. All logs permanently saved in the database.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
