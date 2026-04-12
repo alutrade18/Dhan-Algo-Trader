@@ -1,43 +1,40 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Download, TrendingUp, TrendingDown, BookOpen, ScrollText } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
+function toYMD(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
-function monthAgo() {
+function daysAgo(n: number) {
   const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
+  d.setDate(d.getDate() - n);
+  return d;
 }
 
-interface Trade {
-  orderId?: string;
-  exchangeOrderId?: string;
-  tradingSymbol?: string;
-  transactionType?: string;
-  quantity?: number;
-  tradedPrice?: number;
-  exchangeTime?: string;
-  exchangeSegment?: string;
-  productType?: string;
-  brokerage?: number;
-  [key: string]: unknown;
+function formatDisplayDate(raw: string): string {
+  if (!raw || raw === "—") return "—";
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  }
+  return raw;
 }
 
 interface LedgerEntry {
-  voucherdate?: string;
+  dhanClientId?: string;
   narration?: string;
+  voucherdate?: string;
   exchange?: string;
-  voucherno?: string;
+  voucherdesc?: string;
+  vouchernumber?: string;
   debit?: string;
   credit?: string;
   runbal?: string;
@@ -45,36 +42,21 @@ interface LedgerEntry {
 }
 
 export default function TradeHistory() {
-  const [from, setFrom] = useState(monthAgo());
-  const [to, setTo] = useState(today());
-  const [submitted, setSubmitted] = useState({ from: monthAgo(), to: today() });
-  const [page, setPage] = useState(0);
-
-  const { data: trades = [], isLoading: tradesLoading, refetch: refetchTrades, isFetching: tradesFetching } = useQuery<Trade[]>({
-    queryKey: ["trade-history", submitted.from, submitted.to, page],
-    queryFn: async () => {
-      const url = `${BASE}api/trades/history?fromDate=${submitted.from}&toDate=${submitted.to}&page=${page}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { errorMessage?: string; error?: string };
-        throw new Error(err.errorMessage ?? err.error ?? "Failed");
-      }
-      return res.json() as Promise<Trade[]>;
-    },
-    staleTime: 60000,
-  });
-
-  const [ledgerFrom, setLedgerFrom] = useState(monthAgo());
-  const [ledgerTo, setLedgerTo] = useState(today());
+  const [fromDate, setFromDate] = useState(toYMD(daysAgo(29)));
+  const [toDate, setToDate] = useState(toYMD(new Date()));
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
-  const [ledgerLoading, setLedgerLoading] = useState(false);
-  const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fetched, setFetched] = useState(false);
 
-  const fetchLedger = async () => {
-    setLedgerLoading(true);
-    setLedgerError(null);
+  const fetchLedger = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setFetched(true);
     try {
-      const res = await fetch(`${BASE}api/trades/ledger?from=${ledgerFrom}&to=${ledgerTo}`);
+      const res = await fetch(
+        `${BASE}api/trades/ledger?fromDate=${fromDate}&toDate=${toDate}`
+      );
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string; errorMessage?: string };
         throw new Error(err.errorMessage ?? err.error ?? "Failed to load ledger");
@@ -82,192 +64,181 @@ export default function TradeHistory() {
       const data = await res.json() as LedgerEntry[] | { data?: LedgerEntry[] };
       setLedgerData(Array.isArray(data) ? data : (data.data ?? []));
     } catch (e: unknown) {
-      setLedgerError(e instanceof Error ? e.message : "Unknown error");
+      setError(e instanceof Error ? e.message : "Unknown error");
       setLedgerData([]);
     } finally {
-      setLedgerLoading(false);
+      setLoading(false);
     }
-  };
+  }, [fromDate, toDate]);
 
-  function handleSearch() {
-    setSubmitted({ from, to });
-    setPage(0);
-  }
-
-  function exportCSV(data: Record<string, unknown>[], filename: string) {
-    if (!data.length) return;
-    const keys = Object.keys(data[0]);
-    const csv = [keys.join(","), ...data.map(row => keys.map(k => JSON.stringify(row[k] ?? "")).join(","))].join("\n");
+  function exportCSV() {
+    if (!ledgerData.length) return;
+    const headers = ["Date", "Narration", "Exchange", "Voucher Desc", "Voucher No.", "Debit", "Credit", "Balance"];
+    const rows = ledgerData.map(r => [
+      formatDisplayDate(String(r.voucherdate ?? "")),
+      String(r.narration ?? ""),
+      String(r.exchange ?? ""),
+      String(r.voucherdesc ?? ""),
+      String(r.vouchernumber ?? ""),
+      String(r.debit ?? "0"),
+      String(r.credit ?? "0"),
+      String(r.runbal ?? ""),
+    ]);
+    const csv = [headers, ...rows].map(row => row.map(v => JSON.stringify(v)).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
+    a.href = URL.createObjectURL(blob);
+    a.download = `ledger_${fromDate}_to_${toDate}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(a.href);
   }
 
-  const totalBuy = trades.filter(t => t.transactionType === "BUY").length;
-  const totalSell = trades.filter(t => t.transactionType === "SELL").length;
-  const totalCharges = trades.reduce((sum, t) => sum + Number(t.brokerage ?? 0), 0);
+  const totalDebit = ledgerData.reduce((s, r) => s + Number(String(r.debit ?? "0").replace(/,/g, "")), 0);
+  const totalCredit = ledgerData.reduce((s, r) => s + Number(String(r.credit ?? "0").replace(/,/g, "")), 0);
 
   return (
     <div className="space-y-4">
       <p className="text-sm font-bold text-foreground">
-        View executed trades and ledger entries from Dhan
+        Account credit and debit details fetched live from Dhan
       </p>
 
+      {/* ── Controls ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">From</div>
-        <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-36 text-xs font-mono" max={to} />
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">To</div>
-        <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-36 text-xs font-mono" max={today()} />
-        <Button size="sm" className="gap-1.5" onClick={handleSearch} disabled={tradesLoading}>
-          <Search className="w-3.5 h-3.5" /> Search
+        <span className="text-xs text-muted-foreground">From</span>
+        <Input
+          type="date"
+          value={fromDate}
+          onChange={e => setFromDate(e.target.value)}
+          max={toDate}
+          className="w-36 text-xs font-mono h-9"
+        />
+        <span className="text-xs text-muted-foreground">To</span>
+        <Input
+          type="date"
+          value={toDate}
+          onChange={e => setToDate(e.target.value)}
+          max={toYMD(new Date())}
+          className="w-36 text-xs font-mono h-9"
+        />
+        <Button size="sm" className="gap-1.5 h-9" onClick={fetchLedger} disabled={loading}>
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          {loading ? "Loading…" : "Fetch Ledger"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 h-9 ml-auto"
+          onClick={exportCSV}
+          disabled={ledgerData.length === 0}
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
         </Button>
       </div>
 
-      <Tabs defaultValue="trades">
-        <TabsList className="h-8">
-          <TabsTrigger value="trades" className="text-xs gap-1.5 px-3">
-            <BookOpen className="w-3.5 h-3.5" /> Trade History
-          </TabsTrigger>
-          <TabsTrigger value="ledger" className="text-xs gap-1.5 px-3">
-            <ScrollText className="w-3.5 h-3.5" /> Ledger
-          </TabsTrigger>
-        </TabsList>
+      {/* ── Summary row ── */}
+      {ledgerData.length > 0 && (
+        <div className="flex items-center gap-6 text-xs flex-wrap">
+          <span className="text-muted-foreground">
+            Entries: <span className="text-foreground font-semibold">{ledgerData.length}</span>
+          </span>
+          <span>
+            Total Credit:{" "}
+            <span className="text-emerald-400 font-mono font-semibold">
+              ₹{totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </span>
+          <span>
+            Total Debit:{" "}
+            <span className="text-red-400 font-mono font-semibold">
+              ₹{totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </span>
+        </div>
+      )}
 
-        <TabsContent value="trades" className="space-y-3 mt-3">
-          {trades.length > 0 && (
-            <div className="flex items-center gap-4 flex-wrap text-xs">
-              <span className="text-muted-foreground">Total Trades: <span className="text-foreground font-semibold">{trades.length}</span></span>
-              <span className="text-emerald-400">BUY: {totalBuy}</span>
-              <span className="text-red-400">SELL: {totalSell}</span>
-              {totalCharges > 0 && <span className="text-muted-foreground">Total Charges: <span className="text-red-400 font-mono">₹{totalCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>}
-              <Button
-                variant="outline" size="sm" className="ml-auto gap-1.5 h-7 text-xs"
-                onClick={() => exportCSV(trades as Record<string, unknown>[], `trades_${submitted.from}_${submitted.to}.csv`)}
-              >
-                <Download className="w-3 h-3" /> Export CSV
-              </Button>
-            </div>
-          )}
+      {/* ── Error ── */}
+      {error && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="py-4 text-center text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
-          {tradesLoading ? (
-            <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : trades.length === 0 ? (
-            <Card className="border-dashed"><CardContent className="py-10 text-center text-sm text-muted-foreground">No trades found for selected period.</CardContent></Card>
-          ) : (
-            <>
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full table-auto text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      {["Time", "Symbol", "Exchange", "Side", "Product", "Qty", "Price", "Brokerage"].map(h => (
-                        <th key={h} className={`px-3 py-2.5 text-xs font-medium text-muted-foreground ${["Qty", "Price", "Brokerage"].includes(h) ? "text-right" : "text-left"}`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trades.map((t, i) => {
-                      const side = String(t.transactionType ?? "");
-                      return (
-                        <tr key={String(t.orderId ?? i)} className="border-b border-border/50 hover:bg-muted/20">
-                          <td className="px-3 py-2 text-xs font-mono text-muted-foreground">{String(t.exchangeTime ?? "—").slice(0, 19).replace("T", " ")}</td>
-                          <td className="px-3 py-2 text-xs font-mono font-semibold">{t.tradingSymbol ?? "—"}</td>
-                          <td className="px-3 py-2 text-xs">
-                            <Badge variant="outline" className="text-[10px]">{t.exchangeSegment ?? "—"}</Badge>
-                          </td>
-                          <td className="px-3 py-2">
-                            {side === "BUY"
-                              ? <span className="flex items-center gap-1 text-emerald-400 text-xs font-medium"><TrendingUp className="w-3 h-3" />BUY</span>
-                              : <span className="flex items-center gap-1 text-red-400 text-xs font-medium"><TrendingDown className="w-3 h-3" />SELL</span>}
-                          </td>
-                          <td className="px-3 py-2 text-xs">{t.productType ?? "—"}</td>
-                          <td className="px-3 py-2 text-right font-mono text-xs">{t.quantity ?? "—"}</td>
-                          <td className="px-3 py-2 text-right font-mono text-xs">₹{Number(t.tradedPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                          <td className="px-3 py-2 text-right font-mono text-xs text-red-400/80">
-                            {Number(t.brokerage ?? 0) > 0 ? `₹${Number(t.brokerage).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex items-center gap-2 justify-end">
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
-                <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={trades.length < 50} onClick={() => setPage(p => p + 1)}>Next</Button>
-              </div>
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="ledger" className="space-y-3 mt-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">From</div>
-            <Input type="date" value={ledgerFrom} onChange={e => setLedgerFrom(e.target.value)} className="w-36 text-xs font-mono" max={ledgerTo} />
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">To</div>
-            <Input type="date" value={ledgerTo} onChange={e => setLedgerTo(e.target.value)} className="w-36 text-xs font-mono" max={today()} />
-            <Button size="sm" className="gap-1.5" onClick={fetchLedger} disabled={ledgerLoading}>
-              <Search className="w-3.5 h-3.5" /> {ledgerLoading ? "Loading..." : "Fetch Ledger"}
-            </Button>
-            <Button
-              variant="outline" size="sm" className="gap-1.5 h-8 text-xs ml-auto"
-              onClick={() => exportCSV(ledgerData as Record<string, unknown>[], `ledger_${ledgerFrom}_${ledgerTo}.csv`)}
-              disabled={ledgerData.length === 0}
-            >
-              <Download className="w-3 h-3" /> Export CSV
-            </Button>
-          </div>
-
-          {ledgerError && (
-            <Card className="border-destructive/30 bg-destructive/5">
-              <CardContent className="py-4 text-center text-sm text-destructive">{ledgerError}</CardContent>
-            </Card>
-          )}
-
-          {ledgerLoading ? (
-            <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : ledgerData.length === 0 && !ledgerError ? (
-            <Card className="border-dashed">
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                Select a date range and click Fetch Ledger to view your account statement.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full table-auto text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {["Date", "Narration", "Voucher", "Debit", "Credit", "Balance"].map(h => (
-                      <th key={h} className={`px-3 py-2.5 text-xs font-medium text-muted-foreground ${["Debit", "Credit", "Balance"].includes(h) ? "text-right" : "text-left"}`}>{h}</th>
-                    ))}
+      {/* ── Table ── */}
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+        </div>
+      ) : ledgerData.length === 0 && !error ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            {fetched
+              ? "No ledger entries found for the selected period."
+              : "Select a date range and click Fetch Ledger to view your account statement."}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full table-auto text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                {[
+                  { label: "Date", right: false },
+                  { label: "Narration", right: false },
+                  { label: "Exchange", right: false },
+                  { label: "Voucher No.", right: false },
+                  { label: "Debit", right: true },
+                  { label: "Credit", right: true },
+                  { label: "Balance", right: true },
+                ].map(h => (
+                  <th
+                    key={h.label}
+                    className={`px-3 py-2.5 text-xs font-medium text-muted-foreground ${h.right ? "text-right" : "text-left"}`}
+                  >
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ledgerData.map((row, i) => {
+                const debit = Number(String(row.debit ?? "0").replace(/,/g, ""));
+                const credit = Number(String(row.credit ?? "0").replace(/,/g, ""));
+                const balance = Number(String(row.runbal ?? "0").replace(/,/g, ""));
+                return (
+                  <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
+                    <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                      {formatDisplayDate(String(row.voucherdate ?? ""))}
+                    </td>
+                    <td className="px-3 py-2 text-xs max-w-[220px] truncate" title={String(row.narration ?? "")}>
+                      {String(row.narration ?? "—")}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                      {String(row.exchange ?? "—")}
+                    </td>
+                    <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                      {String(row.vouchernumber ?? "—")}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs text-red-400 whitespace-nowrap">
+                      {debit > 0
+                        ? `₹${debit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs text-emerald-400 whitespace-nowrap">
+                      {credit > 0
+                        ? `₹${credit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                        : "—"}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-mono text-xs whitespace-nowrap ${balance >= 0 ? "text-foreground" : "text-red-400"}`}>
+                      ₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {ledgerData.map((row, i) => (
-                    <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
-                      <td className="px-3 py-2 text-xs font-mono text-muted-foreground">{String(row.voucherdate ?? "—")}</td>
-                      <td className="px-3 py-2 text-xs max-w-[200px] truncate">{String(row.narration ?? "—")}</td>
-                      <td className="px-3 py-2 text-xs font-mono">{String(row.voucherno ?? "—")}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-red-400">
-                        {Number(String(row.debit ?? "0").replace(/,/g, "")) > 0 ? `₹${Number(String(row.debit).replace(/,/g, "")).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-emerald-400">
-                        {Number(String(row.credit ?? "0").replace(/,/g, "")) > 0 ? `₹${Number(String(row.credit).replace(/,/g, "")).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs">{String(row.runbal ?? "—")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

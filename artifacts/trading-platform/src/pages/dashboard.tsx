@@ -149,7 +149,7 @@ const PRESETS: {
   { label: "All-Time", mode: "alltime", days: null },
 ];
 
-const AUTO_RESET_MS = 20 * 1000; // 20 seconds
+const AUTO_RESET_MS = 0.2 * 60 * 1000; // 1 minute
 
 const Y_MAX = 1_500_000;
 const Y_STEP = 150_000;
