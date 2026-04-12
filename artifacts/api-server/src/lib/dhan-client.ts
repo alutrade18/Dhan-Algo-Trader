@@ -116,22 +116,7 @@ export const dhanClient = {
     return dhanRequest("GET", `/orders/${orderId}`);
   },
 
-  async placeOrder(orderData: {
-    security_id: string;
-    exchange_segment: string;
-    transaction_type: string;
-    quantity: number;
-    order_type: string;
-    product_type: string;
-    price: number;
-    trigger_price?: number;
-    disclosed_quantity?: number;
-    after_market_order?: boolean;
-    validity?: string;
-    bo_profit_value?: number;
-    bo_stoploss_value?: number;
-    tag?: string;
-  }) {
+  async placeOrder(orderData: Record<string, unknown>) {
     return dhanRequest("POST", "/orders", {
       dhanClientId: credentials.clientId,
       ...orderData,
@@ -163,6 +148,10 @@ export const dhanClient = {
 
   async getPositions() {
     return dhanRequest("GET", "/positions");
+  },
+
+  async exitAllPositions() {
+    return dhanRequest("DELETE", "/positions");
   },
 
   async getHoldings() {
@@ -233,6 +222,10 @@ export const dhanClient = {
     return dhanRequest("GET", "/fundlimit", undefined, overrideCredentials);
   },
 
+  async calculateMargin(body: Record<string, unknown>) {
+    return dhanRequest("POST", "/margincalculator", body);
+  },
+
   async getMarketQuote(
     securities: Record<string, string[]>,
     quoteType: string,
@@ -270,11 +263,24 @@ export const dhanClient = {
     securityId: string;
     exchangeSegment: string;
     instrumentType: string;
+    interval?: string;
+    fromDate?: string;
+    toDate?: string;
   }) {
+    const now = new Date();
+    const from = data.fromDate ?? (() => {
+      const d = new Date(now); d.setDate(d.getDate() - 60);
+      return `${d.toISOString().split("T")[0]} 09:15:00`;
+    })();
+    const to = data.toDate ?? `${now.toISOString().split("T")[0]} 15:30:00`;
     return dhanRequest("POST", "/charts/intraday", {
-      security_id: data.securityId,
-      exchange_segment: data.exchangeSegment,
+      securityId: data.securityId,
+      exchangeSegment: data.exchangeSegment,
       instrument: data.instrumentType,
+      interval: data.interval ?? "15",
+      oi: false,
+      fromDate: from,
+      toDate: to,
     });
   },
 

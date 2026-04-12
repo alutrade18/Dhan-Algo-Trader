@@ -1,0 +1,519 @@
+=============================================================
+PHASE 3: FRONTEND — FIX PARTIAL PAGES
+=============================================================
+
+### 3A. Positions Page — Add Live LTP + Exit Buttons
+
+File: artifacts/trading-platform/src/pages/positions.tsx
+
+Complete rewrite. Replace entire file content with:
+
+```tsx
+import { useState, useEffect, useCallback } from "react";
+import { useGetPositions } from "@workspace/api-client-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Position } from "@workspace/api-zod/src/generated/types";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { marketSocket } from "@/lib/market-socket";
+import { RefreshCw, LogOut } from "lucide-react";
+
+const BASE = import.meta.env.BASE_URL;
+const fmt = (v?: number) => v !== undefined ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(v) : "—";
+const fmtChange = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+
+export default function Positions() {
+  const { data: positions, isLoading, refetch } = useGetPositions();
+  const { toast } = useToast();
+  const [ltpMap, setLtpMap] = useState<Record<string, number>>({});
+  const [exiting, setExiting] = useState<Record<string, boolean>>({});
+  const [exitingAll, setExitingAll] = useState(false);
+
+  // Filter INTRADAY only, exclude closed
+  const intradayPositions = positions?.filter(p => p.productType !== "CNC" && (p.netQty ?? 0) !== 0) ?? [];
+
+  // Subscribe to live LTP via WebSocket for all open positions
+  useEffect(() => {
+    if (!intradayPositions.length) return;
+    const unsubs: Array<() => void> = [];
+    intradayPositions.forEach(pos => {
+      if (!pos.securityId) return;
+      const secId = Number(pos.securityId);
+      const exchange = pos.exchangeSegment ?? "NSE_EQ";
+      const unsub = marketSocket.subscribe(exchange, secId, (tick) => {
+        setLtpMap(prev => ({ ...prev, [pos.securityId!]: tick.ltp }));
+      }, "ticker");
+      unsubs.push(unsub);
+    });
+    return () => unsubs.forEach(u => u());
+  }, [positions?.length]);
+
+  const calcUnrealizedPnl = (pos: Position, ltp: number) => {
+    const qty = pos.netQty ?? 0;
+    const avg = qty >= 0 ? (pos.buyAvg ?? 0) : (pos.sellAvg ?? 0);
+    return qty >= 0 ? (ltp - avg) * qty : (avg - ltp) * Math.abs(qty);
+  };
+
+  const exitSingle = async (pos: Position) => {
+    const key = pos.securityId ?? "";
+    setExiting(prev => ({ ...prev, [key]: true }));
+    try {
+      const qty = Math.abs(pos.netQty ?? 0);
+      const oppSide = (pos.netQty ?? 0) >= 0 ? "SELL" : "BUY";
+      const res = await fetch(`${BASE}api/positions/exit-single`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          securityId: pos.securityId,
+          exchangeSegment: pos.exchangeSegment,
+          productType: "INTRADAY",
+          quantity: qty,
+          transactionType: oppSide,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.errorMessage ?? data.error ?? "Failed");
+      toast({ title: "Exit order placed", description: `${pos.tradingSymbol} — Order: ${data.orderId}` });
+      setTimeout(() => refetch(), 2000);
+    } catch (e: unknown) {
+      toast({ title: "Exit failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setExiting(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const exitAll = async () => {
+    setExitingAll(true);
+    try {
+      const res = await fetch(`${BASE}api/positions`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      toast({ title: "All positions exiting", description: data.message ?? "Exit orders placed" });
+      setTimeout(() => refetch(), 3000);
+    } catch (e: unknown) {
+      toast({ title: "Exit All failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setExitingAll(false);
+    }
+  };
+
+  const totalUnrealized = intradayPositions.reduce((acc, pos) => {
+    const ltp = ltpMap[pos.securityId ?? ""] ?? 0;
+    return acc + (ltp > 0 ? calcUnrealizedPnl(pos, ltp) : (pos.unrealizedProfit ?? 0));
+  }, 0);
+  const totalRealized = intradayPositions.reduce((acc, pos) => acc + (pos.realizedProfit ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-3">
+          <div className="bg-card border rounded-md px-4 py-2 text-right">
+            <div className="text-xs text-muted-foreground mb-0.5">Unrealized P&L</div>
+            <div className={cn("text-lg font-mono font-bold", totalUnrealized >= 0 ? "text-success" : "text-destructive")}>
+              {fmt(totalUnrealized)}
+            </div>
+          </div>
+          <div className="bg-card border rounded-md px-4 py-2 text-right">
+            <div className="text-xs text-muted-foreground mb-0.5">Realized P&L</div>
+            <div className={cn("text-lg font-mono font-bold", totalRealized >= 0 ? "text-success" : "text-destructive")}>
+              {fmt(totalRealized)}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
+          </Button>
+          {intradayPositions.length > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={exitingAll}>
+                  <LogOut className="h-3.5 w-3.5 mr-1" />
+                  {exitingAll ? "Exiting..." : "Exit All"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Exit All Positions?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will place MARKET SELL/BUY orders for all {intradayPositions.length} open intraday positions immediately.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={exitAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Yes, Exit All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-md border bg-card overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Symbol</TableHead>
+              <TableHead>Side</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Avg Price</TableHead>
+              <TableHead className="text-right">LTP</TableHead>
+              <TableHead className="text-right">Unrealized</TableHead>
+              <TableHead className="text-right">Realized</TableHead>
+              <TableHead className="text-right">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : intradayPositions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
+                  No open intraday positions
+                </TableCell>
+              </TableRow>
+            ) : (
+              intradayPositions.map(pos => {
+                const ltp = ltpMap[pos.securityId ?? ""] ?? 0;
+                const unrealized = ltp > 0 ? calcUnrealizedPnl(pos, ltp) : (pos.unrealizedProfit ?? 0);
+                const qty = pos.netQty ?? 0;
+                const isLong = qty > 0;
+                const key = pos.securityId ?? "";
+                return (
+                  <TableRow key={key}>
+                    <TableCell className="font-mono font-medium">{pos.tradingSymbol}</TableCell>
+                    <TableCell>
+                      <Badge className={cn("text-[10px]", isLong ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive")}>
+                        {isLong ? "LONG" : "SHORT"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{Math.abs(qty)}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(isLong ? pos.buyAvg : pos.sellAvg)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {ltp > 0 ? (
+                        <span className="text-foreground">{fmt(ltp)}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Loading...</span>
+                      )}
+                    </TableCell>
+                    <TableCell className={cn("text-right font-mono", unrealized >= 0 ? "text-success" : "text-destructive")}>
+                      {fmt(unrealized)}
+                      {ltp > 0 && <span className="text-xs ml-1">({fmtChange(unrealized / (Math.abs(qty) * (isLong ? (pos.buyAvg ?? 1) : (pos.sellAvg ?? 1))) * 100)}%)</span>}
+                    </TableCell>
+                    <TableCell className={cn("text-right font-mono", (pos.realizedProfit ?? 0) >= 0 ? "text-success" : "text-destructive")}>
+                      {fmt(pos.realizedProfit ?? 0)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs border-destructive text-destructive hover:bg-destructive hover:text-white"
+                        disabled={exiting[key]}
+                        onClick={() => exitSingle(pos)}
+                      >
+                        {exiting[key] ? "..." : "Exit"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+```
+
+### 3B. Strategies Page — Add Engine Status Widget + Templates
+
+File: artifacts/trading-platform/src/pages/strategies.tsx
+
+Add these at the TOP of the file (after imports):
+
+```tsx
+// Engine Status Widget component — add before main Strategies component
+const STRATEGY_TEMPLATES = [
+  { name: "RSI Oversold Bounce", description: "Buy when RSI(14) drops below 30 — oversold reversal", transactionType: "BUY", timeframeMinutes: 15, entryConditions: [{ indicator: "RSI", comparator: "<", value: "30", period: "14" }], exitConditions: [{ indicator: "RSI", comparator: ">", value: "70", period: "14" }] },
+  { name: "MACD Bullish Cross", description: "Buy when MACD crosses above Signal line", transactionType: "BUY", timeframeMinutes: 15, entryConditions: [{ indicator: "MACD", comparator: "crosses_above", value: "0", period: "12" }], exitConditions: [{ indicator: "MACD", comparator: "crosses_below", value: "0", period: "12" }] },
+  { name: "MACD Bearish Cross", description: "Sell when MACD crosses below Signal line", transactionType: "SELL", timeframeMinutes: 15, entryConditions: [{ indicator: "MACD", comparator: "crosses_below", value: "0", period: "12" }], exitConditions: [] },
+  { name: "EMA50 Price Breakdown", description: "Sell when price closes below 50 EMA", transactionType: "SELL", timeframeMinutes: 15, entryConditions: [{ indicator: "EMA", comparator: "crosses_below", value: "0", period: "50" }], exitConditions: [] },
+  { name: "BB Lower Touch", description: "Buy when price touches lower Bollinger Band", transactionType: "BUY", timeframeMinutes: 15, entryConditions: [{ indicator: "Price", comparator: "<", value: "0", period: "20" }, { indicator: "BB_Lower", comparator: ">", value: "0", period: "20" }], exitConditions: [] },
+];
+
+function EngineStatusWidget() {
+  const BASE = import.meta.env.BASE_URL;
+  const [status, setStatus] = useState<{ running: boolean; activeStrategies: number; lastCheck: string | null } | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${BASE}api/strategies/engine/status`);
+        if (res.ok) setStatus(await res.json());
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  const toggle = async (start: boolean) => {
+    try {
+      const res = await fetch(`${BASE}api/strategies/engine/${start ? "start" : "stop"}`, { method: "POST" });
+      if (res.ok) {
+        toast({ title: start ? "Engine started" : "Engine stopped" });
+        setStatus(prev => prev ? { ...prev, running: start } : null);
+      }
+    } catch {}
+  };
+
+  if (!status) return null;
+  return (
+    <div className="flex items-center gap-3 text-xs p-2.5 rounded-md bg-muted/40 border border-border mb-4">
+      <span className={cn("w-2 h-2 rounded-full shrink-0", status.running ? "bg-success animate-pulse" : "bg-muted-foreground")} />
+      <span className="text-muted-foreground">Engine: <span className={status.running ? "text-success font-medium" : "text-muted-foreground"}>{status.running ? "Running" : "Stopped"}</span></span>
+      <span className="text-muted-foreground">Active: <span className="text-foreground font-medium">{status.activeStrategies}</span></span>
+      {status.lastCheck && <span className="text-muted-foreground">Last: <span className="text-foreground">{new Date(status.lastCheck).toLocaleTimeString("en-IN")}</span></span>}
+      <div className="ml-auto flex gap-2">
+        {status.running
+          ? <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => toggle(false)}>Stop Engine</Button>
+          : <Button size="sm" variant="outline" className="h-6 text-xs border-success text-success" onClick={() => toggle(true)}>Start Engine</Button>
+        }
+      </div>
+    </div>
+  );
+}
+```
+
+In the main `Strategies()` component, at the very top of the JSX return, add:
+```tsx
+<EngineStatusWidget />
+```
+
+Add a "Templates" section above the strategies table — a horizontal scrollable row of template cards. When clicked, it pre-fills the create form:
+```tsx
+// Template quick-select row — add above the "New Strategy" button area
+<div className="mb-4">
+  <p className="text-xs text-muted-foreground mb-2 font-medium">Quick Templates</p>
+  <div className="flex gap-2 overflow-x-auto pb-1">
+    {STRATEGY_TEMPLATES.map(t => (
+      <button
+        key={t.name}
+        onClick={() => {
+          // pre-fill form fields
+          form.setValue("name", t.name);
+          form.setValue("description", t.description);
+          form.setValue("transactionType", t.transactionType as "BUY" | "SELL");
+          form.setValue("timeframeMinutes", String(t.timeframeMinutes));
+          setEntryConditions(t.entryConditions);
+          setExitConditions(t.exitConditions);
+          setDialogOpen(true);
+        }}
+        className="shrink-0 text-left px-3 py-2 rounded-md border border-border bg-card hover:bg-muted/50 transition-colors"
+      >
+        <p className="text-xs font-medium whitespace-nowrap">{t.name}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[160px] truncate">{t.description}</p>
+      </button>
+    ))}
+  </div>
+</div>
+```
+
+Also add `timeframeMinutes` field to the strategy create form:
+```tsx
+// Add inside DialogContent form, after orderType field:
+<FormField
+  control={form.control}
+  name="timeframeMinutes"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Check Interval</FormLabel>
+      <Select onValueChange={field.onChange} value={field.value}>
+        <FormControl><SelectTrigger><SelectValue placeholder="Select timeframe" /></SelectTrigger></FormControl>
+        <SelectContent>
+          <SelectItem value="1">1 minute</SelectItem>
+          <SelectItem value="5">5 minutes</SelectItem>
+          <SelectItem value="15">15 minutes (default)</SelectItem>
+          <SelectItem value="25">25 minutes</SelectItem>
+          <SelectItem value="60">60 minutes</SelectItem>
+        </SelectContent>
+      </Select>
+    </FormItem>
+  )}
+/>
+```
+
+### 3C. Trade History Page — Add Ledger Tab
+
+File: artifacts/trading-platform/src/pages/trade-history.tsx
+
+Add a "Ledger" tab to the existing Tabs component. If tabs don't exist, wrap existing content in Tabs with "Trade History" as first tab.
+
+Add second tab "Ledger":
+```tsx
+// Ledger tab state
+const [ledgerFrom, setLedgerFrom] = useState(() => {
+  const d = new Date(); d.setDate(d.getDate() - 30);
+  return d.toISOString().split("T")[0];
+});
+const [ledgerTo, setLedgerTo] = useState(new Date().toISOString().split("T")[0]);
+const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
+const [ledgerLoading, setLedgerLoading] = useState(false);
+
+interface LedgerEntry {
+  narration: string; voucherdate: string; exchange: string;
+  voucherdesc: string; vouchernumber: string; debit: string;
+  credit: string; runbal: string;
+}
+
+const fetchLedger = async () => {
+  setLedgerLoading(true);
+  try {
+    const res = await fetch(`${BASE}api/trades/ledger?fromDate=${ledgerFrom}&toDate=${ledgerTo}`);
+    const data = await res.json();
+    setLedgerData(Array.isArray(data) ? data : []);
+  } catch { setLedgerData([]); }
+  finally { setLedgerLoading(false); }
+};
+
+// In the JSX, add Ledger tab:
+<TabsContent value="ledger">
+  <div className="flex gap-2 mb-4 flex-wrap">
+    <Input type="date" value={ledgerFrom} onChange={e => setLedgerFrom(e.target.value)} className="w-40 h-8 text-sm" />
+    <Input type="date" value={ledgerTo} onChange={e => setLedgerTo(e.target.value)} className="w-40 h-8 text-sm" />
+    <Button size="sm" onClick={fetchLedger} disabled={ledgerLoading}>
+      {ledgerLoading ? "Loading..." : "Fetch Ledger"}
+    </Button>
+  </div>
+  <div className="rounded-md border bg-card overflow-x-auto">
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Date</TableHead>
+          <TableHead>Narration</TableHead>
+          <TableHead>Exchange</TableHead>
+          <TableHead>Voucher</TableHead>
+          <TableHead className="text-right">Debit</TableHead>
+          <TableHead className="text-right">Credit</TableHead>
+          <TableHead className="text-right">Balance</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {ledgerLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>)}</TableRow>
+          ))
+        ) : ledgerData.length === 0 ? (
+          <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground text-sm">No ledger entries for selected period</TableCell></TableRow>
+        ) : (
+          ledgerData.map((entry, i) => (
+            <TableRow key={i}>
+              <TableCell className="text-xs font-mono">{entry.voucherdate}</TableCell>
+              <TableCell className="text-xs">{entry.narration}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{entry.exchange}</TableCell>
+              <TableCell className="text-xs font-mono text-muted-foreground">{entry.vouchernumber}</TableCell>
+              <TableCell className="text-right text-xs font-mono text-destructive">{entry.debit !== "0.00" ? `₹${entry.debit}` : "—"}</TableCell>
+              <TableCell className="text-right text-xs font-mono text-success">{entry.credit !== "0.00" ? `₹${entry.credit}` : "—"}</TableCell>
+              <TableCell className="text-right text-xs font-mono">{`₹${entry.runbal}`}</TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  </div>
+</TabsContent>
+```
+
+### 3D. Settings Page — Add Token Expiry Warning + Margin Calculator section
+
+File: artifacts/trading-platform/src/pages/settings.tsx
+
+Add token expiry warning banner at the top of the page (above all cards):
+```tsx
+function TokenExpiryWarning() {
+  const BASE = import.meta.env.BASE_URL;
+  const [info, setInfo] = useState<{ hasToken: boolean; tokenUpdatedAt?: string } | null>(null);
+
+  useEffect(() => {
+    fetch(`${BASE}api/broker/token-info`).then(r => r.json()).then(setInfo).catch(() => {});
+  }, []);
+
+  if (!info?.hasToken || !info.tokenUpdatedAt) return null;
+  const updated = new Date(info.tokenUpdatedAt);
+  const expiresAt = new Date(updated.getTime() + 24 * 60 * 60 * 1000);
+  const hoursLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hoursLeft > 4) return null; // Only show warning if < 4 hours left
+
+  return (
+    <div className="mb-4 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 flex items-center justify-between gap-3">
+      <p className="text-xs text-amber-400">
+        ⚠️ Token expires in ~{Math.max(0, Math.floor(hoursLeft))}h {Math.floor((hoursLeft % 1) * 60)}m. Renew now to avoid disruption.
+      </p>
+      <button
+        className="text-xs text-amber-400 border border-amber-500/40 px-2.5 py-1 rounded hover:bg-amber-500/20 transition-colors"
+        onClick={async () => {
+          const res = await fetch(`${BASE}api/broker/renew-token`, { method: "POST" });
+          const d = await res.json();
+          if (d.success) alert("Token renewed successfully!");
+          else alert("Renewal failed. Please generate a new token from Dhan web.");
+        }}
+      >
+        Renew Token
+      </button>
+    </div>
+  );
+}
+```
+
+Add `<TokenExpiryWarning />` as the first child inside the main settings div.
+
+Also add DH-911 Static IP global banner — add to app-layout.tsx:
+
+File: artifacts/trading-platform/src/components/layout/app-layout.tsx
+
+Add a global error banner state using window event:
+```tsx
+// Add near the top of AppLayout component:
+const [staticIpError, setStaticIpError] = useState(false);
+
+// Listen for DH-911 errors emitted globally
+useEffect(() => {
+  const handler = () => setStaticIpError(true);
+  window.addEventListener("dhan:staticip-error", handler);
+  return () => window.removeEventListener("dhan:staticip-error", handler);
+}, []);
+
+// Add in JSX above the main content:
+{staticIpError && (
+  <div className="bg-destructive/10 border-b border-destructive/30 px-4 py-2 text-xs text-destructive flex items-center justify-between">
+    <span>⚠️ <strong>Static IP Required:</strong> Your server IP is not whitelisted for order placement. Go to Dhan Web → My Profile → API → Static IP to whitelist it.</span>
+    <button onClick={() => setStaticIpError(false)} className="ml-4 opacity-60 hover:opacity-100">✕</button>
+  </div>
+)}
+```
+
+In market-socket.ts or any fetch utility, intercept DH-911:
+Add this utility in artifacts/trading-platform/src/lib/api-error-handler.ts:
+```typescript
+export function checkForDH911(data: unknown) {
+  if (data && typeof data === "object" && (data as Record<string, unknown>).errorCode === "DH-911") {
+    window.dispatchEvent(new CustomEvent("dhan:staticip-error"));
+  }
+}
+```

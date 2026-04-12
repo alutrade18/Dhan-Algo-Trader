@@ -50,4 +50,37 @@ router.get("/funds", async (req, res): Promise<void> => {
   }
 });
 
+// POST /funds/margin — Calculate margin for a single order
+router.post("/funds/margin", async (req, res): Promise<void> => {
+  if (!dhanClient.isConfigured()) {
+    res.status(401).json({ error: "Broker not connected" });
+    return;
+  }
+  try {
+    const { exchangeSegment, transactionType, quantity, productType, securityId, price, triggerPrice } = req.body as {
+      exchangeSegment: string;
+      transactionType: string;
+      quantity: number;
+      productType: string;
+      securityId: string;
+      price: number;
+      triggerPrice?: number;
+    };
+    const result = await dhanClient.calculateMargin({
+      dhanClientId: dhanClient.getCredentials().clientId,
+      exchangeSegment,
+      transactionType,
+      quantity,
+      productType,
+      securityId,
+      price,
+      triggerPrice: triggerPrice ?? 0,
+    });
+    res.json(result);
+  } catch (e) {
+    if (e instanceof DhanApiError) res.status(e.status).json(e.toClientResponse());
+    else res.status(500).json({ error: "Failed to calculate margin" });
+  }
+});
+
 export default router;

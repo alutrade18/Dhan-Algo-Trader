@@ -7,6 +7,7 @@ import { db, settingsTable } from "@workspace/db";
 import { marketFeedWS } from "./lib/market-feed-ws";
 import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
+import { strategyEngine } from "./lib/strategy-engine";
 
 const rawPort = process.env["PORT"];
 
@@ -71,6 +72,12 @@ async function loadSavedCredentials() {
 loadSavedCredentials().then(() => {
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
+    db.select().from(settingsTable).limit(1).then(([s]) => {
+      if (s?.enableAutoTrading && !s?.killSwitchEnabled) {
+        strategyEngine.start();
+        logger.info("Strategy engine auto-started (enableAutoTrading=true in DB)");
+      }
+    }).catch(() => {});
   });
 });
 

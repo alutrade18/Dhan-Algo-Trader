@@ -35,6 +35,21 @@ router.get("/trades/history", async (req, res): Promise<void> => {
   }
 });
 
+// GET /trades/ledger — Ledger report from Dhan
+router.get("/trades/ledger", async (req, res): Promise<void> => {
+  const { fromDate, toDate } = req.query as { fromDate?: string; toDate?: string };
+  if (!fromDate || !toDate) {
+    res.status(400).json({ error: "fromDate and toDate required (YYYY-MM-DD)" });
+    return;
+  }
+  try {
+    const data = await dhanClient.getLedger(fromDate, toDate);
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) {
+    handleRouteError(res, e, "GET /trades/ledger");
+  }
+});
+
 router.get("/trades/:orderId", async (req, res): Promise<void> => {
   try {
     const all = await dhanClient.getTradeBook();

@@ -3,6 +3,7 @@ import { eq, sql, desc } from "drizzle-orm";
 import { db, strategiesTable, tradeLogsTable, settingsTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
+import { strategyEngine } from "../lib/strategy-engine";
 import {
   CreateStrategyBody,
   UpdateStrategyBody,
@@ -67,6 +68,20 @@ router.get("/strategies/performance", async (_req, res): Promise<void> => {
     worstStrategy: worstStrategy || "N/A",
     avgPnlPerTrade: Math.round(avgPnlPerTrade * 100) / 100,
   });
+});
+
+router.get("/strategies/engine/status", (_req, res): void => {
+  res.json(strategyEngine.getStatus());
+});
+
+router.post("/strategies/engine/start", (_req, res): void => {
+  strategyEngine.start();
+  res.json({ success: true, message: "Engine started" });
+});
+
+router.post("/strategies/engine/stop", (_req, res): void => {
+  strategyEngine.stop();
+  res.json({ success: true, message: "Engine stopped" });
 });
 
 router.get("/strategies/:id", async (req, res): Promise<void> => {
