@@ -16,8 +16,13 @@ interface AppLayoutProps {
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
-  "/orders": "Orders",
+  "/orders": "Order Book",
+  "/super-orders": "Super Orders",
+  "/forever-orders": "Forever Orders",
+  "/conditional": "Conditional Triggers",
+  "/option-chain": "Option Chain",
   "/positions": "Positions",
+  "/trade-history": "Trade History",
   "/strategies": "Strategies",
   "/backtesting": "Backtesting",
   "/paper-trading": "Paper Trading",

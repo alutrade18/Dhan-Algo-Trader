@@ -767,12 +767,9 @@ export default function OrdersPage() {
 
         {/* ── Single header row ─────────────────────────────────── */}
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Order Book</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Today order and view past trade history
-            </p>
-          </div>
+          <p className="text-sm font-bold text-foreground">
+            Today&apos;s orders and view past trade history
+          </p>
           <div className="flex items-center gap-2.5">
             <Button
               variant="outline"

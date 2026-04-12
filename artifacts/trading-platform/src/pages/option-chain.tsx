@@ -351,17 +351,14 @@ export default function OptionChain() {
     <div className="space-y-4">
       {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Option Chain</h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            <Clock className="w-3 h-3 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">
-              ±20 strikes around ATM · Refresh every 10 sec
-            </p>
-            <span className={`text-xs font-medium ${marketStatus.color}`}>
-              · {marketStatus.label}
-            </span>
-          </div>
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+          <p className="text-sm font-bold text-foreground">
+            ±20 strikes around ATM · Refresh every 10 sec
+          </p>
+          <span className={`text-xs font-medium ${marketStatus.color}`}>
+            · {marketStatus.label}
+          </span>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

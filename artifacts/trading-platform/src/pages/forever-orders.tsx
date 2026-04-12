@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Plus, X, Clock, TrendingUp, TrendingDown, WifiOff, Loader2 } from "lucide-react";
+import { RefreshCw, Plus, X, TrendingUp, TrendingDown, WifiOff, Loader2 } from "lucide-react";
 import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
@@ -195,12 +195,9 @@ export default function ForeverOrders() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary" /> Forever Orders
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">GTT (Good Till Triggered) and OCO orders — Equity &amp; F&amp;O only</p>
-        </div>
+        <p className="text-sm font-bold text-foreground">
+          GTT (Good Till Triggered) and OCO orders — Equity &amp; F&amp;O only
+        </p>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refetch()} disabled={isFetching}>
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} /> Refresh
