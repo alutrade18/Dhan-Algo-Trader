@@ -20,30 +20,15 @@ import { cn } from "@/lib/utils";
 
 const NAV_SECTIONS = [
   {
-    label: "OVERVIEW",
-    items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
     label: "TRADING",
     items: [
-      { href: "/orders", label: "Orders", icon: List },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/positions", label: "Positions", icon: Briefcase },
+      { href: "/orders", label: "Order Book", icon: List },
+      { href: "/option-chain", label: "Option Chain", icon: LineChart },
       { href: "/super-orders", label: "Super Orders", icon: Layers },
       { href: "/forever-orders", label: "Forever Orders", icon: Clock },
-      { href: "/conditional", label: "Conditional", icon: Zap },
-    ],
-  },
-  {
-    label: "PORTFOLIO",
-    items: [
-      { href: "/positions", label: "Positions", icon: Briefcase },
-    ],
-  },
-  {
-    label: "MARKET DATA",
-    items: [
-      { href: "/option-chain", label: "Option Chain", icon: LineChart },
+      { href: "/conditional", label: "Conditional Triggers", icon: Zap },
     ],
   },
   {
