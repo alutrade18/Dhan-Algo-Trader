@@ -113,14 +113,14 @@
   --success: 145 62% 34%;           /* #228850 — rich green */
   --success-foreground: 0 0% 100%;
 
-  /* Sidebar */
-  --sidebar: 213 30% 94%;           /* #e6eef7 */
-  --sidebar-foreground: 214 35% 18%;
-  --sidebar-border: 213 22% 86%;
+  /* Sidebar — same family as background, slightly cooler */
+  --sidebar: 213 26% 93%;           /* #e4ecf5 — cooler blue-white */
+  --sidebar-foreground: 214 35% 16%;
+  --sidebar-border: 213 20% 84%;
   --sidebar-primary: 214 72% 44%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 211 28% 90%;
-  --sidebar-accent-foreground: 214 35% 18%;
+  --sidebar-accent: 211 26% 88%;
+  --sidebar-accent-foreground: 214 35% 16%;
   --sidebar-ring: 214 72% 44%;
 
   --app-font-sans: 'Inter', sans-serif;
@@ -179,14 +179,14 @@
   --success: 145 60% 44%;           /* #2dab63 — vivid green */
   --success-foreground: 0 0% 100%;
 
-  /* Sidebar — deepest layer */
-  --sidebar: 222 26% 6%;            /* #0a1019 */
-  --sidebar-foreground: 210 24% 82%;
-  --sidebar-border: 220 18% 18%;
+  /* Sidebar — unified with header, slightly darker than background */
+  --sidebar: 222 24% 9%;            /* #0e1622 — one step darker than bg */
+  --sidebar-foreground: 210 24% 84%;
+  --sidebar-border: 220 18% 19%;
   --sidebar-primary: 210 82% 62%;
   --sidebar-primary-foreground: 222 24% 8%;
-  --sidebar-accent: 220 18% 14%;
-  --sidebar-accent-foreground: 210 24% 82%;
+  --sidebar-accent: 220 18% 15%;
+  --sidebar-accent-foreground: 210 24% 84%;
   --sidebar-ring: 210 82% 62%;
 
   --app-font-sans: 'Inter', sans-serif;

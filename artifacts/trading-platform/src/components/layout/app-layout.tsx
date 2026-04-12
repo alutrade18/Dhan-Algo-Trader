@@ -166,7 +166,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-14 border-b border-border bg-card/50 backdrop-blur flex items-center justify-between px-3 md:px-6 shrink-0 gap-2">
+        <header className="h-14 border-b border-sidebar-border bg-sidebar flex items-center justify-between px-3 md:px-6 shrink-0 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Button
               variant="ghost"

@@ -94,7 +94,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-r-0"
         )}
       >
-        <div className="p-4 flex items-center justify-between border-b border-sidebar-border shrink-0">
+        <div className="h-14 px-4 flex items-center justify-between border-b border-sidebar-border shrink-0">
           <div className="flex items-center gap-2">
             <div className="bg-primary text-primary-foreground p-1.5 rounded-md">
               <BullIcon className="w-5 h-5" />
