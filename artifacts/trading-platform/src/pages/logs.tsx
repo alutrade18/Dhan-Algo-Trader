@@ -3,11 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, RotateCcw, ChevronDown, ChevronRight, Eye, EyeOff, TrendingUp, TrendingDown } from "lucide-react";
+import { RotateCcw, ChevronDown, ChevronRight, Eye, EyeOff, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -99,7 +98,7 @@ function AppLogRow({ log }: { log: AppLog }) {
             {log.category}
           </Badge>
         </td>
-        <td className="px-2 py-2 font-medium max-w-[260px] truncate">{log.action}</td>
+        <td className="px-2 py-2 font-medium max-w-[280px] truncate">{log.action}</td>
         <td className="px-2 py-2">
           {log.status && (
             <Badge
@@ -111,7 +110,7 @@ function AppLogRow({ log }: { log: AppLog }) {
           )}
         </td>
         <td className="px-2 py-2 text-muted-foreground font-mono text-[10px]">{log.statusCode ?? "—"}</td>
-        <td className="px-2 py-2 w-5 text-muted-foreground text-[10px]">
+        <td className="px-2 py-2 w-5 text-muted-foreground">
           {hasDetails && (expanded
             ? <ChevronDown className="h-3 w-3 text-primary" />
             : <ChevronRight className="h-3 w-3" />
@@ -134,18 +133,13 @@ function AppLogRow({ log }: { log: AppLog }) {
 function TradeLogRow({ log }: { log: TradeLog }) {
   const isBuy = log.transactionType === "BUY";
   const pnl = log.pnl !== null && log.pnl !== undefined ? Number(log.pnl) : null;
-
   return (
     <tr className="border-b border-border/40 hover:bg-muted/20 text-xs">
-      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap font-mono text-[10px]">
-        {fmtTime(log.executedAt)}
-      </td>
+      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap font-mono text-[10px]">{fmtTime(log.executedAt)}</td>
       <td className="px-2 py-2 font-mono font-semibold">{log.tradingSymbol}</td>
       <td className="px-2 py-2">
         <span className={cn("flex items-center gap-1 font-medium", isBuy ? "text-emerald-400" : "text-red-400")}>
-          {isBuy
-            ? <TrendingUp className="w-3 h-3" />
-            : <TrendingDown className="w-3 h-3" />}
+          {isBuy ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           {log.transactionType}
         </span>
       </td>
@@ -167,7 +161,7 @@ function TradeLogRow({ log }: { log: TradeLog }) {
           : <span className="text-muted-foreground">—</span>
         }
       </td>
-      <td className="px-2 py-2 text-xs text-muted-foreground max-w-[160px] truncate">{log.strategyName}</td>
+      <td className="px-2 py-2 text-muted-foreground max-w-[160px] truncate">{log.strategyName}</td>
       <td className="px-2 py-2 font-mono text-[10px] text-muted-foreground">{log.orderId ?? "—"}</td>
     </tr>
   );
@@ -186,29 +180,21 @@ function clearResetTs() {
 export default function Logs() {
   const [level, setLevel] = useState("all");
   const [category, setCategory] = useState("all");
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
-  const [showingAll, setShowingAll] = useState(!getResetTs());
+  const isFiltered = resetTs !== null;
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
-  const effectiveFrom = !showingAll && resetTs ? resetTs.slice(0, 10) : fromDate;
-
-  const { data, isLoading, isFetching, refetch } = useQuery<LogsResponse>({
-    queryKey: ["app-logs", level, category, search, page, effectiveFrom, toDate],
+  const { data, isLoading } = useQuery<LogsResponse>({
+    queryKey: ["app-logs", level, category, page, resetTs],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (level !== "all") p.set("level", level);
       if (category !== "all") p.set("category", category);
-      if (search) p.set("search", search);
-      if (effectiveFrom) p.set("fromDate", effectiveFrom);
-      if (toDate) p.set("toDate", toDate);
+      if (resetTs) p.set("fromDate", resetTs.slice(0, 10));
       const res = await fetch(`${BASE}api/logs?${p}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
@@ -230,43 +216,40 @@ export default function Logs() {
     if (data && tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
   }, [data]);
 
-  function handleResetView() {
+  function handleClearView() {
     const now = new Date().toISOString();
     setResetTs(now);
     setResetTsState(now);
-    setShowingAll(false);
     setPage(0);
     queryClient.invalidateQueries({ queryKey: ["app-logs"] });
-    toast({ title: "View reset", description: "Showing only new logs from now. Database is unchanged." });
+    toast({ title: "View cleared", description: "UI shows only new logs. Nothing deleted from database." });
   }
 
   function handleShowAll() {
     clearResetTs();
     setResetTsState(null);
-    setShowingAll(true);
     setPage(0);
     queryClient.invalidateQueries({ queryKey: ["app-logs"] });
   }
 
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
-
   const errorCount = logs.filter(l => l.level === "error").length;
-  const warnCount = logs.filter(l => l.level === "warn").length;
+  const warnCount  = logs.filter(l => l.level === "warn").length;
 
   return (
     <div className="space-y-4">
       <Tabs defaultValue="app">
         <TabsList className="h-8">
-          <TabsTrigger value="app" className="text-xs px-3">Application Logs</TabsTrigger>
+          <TabsTrigger value="app"   className="text-xs px-3">Application Logs</TabsTrigger>
           <TabsTrigger value="trade" className="text-xs px-3">Strategy Trade Logs</TabsTrigger>
         </TabsList>
 
-        {/* ── APP LOGS ── */}
+        {/* ── APPLICATION LOGS ── */}
         <TabsContent value="app" className="mt-3">
           <Card>
             <CardHeader className="pb-3 pt-4 px-4">
-              <div className="flex flex-wrap items-start gap-3 justify-between">
+              <div className="flex flex-wrap items-center gap-3 justify-between">
                 <div>
                   <CardTitle className="text-sm">Application Logs</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -275,7 +258,6 @@ export default function Logs() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  {/* Live stats pills */}
                   {errorCount > 0 && (
                     <span className="text-[10px] font-mono rounded border border-destructive/30 bg-destructive/10 text-destructive px-2 py-0.5">
                       {errorCount} error{errorCount > 1 ? "s" : ""}
@@ -287,47 +269,43 @@ export default function Logs() {
                     </span>
                   )}
 
-                  <Button
-                    variant="ghost" size="sm" className="h-8 gap-1.5 text-xs"
-                    onClick={() => refetch()} disabled={isFetching}
-                  >
-                    <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-                    Refresh
-                  </Button>
-
-                  {/* Reset View / Show All toggle */}
-                  {showingAll ? (
+                  {isFiltered ? (
                     <Button
-                      variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground"
-                      onClick={handleResetView}
-                      title="Hides logs older than now in UI only — nothing is deleted from the database"
-                    >
-                      <EyeOff className="h-3.5 w-3.5" />
-                      Reset View
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-emerald-400 border-emerald-400/30"
+                      variant="outline" size="sm"
+                      className="h-8 gap-1.5 text-xs text-emerald-400 border-emerald-400/30 hover:bg-emerald-400/10"
                       onClick={handleShowAll}
                     >
                       <Eye className="h-3.5 w-3.5" />
                       Show All History
                     </Button>
+                  ) : (
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={handleClearView}
+                      title="Hides existing logs in UI — nothing is deleted from the database"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Clear View
+                    </Button>
                   )}
                 </div>
               </div>
 
-              {/* View-reset notice */}
-              {!showingAll && resetTs && (
+              {isFiltered && resetTs && (
                 <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded px-2.5 py-1.5">
                   <RotateCcw className="h-3 w-3 shrink-0" />
-                  Showing logs since {new Date(resetTs).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })} · Logs before this are in the database — click &ldquo;Show All History&rdquo; to view.
+                  Showing logs since{" "}
+                  {new Date(resetTs).toLocaleString("en-IN", {
+                    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+                  })}
+                  {" "}· Older logs are safe in the database — click &ldquo;Show All History&rdquo; to restore.
                 </div>
               )}
             </CardHeader>
 
             <CardContent className="px-4 pb-4 space-y-3">
-              {/* Filters */}
+              {/* Level + Category filters */}
               <div className="flex flex-wrap gap-2 items-center">
                 <Select value={level} onValueChange={v => { setLevel(v); setPage(0); }}>
                   <SelectTrigger className="h-8 w-[110px] text-xs">
@@ -357,45 +335,6 @@ export default function Logs() {
                   </SelectContent>
                 </Select>
 
-                {/* Date range */}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span>From</span>
-                  <Input
-                    type="date"
-                    value={showingAll ? fromDate : ""}
-                    onChange={e => { setFromDate(e.target.value); setPage(0); }}
-                    disabled={!showingAll}
-                    className="h-8 w-32 text-xs font-mono"
-                    title={!showingAll ? "Clear 'Reset View' to use custom date range" : undefined}
-                  />
-                  <span>To</span>
-                  <Input
-                    type="date"
-                    value={toDate}
-                    onChange={e => { setToDate(e.target.value); setPage(0); }}
-                    className="h-8 w-32 text-xs font-mono"
-                  />
-                </div>
-
-                {/* Search */}
-                <div className="flex items-center gap-1 flex-1 min-w-[160px]">
-                  <Input
-                    placeholder="Search action…"
-                    value={searchInput}
-                    onChange={e => setSearchInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") { setSearch(searchInput); setPage(0); } }}
-                    className="h-8 text-xs"
-                  />
-                  <Button size="sm" className="h-8 px-2 text-xs" onClick={() => { setSearch(searchInput); setPage(0); }}>
-                    Go
-                  </Button>
-                  {search && (
-                    <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => { setSearchInput(""); setSearch(""); setPage(0); }}>
-                      ✕
-                    </Button>
-                  )}
-                </div>
-
                 <span className="text-xs text-muted-foreground ml-auto shrink-0">
                   {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
                 </span>
@@ -405,7 +344,7 @@ export default function Logs() {
               <div
                 ref={tableScrollRef}
                 className="overflow-auto rounded-md border border-border"
-                style={{ maxHeight: "calc(100vh - 360px)", minHeight: "240px" }}
+                style={{ maxHeight: "calc(100vh - 340px)", minHeight: "240px" }}
               >
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
@@ -438,7 +377,6 @@ export default function Logs() {
                 </table>
               </div>
 
-              {/* Pagination */}
               {total > LIMIT && (
                 <div className="flex items-center justify-between pt-1">
                   <Button
@@ -470,13 +408,14 @@ export default function Logs() {
               </p>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <div className="overflow-auto rounded-md border border-border" style={{ maxHeight: "calc(100vh - 300px)", minHeight: "240px" }}>
+              <div className="overflow-auto rounded-md border border-border" style={{ maxHeight: "calc(100vh - 280px)", minHeight: "240px" }}>
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
                       {["Time", "Symbol", "Side", "Qty", "Price", "Status", "P&L", "Strategy", "Order ID"].map(h => (
-                        <th key={h} className={cn("px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap",
-                          ["Qty", "Price", "P&L"].includes(h) ? "text-right" : "text-left"
+                        <th key={h} className={cn(
+                          "px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap",
+                          ["Qty", "Price", "P&L"].includes(h) && "text-right"
                         )}>{h}</th>
                       ))}
                     </tr>
