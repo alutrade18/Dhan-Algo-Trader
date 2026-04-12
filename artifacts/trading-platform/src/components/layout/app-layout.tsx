@@ -5,7 +5,7 @@ import { useHealthCheck, useGetFundLimits, getHealthCheckQueryKey, getGetFundLim
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, ShieldAlert } from "lucide-react";
+import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     gcTime: 0,
   });
 
+  const [allPaused, setAllPaused] = useState(false);
+
   const pauseAllMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${BASE}api/strategies/pause-all`, { method: "POST" });
@@ -105,11 +107,27 @@ export function AppLayout({ children }: AppLayoutProps) {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "All strategies paused", description: "All active strategies have been paused." });
+      setAllPaused(true);
+      toast({ title: "All strategies paused", description: "Click 'Activate All Strategy' to resume." });
       queryClient.invalidateQueries({ queryKey: ["strategies"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
     onError: () => toast({ title: "Error", description: "Failed to pause strategies", variant: "destructive" }),
+  });
+
+  const activateAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}api/strategies/activate-all`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      setAllPaused(false);
+      toast({ title: "All strategies activated", description: "All paused strategies are now active." });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to activate strategies", variant: "destructive" }),
   });
 
   const emergencyStopMutation = useMutation({
@@ -158,17 +176,31 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             {isDashboard && (
               <div className="flex items-center gap-1.5 ml-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2 text-xs gap-1.5 border-muted-foreground/30 hidden sm:flex"
-                  onClick={() => pauseAllMutation.mutate()}
-                  disabled={pauseAllMutation.isPending}
-                  title="Pause All Strategies"
-                >
-                  <PauseCircle className="h-3.5 w-3.5" />
-                  <span className="hidden md:inline">Pause All</span>
-                </Button>
+                {allPaused ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1.5 border-green-500/40 text-green-400 hover:bg-green-500/10 hidden sm:flex"
+                    onClick={() => activateAllMutation.mutate()}
+                    disabled={activateAllMutation.isPending}
+                    title="Activate All Strategies"
+                  >
+                    <PlayCircle className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Activate All Strategy</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1.5 border-muted-foreground/30 hidden sm:flex"
+                    onClick={() => pauseAllMutation.mutate()}
+                    disabled={pauseAllMutation.isPending}
+                    title="Pause All Strategies"
+                  >
+                    <PauseCircle className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Pause All Strategy</span>
+                  </Button>
+                )}
                 <Button
                   variant={dhanKillActive ? "secondary" : "destructive"}
                   size="sm"

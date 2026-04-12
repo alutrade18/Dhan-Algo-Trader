@@ -236,6 +236,16 @@ router.post("/strategies/pause-all", async (_req, res): Promise<void> => {
   res.json({ success: true, message: "All strategies paused" });
 });
 
+router.post("/strategies/activate-all", async (_req, res): Promise<void> => {
+  await db
+    .update(strategiesTable)
+    .set({ status: "active" })
+    .where(eq(strategiesTable.status, "paused"));
+
+  void sendTelegramAlert("▶️ *All strategies activated* by user action");
+  res.json({ success: true, message: "All strategies activated" });
+});
+
 router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
   const params = ExecuteStrategyParams.safeParse(req.params);
   if (!params.success) {

@@ -514,11 +514,11 @@ function StatCard({
   color = "text-foreground",
 }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
+    <div className="rounded-lg border border-border bg-card px-3 py-2 flex items-center gap-2">
       <div className="shrink-0 text-muted-foreground">{icon}</div>
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
-        <p className={`text-2xl font-bold ${color}`}>{value}</p>
+        <p className="text-[11px] text-muted-foreground truncate leading-tight">{label}</p>
+        <p className={`text-lg font-bold leading-tight ${color}`}>{value}</p>
       </div>
     </div>
   );
@@ -763,14 +763,14 @@ export default function OrdersPage() {
 
   return (
     <TooltipProvider>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
 
         {/* ── Single header row ─────────────────────────────────── */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Order Book</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Manage orders and view trade history
+              Today order and view past trade history
             </p>
           </div>
           <div className="flex items-center gap-2.5">
@@ -791,26 +791,26 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <StatCard
-            icon={<ClipboardList className="h-5 w-5" />}
+            icon={<ClipboardList className="h-4 w-4" />}
             label="Total Orders Today"
             value={totalOrders}
           />
           <StatCard
-            icon={<CheckCircle2 className="h-5 w-5" />}
+            icon={<CheckCircle2 className="h-4 w-4" />}
             label="Traded"
             value={tradedCount}
             color="text-green-400"
           />
           <StatCard
-            icon={<Clock className="h-5 w-5" />}
+            icon={<Clock className="h-4 w-4" />}
             label="Pending / Transit"
             value={pendingCount}
             color="text-yellow-400"
           />
           <StatCard
-            icon={<XCircle className="h-5 w-5" />}
+            icon={<XCircle className="h-4 w-4" />}
             label="Rejected / Cancelled"
             value={rejCancelCount}
             color="text-red-400"
@@ -818,7 +818,7 @@ export default function OrdersPage() {
         </div>
 
           <TabsContent value="today" className="space-y-0 mt-0">
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col" style={{ minHeight: "calc(100vh - 18rem)" }}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <p className="text-sm font-medium">Today's Orders</p>
                 <Button

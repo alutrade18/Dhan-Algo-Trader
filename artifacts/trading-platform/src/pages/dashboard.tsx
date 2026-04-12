@@ -157,8 +157,8 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    refetchInterval: msUntilNext9amIST,
-    staleTime: msUntilNext9amIST(),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
   });
 
   const fundsData = funds as (typeof funds & { availableBalance?: number; utilizedAmount?: number }) | undefined;
