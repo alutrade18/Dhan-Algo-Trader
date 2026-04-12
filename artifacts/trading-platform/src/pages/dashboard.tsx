@@ -80,11 +80,11 @@ export default function Dashboard() {
   const summaryExt = summary as DashboardSummaryExt | undefined;
   const fundsData = funds as (typeof funds & { availableBalance?: number; utilizedAmount?: number }) | undefined;
 
-  const [dateMode, setDateMode] = useState<DateMode>("7d");
-  const [fromInput, setFromInput] = useState(toYMD(daysAgo(29)));
+  const [dateMode, setDateMode] = useState<DateMode>("365d");
+  const [fromInput, setFromInput] = useState(toYMD(daysAgo(364)));
   const [toInput, setToInput] = useState(toYMD(new Date()));
   const [activeQuery, setActiveQuery] = useState<{ mode: DateMode; from: string; to: string }>({
-    mode: "7d", from: toYMD(daysAgo(6)), to: toYMD(new Date()),
+    mode: "365d", from: toYMD(daysAgo(364)), to: toYMD(new Date()),
   });
 
   const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
