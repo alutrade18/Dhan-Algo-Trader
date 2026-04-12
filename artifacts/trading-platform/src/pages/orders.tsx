@@ -532,8 +532,7 @@ export default function OrdersPage() {
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
 
-  const [countdown, setCountdown] = useState(15);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [modifyOrder, setModifyOrder] = useState<DhanOrder | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
@@ -576,18 +575,12 @@ export default function OrdersPage() {
   }, [fetchOrders]);
 
   useEffect(() => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          void fetchOrders();
-          return 15;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    autoRefreshRef.current = setInterval(() => {
+      void fetchOrders();
+    }, 11000);
     return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
   }, [fetchOrders]);
 
@@ -771,26 +764,32 @@ export default function OrdersPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-5">
-        <div className="flex items-center justify-between">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+
+        {/* ── Single header row ─────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              Order Book
-            </h1>
+            <h1 className="text-xl font-semibold tracking-tight">Order Book</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               Manage orders and view trade history
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={ordersRefreshing || historyLoading}
-            className="gap-1.5"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${ordersRefreshing || historyLoading ? "animate-spin" : ""}`} />
-            {ordersRefreshing || historyLoading ? "Refreshing…" : "Refresh"}
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={ordersRefreshing || historyLoading}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${ordersRefreshing || historyLoading ? "animate-spin" : ""}`} />
+              {ordersRefreshing || historyLoading ? "Refreshing…" : "Refresh"}
+            </Button>
+            <TabsList className="bg-muted/40 h-8">
+              <TabsTrigger value="today" className="text-xs px-3 h-6">Today's Orders</TabsTrigger>
+              <TabsTrigger value="history" className="text-xs px-3 h-6">Order History</TabsTrigger>
+            </TabsList>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -819,39 +818,19 @@ export default function OrdersPage() {
           />
         </div>
 
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="space-y-4"
-        >
-          <TabsList className="bg-muted/40">
-            <TabsTrigger value="today">Today's Orders</TabsTrigger>
-            <TabsTrigger value="history">Order History</TabsTrigger>
-          </TabsList>
-
           <TabsContent value="today" className="space-y-0 mt-0">
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <p className="text-sm font-medium">Today's Orders</p>
-                <div className="flex items-center gap-3">
-                  {!ordersLoading && !ordersError && (
-                    <p className="text-xs text-muted-foreground">
-                      Auto refresh in{" "}
-                      <span className="font-mono font-semibold text-foreground">
-                        {countdown}s
-                      </span>
-                    </p>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 h-7 text-xs"
-                    onClick={exportTodayOrders}
-                  >
-                    <Download className="h-3 w-3" />
-                    Export
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-7 text-xs"
+                  onClick={exportTodayOrders}
+                >
+                  <Download className="h-3 w-3" />
+                  Export
+                </Button>
               </div>
 
               {ordersError ? (
@@ -1316,7 +1295,6 @@ export default function OrdersPage() {
               )}
             </div>
           </TabsContent>
-        </Tabs>
 
         <ModifyOrderModal
           order={modifyOrder}
@@ -1324,7 +1302,7 @@ export default function OrdersPage() {
           onClose={() => setModifyOrder(null)}
           onSuccess={() => void fetchOrders()}
         />
-      </div>
+      </Tabs>
     </TooltipProvider>
   );
 }
