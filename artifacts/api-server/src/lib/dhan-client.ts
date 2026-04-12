@@ -273,20 +273,20 @@ export const dhanClient = {
     return dhanRequest("POST", `/killswitch?killSwitchStatus=${status}`);
   },
 
+  async getPnlExit() {
+    return dhanRequest("GET", "/pnlExit");
+  },
+
   async setPnlExit(data: {
     profitValue: number;
     lossValue: number;
-    productType: string | string[];
+    productType: string[];
     enableKillSwitch: boolean;
   }) {
-    const productType = Array.isArray(data.productType)
-      ? data.productType[0]
-      : data.productType;
     return dhanRequest("POST", "/pnlExit", {
-      dhanClientId: credentials.clientId,
-      profitValue: data.profitValue,
-      lossValue: data.lossValue,
-      productType,
+      profitValue: data.profitValue.toFixed(2),
+      lossValue: data.lossValue.toFixed(2),
+      productType: data.productType,
       enableKillSwitch: data.enableKillSwitch,
     });
   },

@@ -74,6 +74,15 @@ interface KillSwitchStatus {
   error?: string;
 }
 
+interface PnlExitStatus {
+  pnlExitStatus?: string;
+  profit?: string;
+  loss?: string;
+  productType?: string[];
+  enable_kill_switch?: boolean;
+  message?: string;
+}
+
 export default function Settings() {
   const { data: settings, isLoading } = useGetSettings();
   const queryClient = useQueryClient();
@@ -84,6 +93,7 @@ export default function Settings() {
   const [pnlProductTypes, setPnlProductTypes] = useState<string[]>(["INTRADAY"]);
   const [pnlActive, setPnlActive] = useState(false);
   const [optimisticKsActive, setOptimisticKsActive] = useState<boolean | null>(null);
+  const [pnlLoaded, setPnlLoaded] = useState(false);
 
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
@@ -111,6 +121,22 @@ export default function Settings() {
     : (ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE");
 
   const canDeactivate = ksStatus?.canDeactivateToday !== false;
+
+  const { data: pnlStatus, refetch: refetchPnl } = useQuery<PnlExitStatus>({
+    queryKey: ["pnl-exit-status"],
+    queryFn: async () => {
+      if (!isConnected) return {};
+      const res = await fetch(`${BASE}api/risk/pnl-exit`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store", "Pragma": "no-cache" },
+      });
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: isConnected,
+    staleTime: 0,
+    gcTime: 0,
+  });
 
   const brokerForm = useForm<z.infer<typeof brokerSchema>>({
     resolver: zodResolver(brokerSchema),
@@ -141,6 +167,22 @@ export default function Settings() {
       });
     }
   }, [settingsData?.id]);
+
+  useEffect(() => {
+    if (pnlStatus && !pnlLoaded) {
+      const isActive = pnlStatus.pnlExitStatus === "ACTIVE";
+      setPnlActive(isActive);
+      if (isActive) {
+        if (pnlStatus.productType?.length) setPnlProductTypes(pnlStatus.productType);
+        pnlForm.reset({
+          profitValue: pnlStatus.profit ? Number(pnlStatus.profit) : undefined,
+          lossValue: pnlStatus.loss ? Number(pnlStatus.loss) : undefined,
+          enableKillSwitch: pnlStatus.enable_kill_switch ?? false,
+        });
+      }
+      setPnlLoaded(true);
+    }
+  }, [pnlStatus]);
 
   const connectMutation = useMutation({
     mutationFn: async (data: z.infer<typeof brokerSchema>) => {
@@ -291,9 +333,10 @@ export default function Settings() {
     },
     onSuccess: (_data, values) => {
       setPnlActive(true);
+      void refetchPnl();
       toast({
         title: "P&L Exit Activated",
-        description: `Dhan will exit positions at ₹${values.profitValue} profit or ₹${values.lossValue} loss.${values.enableKillSwitch ? " Kill switch will engage if triggered." : ""}`,
+        description: `Dhan will exit ${pnlProductTypes.join(" + ")} positions at ₹${values.profitValue} profit or ₹${values.lossValue} loss.${values.enableKillSwitch ? " Kill switch will engage if triggered." : ""}`,
       });
     },
     onError: (err: Error) => toast({ title: "Failed to set P&L exit", description: err.message, variant: "destructive" }),
@@ -303,13 +346,15 @@ export default function Settings() {
     mutationFn: async () => {
       const res = await fetch(`${BASE}api/risk/pnl-exit`, { method: "DELETE" });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? "Failed");
+        const err = await res.json().catch(() => ({})) as { error?: string; errorMessage?: string };
+        throw new Error(err.errorMessage ?? err.error ?? "Failed");
       }
       return res.json();
     },
     onSuccess: () => {
       setPnlActive(false);
+      setPnlLoaded(false);
+      void refetchPnl();
       toast({ title: "P&L Exit Stopped", description: "Auto-exit rules disabled." });
     },
     onError: (err: Error) => toast({ title: "Failed to stop P&L exit", description: err.message, variant: "destructive" }),
@@ -644,16 +689,30 @@ export default function Settings() {
                   </div>
                 </div>
 
+                {pnlActive && pnlStatus?.pnlExitStatus === "ACTIVE" && (
+                  <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs space-y-1">
+                    <p className="font-semibold text-primary">Currently Active on Dhan</p>
+                    <div className="flex gap-4 text-muted-foreground flex-wrap">
+                      <span>Profit Target: <span className="font-medium text-success">₹{pnlStatus.profit}</span></span>
+                      <span>Loss Limit: <span className="font-medium text-destructive">₹{pnlStatus.loss}</span></span>
+                      <span>Product: <span className="font-medium">{pnlStatus.productType?.join(", ")}</span></span>
+                      <span>Kill Switch: <span className="font-medium">{pnlStatus.enable_kill_switch ? "Yes" : "No"}</span></span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Apply to</label>
                   <div className="flex items-center gap-6 flex-wrap">
-                    <label className="flex items-center gap-2 cursor-pointer text-sm">
-                      <Checkbox
-                        checked={pnlProductTypes.includes("INTRADAY")}
-                        onCheckedChange={() => toggleProductType("INTRADAY")}
-                      />
-                      INTRADAY
-                    </label>
+                    {["INTRADAY", "DELIVERY"].map(type => (
+                      <label key={type} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <Checkbox
+                          checked={pnlProductTypes.includes(type)}
+                          onCheckedChange={() => toggleProductType(type)}
+                        />
+                        {type}
+                      </label>
+                    ))}
                     <label className="flex items-center gap-2 cursor-pointer text-sm">
                       <Checkbox
                         checked={pnlForm.watch("enableKillSwitch")}
@@ -672,7 +731,7 @@ export default function Settings() {
                     disabled={pnlExitMutation.isPending || !pnlProductTypes.length}
                   >
                     <TrendingUp className="w-3.5 h-3.5" />
-                    {pnlExitMutation.isPending ? "Activating..." : "Activate P&L Exit"}
+                    {pnlExitMutation.isPending ? "Activating..." : pnlActive ? "Update P&L Exit" : "Activate P&L Exit"}
                   </Button>
                   {pnlActive && (
                     <Button

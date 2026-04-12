@@ -159,6 +159,23 @@ router.post("/risk/killswitch", async (req, res): Promise<void> => {
   }
 });
 
+router.get("/risk/pnl-exit", async (_req, res): Promise<void> => {
+  noCache(res);
+  if (!requireBroker(res)) return;
+  try {
+    const data = await dhanClient.getPnlExit();
+    res.json(data);
+  } catch (err) {
+    if (err instanceof DhanApiError && err.status === 400) {
+      res.json({ pnlExitStatus: "INACTIVE", message: "No active P&L exit configured" });
+    } else if (err instanceof DhanApiError) {
+      res.status(err.status).json(err.toClientResponse());
+    } else {
+      res.status(500).json({ error: "Failed to get P&L exit status" });
+    }
+  }
+});
+
 router.post("/risk/pnl-exit", async (req, res): Promise<void> => {
   noCache(res);
   if (!requireBroker(res)) return;
@@ -168,14 +185,14 @@ router.post("/risk/pnl-exit", async (req, res): Promise<void> => {
     productType?: string[];
     enableKillSwitch?: boolean;
   };
-  if (profitValue === undefined || lossValue === undefined || !productType?.length) {
+  if (!profitValue || !lossValue || !productType?.length) {
     res.status(400).json({ error: "profitValue, lossValue and productType are required" });
     return;
   }
   try {
     const data = await dhanClient.setPnlExit({
-      profitValue,
-      lossValue,
+      profitValue: Number(profitValue),
+      lossValue: Number(lossValue),
       productType,
       enableKillSwitch: enableKillSwitch ?? false,
     });
