@@ -67,8 +67,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
-  const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: 60000 } });
+  const { data: funds, isLoading: isFundsLoading, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: 15000 } });
   const { resolvedTheme, toggleTheme } = useTheme();
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -82,10 +83,15 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const fundsData = funds as (typeof funds & { availableBalance?: number | null }) | undefined;
   const availableBalance = fundsData?.availableBalance;
-  const isRefreshing = isFundsLoading || isFundsRefetching;
+  const isRefreshing = isFundsLoading || isManualRefreshing;
 
   const handleRefreshBalance = async () => {
-    await Promise.all([refetchFunds(), refetchHealth()]);
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([refetchFunds(), refetchHealth()]);
+    } finally {
+      setIsManualRefreshing(false);
+    }
   };
 
   const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
@@ -185,7 +191,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-2 text-xs gap-1.5 border-green-500/40 text-green-400 hover:bg-green-500/10 hidden sm:flex"
+                    className="h-7 px-2 text-xs gap-1.5 border-primary/50 text-primary hover:bg-primary/10 hidden sm:flex"
                     onClick={() => activateAllMutation.mutate()}
                     disabled={activateAllMutation.isPending}
                     title="Activate All Strategies"
@@ -197,7 +203,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-2 text-xs gap-1.5 border-muted-foreground/30 hidden sm:flex"
+                    className="h-7 px-2 text-xs gap-1.5 border-primary/30 text-primary/70 hover:bg-primary/8 hover:text-primary hidden sm:flex"
                     onClick={() => pauseAllMutation.mutate()}
                     disabled={pauseAllMutation.isPending}
                     title="Pause All Strategies"
@@ -259,8 +265,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                   ONLINE
                 </Badge>
               ) : brokerConnected ? (
-                <Badge variant="outline" className="text-yellow-500 border-yellow-500/30 bg-yellow-500/10 gap-1 rounded-sm text-[10px] px-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                <Badge variant="outline" className="text-primary border-primary/40 bg-primary/10 gap-1 rounded-sm text-[10px] px-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                   CONNECTED
                 </Badge>
               ) : (
@@ -273,7 +279,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="hidden md:flex items-center gap-1.5">
               <Activity className={cn("w-4 h-4", marketOpen ? "text-success" : "text-muted-foreground")} />
               <span className={cn("text-xs font-mono", marketOpen ? "text-success" : "text-muted-foreground")}>
-                NSE: {marketOpen ? "OPEN" : "CLOSED"}
+                Market: {marketOpen ? "OPEN" : "CLOSED"}
               </span>
             </div>
 
