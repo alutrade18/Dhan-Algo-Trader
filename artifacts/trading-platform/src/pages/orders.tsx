@@ -622,14 +622,12 @@ export default function OrdersPage() {
 
   function handleRefresh() {
     if (activeTab === "today") {
-      setCountdown(15);
       void fetchOrders(true);
     } else {
       if (lastSearchRef.current) {
         void fetchHistory(lastSearchRef.current.from, lastSearchRef.current.to);
       } else {
         void fetchOrders(true);
-        setCountdown(15);
       }
     }
   }

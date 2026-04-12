@@ -225,18 +225,35 @@
     @apply bg-muted-foreground/50;
   }
 
+  /* Light theme — blue calendar icon */
   input[type="date"],
   input[type="datetime-local"] {
-    color-scheme: dark;
+    color-scheme: light;
   }
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.8);
+    filter: invert(34%) sepia(88%) saturate(493%) hue-rotate(191deg) brightness(90%);
     cursor: pointer;
-    opacity: 0.7;
+    opacity: 0.85;
   }
   input[type="date"]::-webkit-calendar-picker-indicator:hover,
   input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
+  /* Dark theme — white calendar icon */
+  .dark input[type="date"],
+  .dark input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: brightness(0) invert(1);
+    cursor: pointer;
+    opacity: 0.8;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
   }
 }
