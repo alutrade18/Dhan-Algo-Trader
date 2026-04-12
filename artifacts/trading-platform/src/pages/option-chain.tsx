@@ -349,19 +349,21 @@ export default function OptionChain() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-          <p className="text-sm font-bold text-foreground">
-            ±20 strikes around ATM · Refresh every 10 sec
-          </p>
-          <span className={`text-xs font-medium ${marketStatus.color}`}>
-            · {marketStatus.label}
-          </span>
+      {/* ── Market closed banner (replaces the subtitle row when market is closed) ── */}
+      {!marketStatus.isOpen && expiry && !chainError && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-400">Market is closed — live refresh paused</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {marketStatus.label} · Manual Refresh still works. Auto-refresh resumes at 8:50 AM IST on next trading day.
+            </p>
+          </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* ── Controls row ── */}
+      <div className="flex items-center gap-2 flex-wrap">
           {/* Index / Stock toggle */}
           <div className="flex rounded-md overflow-hidden border border-border text-xs">
             <button
@@ -422,21 +424,7 @@ export default function OptionChain() {
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </div>
       </div>
-
-      {/* ── Market closed banner ── */}
-      {!marketStatus.isOpen && expiry && !chainError && (
-        <div className="flex items-center gap-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-amber-400">Market is closed — live refresh paused</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {marketStatus.label} · Manual Refresh still works. Auto-refresh resumes at 8:50 AM IST on next trading day.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* ── Stats bar ── */}
       {hasData && (
@@ -670,11 +658,11 @@ export default function OptionChain() {
         <div className="flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
           <span className="flex items-center gap-1">
             <span className="w-3 h-1.5 rounded-full bg-gradient-to-r from-red-600 to-red-400 inline-block" />
-            Call OI bar (resistance)
+            Call OI bar
           </span>
           <span className="flex items-center gap-1">
             <span className="w-3 h-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 inline-block" />
-            Put OI bar (support)
+            Put OI bar
           </span>
           <span className="flex items-center gap-1">
             <span className="text-amber-400">◆</span>
@@ -683,7 +671,7 @@ export default function OptionChain() {
           <span className="flex items-center gap-1">
             <span className="text-emerald-400 text-[10px]">▲0.50</span>
             / <span className="text-red-400 text-[10px]">▼0.50</span>
-            LTP change since last refresh
+            Last LTP Change
           </span>
         </div>
       )}
