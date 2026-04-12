@@ -115,7 +115,10 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 
 ### Dashboard
 - `GET /api/dashboard/summary` — Portfolio summary (now includes killSwitchTriggered, dailyLossAmount)
-- `GET /api/dashboard/equity-curve?days=7` — Daily P&L and cumulative for last N days
+- `GET /api/dashboard/equity-curve?days=N` — Daily P&L and cumulative for last N days (ledger source)
+- `GET /api/dashboard/equity-curve?source=ledger&allTime=true` — All-time equity curve via parallel 3-year getAllLedger fetch
+- `GET /api/dashboard/equity-curve?source=ledger&fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD` — Custom date range
+- `GET /api/dashboard/period-pnl?days=N` — Period P&L using formula: currentBalance − openingBalance + periodWithdrawals − periodDeposits
 - `GET /api/dashboard/recent-activity` — Recent activity feed
 
 ### Paper Trades

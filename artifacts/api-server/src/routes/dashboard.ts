@@ -245,6 +245,33 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
       (currentBalance - openingBalance + periodWithdrawals - periodDeposits) * 100
     ) / 100;
 
+    const debug = req.query.debug === "true";
+    if (debug) {
+      const depositEntries: unknown[] = [];
+      const withdrawalEntries: unknown[] = [];
+      for (const e of entries) {
+        const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+        if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
+        const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
+        const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
+        const isCredit = !isNaN(credit) && credit > 0;
+        const isDebit  = !isNaN(debit)  && debit  > 0;
+        const isDeposit = narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
+          narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
+          narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
+          narr.includes("FUNDS ADDED") ||
+          (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
+        const isWithdrawal = narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
+          narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
+          narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
+          (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
+        if (isDeposit && isCredit) depositEntries.push({ narr: e.narration, credit, date: e.voucherdate });
+        else if (isWithdrawal && isDebit) withdrawalEntries.push({ narr: e.narration, debit, date: e.voucherdate });
+      }
+      res.json({ periodPnl, currentBalance, openingBalance, periodDeposits, periodWithdrawals, days, depositEntries, withdrawalEntries });
+      return;
+    }
+
     res.json({ periodPnl, currentBalance, openingBalance, periodDeposits, periodWithdrawals, days });
   } catch (e) {
     req.log.error({ err: e }, "Period P&L error");
@@ -270,6 +297,66 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
         return;
       }
     } else if (req.query.allTime === "true") {
+      if (useLedger) {
+        // For all-time ledger: use getAllLedger with 3-year window (same as summary endpoint)
+        const now = new Date();
+        const allTimeStart = new Date(now);
+        allTimeStart.setFullYear(allTimeStart.getFullYear() - 3);
+        const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
+        const todayStr = now.toISOString().split("T")[0];
+
+        try {
+          const raw = await dhanClient.getAllLedger(allTimeStartStr, todayStr);
+          const entries = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+
+          type DayInfo = { runbal: number; types: string[]; narration: string };
+          const dailyMap = new Map<string, DayInfo>();
+
+          for (const e of entries) {
+            const voucher = String(e.voucherdate ?? "");
+            if (!voucher) continue;
+            const parsed = new Date(voucher);
+            if (isNaN(parsed.getTime())) continue;
+            const dateKey = parsed.toISOString().split("T")[0];
+            const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
+            if (isNaN(bal)) continue;
+            const narration = String(e.narration ?? e.particulars ?? "").trim();
+            const type = classifyLedgerEntry(narration);
+
+            if (!dailyMap.has(dateKey)) {
+              dailyMap.set(dateKey, { runbal: bal, types: [type], narration });
+            } else {
+              const existing = dailyMap.get(dateKey)!;
+              existing.runbal = bal;
+              existing.types.push(type);
+              existing.narration = narration;
+            }
+          }
+
+          const sortedDates = Array.from(dailyMap.keys()).sort();
+          const pts: typeof points = [];
+          let prevBal = 0;
+          for (const d of sortedDates) {
+            const info = dailyMap.get(d)!;
+            const pnl = Math.round((info.runbal - prevBal) * 100) / 100;
+            const types = info.types;
+            const dominantType = types.includes("DEPOSIT") ? "DEPOSIT"
+              : types.includes("WITHDRAWAL") ? "WITHDRAWAL" : "PNL";
+            pts.push({ date: d, pnl, cumulative: 0, runbal: info.runbal, type: dominantType, label: info.narration });
+            prevBal = info.runbal;
+          }
+          let tradingCumulative = 0;
+          for (const p of pts) {
+            if (p.type === "PNL") tradingCumulative += p.pnl;
+            p.cumulative = Math.round(tradingCumulative * 100) / 100;
+          }
+          res.json(pts);
+          return;
+        } catch {
+          res.json([]);
+          return;
+        }
+      }
       const [firstRow] = await db
         .select({ minDate: sql<string>`min(${tradeLogsTable.executedAt})::date::text` })
         .from(tradeLogsTable)

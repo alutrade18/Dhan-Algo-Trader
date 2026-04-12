@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGetFundLimits } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,13 +91,16 @@ interface DashboardSummary {
   usedMargin?: number;
 }
 
-type DateMode = "7d" | "30d" | "365d" | "custom";
+type DateMode = "alltime" | "7d" | "30d" | "365d" | "custom";
 
-const PRESETS: { label: string; mode: Exclude<DateMode, "custom">; days: number }[] = [
-  { label: "7D",   mode: "7d",   days: 6   },
-  { label: "30D",  mode: "30d",  days: 29  },
-  { label: "365D", mode: "365d", days: 364 },
+const PRESETS: { label: string; mode: Exclude<DateMode, "custom">; days: number | null }[] = [
+  { label: "All-Time", mode: "alltime", days: null },
+  { label: "7D",       mode: "7d",      days: 6   },
+  { label: "30D",      mode: "30d",     days: 29  },
+  { label: "365D",     mode: "365d",    days: 364 },
 ];
+
+const AUTO_RESET_MS = 5 * 60 * 1000; // 5 minutes
 
 const Y_MAX = 1_500_000;
 const Y_STEP = 150_000;
@@ -163,8 +166,18 @@ export default function Dashboard() {
   const [fromInput, setFromInput] = useState(toYMD(daysAgo(364)));
   const [toInput, setToInput] = useState(toYMD(new Date()));
   const [activeQuery, setActiveQuery] = useState<{ mode: DateMode; from: string; to: string }>({
-    mode: "365d", from: toYMD(daysAgo(364)), to: toYMD(new Date()),
+    mode: "alltime", from: toYMD(daysAgo(364)), to: toYMD(new Date()),
   });
+
+  // Auto-reset to all-time after 5 minutes of no period selection change
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function scheduleAutoReset() {
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => {
+      setActiveQuery(q => q.mode !== "alltime" ? { ...q, mode: "alltime" } : q);
+    }, AUTO_RESET_MS);
+  }
+  useEffect(() => () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); }, []);
 
   const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
     queryKey: ["killswitch-status"],
@@ -185,7 +198,8 @@ export default function Dashboard() {
     queryKey: ["equity-curve", activeQuery.mode, activeQuery.from, activeQuery.to],
     queryFn: async () => {
       let url = `${BASE}api/dashboard/equity-curve?source=ledger`;
-      if (activeQuery.mode === "7d")       url += "&days=7";
+      if (activeQuery.mode === "alltime")  url += "&allTime=true";
+      else if (activeQuery.mode === "7d")   url += "&days=7";
       else if (activeQuery.mode === "30d")  url += "&days=30";
       else if (activeQuery.mode === "365d") url += "&days=365";
       else url += `&fromDate=${activeQuery.from}&toDate=${activeQuery.to}`;
@@ -217,34 +231,47 @@ export default function Dashboard() {
   const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
   const killTriggered = dhanKillActive || summary?.killSwitchTriggered;
 
-  // Total P&L card: show period-specific value when a preset is active,
-  // otherwise show all-time value from the summary API.
+  // Total P&L card:
+  //  • alltime / custom → show all-time P&L from summary API
+  //  • 7d / 30d / 365d  → show period-specific P&L from period-pnl API
   // All values come from live Dhan API — nothing is persisted in DB.
-  const isPreset = activeQuery.mode !== "custom";
-  const displayPnl   = isPreset && periodPnlData !== undefined ? periodPnlData.periodPnl : (summary?.totalPnl ?? 0);
-  const displayLabel = activeQuery.mode === "7d"   ? "7D Net"  :
-                       activeQuery.mode === "30d"  ? "30D Net" :
+  const isPeriodMode = activeQuery.mode === "7d" || activeQuery.mode === "30d" || activeQuery.mode === "365d";
+  const displayPnl   = isPeriodMode && periodPnlData !== undefined ? periodPnlData.periodPnl : (summary?.totalPnl ?? 0);
+  const displayLabel = activeQuery.mode === "7d"   ? "7D Net"   :
+                       activeQuery.mode === "30d"  ? "30D Net"  :
                        activeQuery.mode === "365d" ? "365D Net" : "All-Time Net";
-  const isPnlLoading = isPreset ? isPeriodPnlLoading : isSummaryLoading;
+  const isPnlLoading = isPeriodMode ? isPeriodPnlLoading : isSummaryLoading;
 
   const equityData = (equityCurve ?? [])
-    .filter(p => p.pnl !== 0 || p.runbal !== undefined)
+    .filter(p => {
+      if (!p.date || p.date.startsWith("1970")) return false;
+      const lbl = (p.label ?? "").toLowerCase();
+      if (lbl === "opening balance" || lbl === "closing balance") return false;
+      return p.pnl !== 0 || (p.runbal !== undefined && p.runbal !== 0);
+    })
     .map(p => ({
       ...p,
       date: new Date(p.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" }),
     }));
 
   function handlePreset(preset: typeof PRESETS[0]) {
-    const from = daysAgo(preset.days);
+    if (preset.mode === "alltime") {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      setActiveQuery(q => ({ ...q, mode: "alltime" }));
+      return;
+    }
+    const from = daysAgo(preset.days!);
     const to   = new Date();
     setFromInput(toYMD(from));
     setToInput(toYMD(to));
     setActiveQuery({ mode: preset.mode, from: toYMD(from), to: toYMD(to) });
+    scheduleAutoReset();
   }
 
   function applyCustomRange() {
     if (!fromInput || !toInput || fromInput > toInput) return;
     setActiveQuery({ mode: "custom", from: fromInput, to: toInput });
+    scheduleAutoReset();
   }
 
   const todayPnl        = summary?.todayPnl        ?? 0;
