@@ -29,9 +29,18 @@ const riskSchema = z.object({
   maxDailyLoss: z.coerce.number().min(0, "Must be ≥ 0"),
 });
 
+const TELEGRAM_TOKEN_REGEX = /^\d{8,12}:[A-Za-z0-9_-]{35,}$/;
+const TELEGRAM_CHAT_ID_REGEX = /^-?\d+$/;
+
 const telegramSchema = z.object({
-  telegramBotToken: z.string().min(1, "Bot Token is required"),
-  telegramChatId: z.string().min(1, "Chat ID is required"),
+  telegramBotToken: z
+    .string()
+    .min(1, "Bot Token is required")
+    .regex(TELEGRAM_TOKEN_REGEX, "Invalid format — should be like: 1234567890:ABCDefgh...  (digits:35+chars from @BotFather)"),
+  telegramChatId: z
+    .string()
+    .min(1, "Chat ID is required")
+    .regex(TELEGRAM_CHAT_ID_REGEX, "Chat ID must be a number (e.g. 987654321 or -100123456789 for groups)"),
 });
 
 const pnlExitSchema = z.object({
@@ -287,6 +296,24 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
     },
     onError: () => toast({ title: "Failed to save Telegram settings", variant: "destructive" }),
+  });
+
+  const telegramResetMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${BASE}api/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegramBotToken: null, telegramChatId: null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      telegramForm.reset({ telegramBotToken: "", telegramChatId: "" });
+      toast({ title: "Telegram credentials removed", description: "Bot token and Chat ID have been cleared from the database." });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    },
+    onError: () => toast({ title: "Failed to reset Telegram credentials", variant: "destructive" }),
   });
 
   const killSwitchMutation = useMutation({
@@ -554,17 +581,22 @@ export default function Settings() {
               <Bell className="w-4 h-4 text-primary" />
               Telegram Alerts
             </CardTitle>
-            <CardDescription className="text-xs">Create a bot via @BotFather · Get Chat ID via @userinfobot</CardDescription>
+            <CardDescription className="text-xs">
+              Receive trade alerts on Telegram · Bot created via @BotFather
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Bot Token</label>
+                <p className="text-xs text-muted-foreground">
+                  From @BotFather — format: <code className="text-[10px] bg-muted px-1 py-0.5 rounded font-mono">1234567890:ABCDefghijklmnopqrstuvwxyz1234567</code>
+                </p>
                 <div className="relative">
                   <Input
                     type={showBotToken ? "text" : "password"}
-                    placeholder=""
-                    className="pr-10"
+                    placeholder="e.g. 1234567890:ABCDefghijklmn..."
+                    className="pr-10 font-mono text-xs"
                     autoComplete="off"
                     {...telegramForm.register("telegramBotToken")}
                   />
@@ -576,20 +608,58 @@ export default function Settings() {
                   <p className="text-xs text-destructive">{telegramForm.formState.errors.telegramBotToken.message}</p>
                 )}
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Chat ID</label>
-                <Input type="text" placeholder="" autoComplete="off" {...telegramForm.register("telegramChatId")} />
+                <div className="rounded-md border border-muted bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-foreground">How to get your Chat ID:</p>
+                  <ol className="list-decimal list-inside space-y-0.5">
+                    <li>Open Telegram and send any message to your bot <span className="font-mono text-primary">@Rajesh_Algo_Tradingbot</span></li>
+                    <li>Open this URL in a browser (replace TOKEN with your bot token):</li>
+                  </ol>
+                  <code className="block text-[10px] bg-muted px-2 py-1 rounded break-all font-mono mt-1">
+                    https://api.telegram.org/bot{"<TOKEN>"}/getUpdates
+                  </code>
+                  <p>Find <code className="font-mono">"id"</code> inside <code className="font-mono">"chat"</code> — that number is your Chat ID.</p>
+                </div>
+                <Input
+                  type="text"
+                  placeholder="e.g. 987654321 or -100123456789 (group)"
+                  autoComplete="off"
+                  className="font-mono text-xs"
+                  {...telegramForm.register("telegramChatId")}
+                />
                 {telegramForm.formState.errors.telegramChatId && (
                   <p className="text-xs text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>
                 )}
               </div>
-              <div className="flex items-center justify-between">
-                <Button type="submit" variant="outline" size="sm" className="gap-2" disabled={telegramMutation.isPending}>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button type="submit" size="sm" className="gap-2" disabled={telegramMutation.isPending}>
                   <Bell className="w-3.5 h-3.5" />
-                  {telegramMutation.isPending ? "Saving..." : "Save"}
+                  {telegramMutation.isPending ? "Saving..." : "Save Credentials"}
                 </Button>
+
+                {(settingsData?.telegramBotToken || settingsData?.telegramChatId) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                    disabled={telegramResetMutation.isPending}
+                    onClick={() => {
+                      if (confirm("Remove saved Telegram Bot Token and Chat ID from the database?")) {
+                        telegramResetMutation.mutate();
+                      }
+                    }}
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    {telegramResetMutation.isPending ? "Removing..." : "Reset Credentials"}
+                  </Button>
+                )}
+
                 {settingsData?.telegramChatId && (
-                  <span className="text-xs text-success">✓ Alerts active</span>
+                  <span className="text-xs text-success ml-auto">✓ Alerts active</span>
                 )}
               </div>
             </form>
