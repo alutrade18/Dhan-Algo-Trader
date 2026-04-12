@@ -72,97 +72,97 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME — Slate Ember ────────────────────── */
+/* ── LIGHT THEME — Obsidian Violet ────────────────── */
 :root,
 .light {
-  --background: 20 8% 95%;          /* neutral warm gray */
-  --foreground: 20 12% 8%;          /* near-black warm */
-  --border: 20 8% 84%;
+  --background: 265 22% 97%;        /* soft lavender-white */
+  --foreground: 265 38% 9%;         /* deep purple near-black */
+  --border: 265 16% 86%;
   --input: 0 0% 100%;
-  --ring: 16 90% 50%;               /* vivid orange-red ring */
+  --ring: 262 80% 54%;              /* vivid violet ring */
   --card: 0 0% 100%;
-  --card-foreground: 20 12% 8%;
-  --card-border: 20 8% 84%;
+  --card-foreground: 265 38% 9%;
+  --card-border: 265 16% 86%;
   --popover: 0 0% 100%;
-  --popover-foreground: 20 12% 8%;
-  --popover-border: 20 8% 84%;
-  --primary: 16 90% 50%;            /* rich orange */
+  --popover-foreground: 265 38% 9%;
+  --popover-border: 265 16% 86%;
+  --primary: 262 80% 54%;           /* deep vivid violet */
   --primary-foreground: 0 0% 100%;
-  --secondary: 20 8% 91%;
-  --secondary-foreground: 20 10% 20%;
-  --muted: 20 6% 93%;
-  --muted-foreground: 20 8% 46%;
-  --accent: 16 70% 93%;             /* light orange tint */
-  --accent-foreground: 16 90% 28%;
-  --destructive: 0 78% 50%;
+  --secondary: 265 18% 92%;
+  --secondary-foreground: 265 28% 20%;
+  --muted: 265 14% 94%;
+  --muted-foreground: 265 12% 46%;
+  --accent: 262 55% 93%;            /* light violet tint */
+  --accent-foreground: 262 80% 28%;
+  --destructive: 4 76% 50%;
   --destructive-foreground: 0 0% 100%;
   --success: 145 62% 34%;
   --success-foreground: 0 0% 100%;
-  --warning: 32 95% 44%;
+  --warning: 38 90% 40%;
   --warning-foreground: 0 0% 100%;
-  --sidebar: 20 8% 92%;             /* warm gray sidebar */
-  --sidebar-foreground: 20 10% 16%;
-  --sidebar-border: 20 8% 84%;
-  --sidebar-primary: 16 90% 50%;
+  --sidebar: 265 18% 94%;           /* lavender-white sidebar */
+  --sidebar-foreground: 265 28% 16%;
+  --sidebar-border: 265 16% 86%;
+  --sidebar-primary: 262 80% 54%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 16 60% 90%;     /* orange hover tint */
-  --sidebar-accent-foreground: 16 90% 26%;
-  --sidebar-ring: 16 90% 50%;
-  --chart-1: 16 90% 50%;
+  --sidebar-accent: 262 50% 90%;    /* violet hover tint */
+  --sidebar-accent-foreground: 262 80% 28%;
+  --sidebar-ring: 262 80% 54%;
+  --chart-1: 262 80% 54%;
   --chart-2: 145 62% 34%;
-  --chart-3: 0 78% 50%;
+  --chart-3: 4 76% 50%;
   --chart-4: 200 72% 44%;
-  --chart-5: 262 60% 52%;
+  --chart-5: 38 90% 40%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 }
 
-/* ── DARK THEME — Slate Ember ──────────────────────── */
+/* ── DARK THEME — Obsidian Violet ──────────────────── */
 .dark {
-  --background: 220 8% 10%;         /* dark cool gray */
-  --foreground: 20 10% 90%;         /* warm off-white */
-  --border: 220 6% 20%;
-  --input: 220 6% 15%;
-  --ring: 16 92% 54%;               /* vivid orange-red */
-  --card: 220 8% 13%;
-  --card-foreground: 20 10% 90%;
-  --card-border: 220 6% 20%;
-  --popover: 220 8% 13%;
-  --popover-foreground: 20 10% 90%;
-  --popover-border: 220 6% 20%;
-  --primary: 16 92% 54%;            /* vivid orange-red */
+  --background: 265 14% 8%;         /* near-black purple-tinted */
+  --foreground: 265 16% 90%;        /* soft lavender-white text */
+  --border: 265 12% 18%;
+  --input: 265 12% 13%;
+  --ring: 262 75% 62%;              /* vivid violet */
+  --card: 265 14% 11%;
+  --card-foreground: 265 16% 90%;
+  --card-border: 265 12% 18%;
+  --popover: 265 14% 11%;
+  --popover-foreground: 265 16% 90%;
+  --popover-border: 265 12% 18%;
+  --primary: 262 75% 62%;           /* vivid violet */
   --primary-foreground: 0 0% 100%;
-  --secondary: 220 6% 16%;
-  --secondary-foreground: 20 8% 74%;
-  --muted: 220 6% 14%;
-  --muted-foreground: 220 6% 54%;
-  --accent: 220 6% 16%;
-  --accent-foreground: 20 8% 74%;
-  --destructive: 0 76% 56%;
+  --secondary: 265 12% 14%;
+  --secondary-foreground: 265 12% 76%;
+  --muted: 265 12% 12%;
+  --muted-foreground: 265 10% 54%;
+  --accent: 265 12% 14%;
+  --accent-foreground: 265 12% 76%;
+  --destructive: 4 76% 56%;
   --destructive-foreground: 0 0% 100%;
   --success: 145 60% 44%;
   --success-foreground: 0 0% 100%;
-  --warning: 32 90% 56%;
+  --warning: 38 85% 56%;
   --warning-foreground: 0 0% 100%;
-  --sidebar: 220 10% 8%;            /* deepest slate sidebar */
-  --sidebar-foreground: 220 8% 78%;
-  --sidebar-border: 220 8% 18%;
-  --sidebar-primary: 16 92% 54%;
+  --sidebar: 265 16% 6%;            /* deepest obsidian sidebar */
+  --sidebar-foreground: 265 12% 78%;
+  --sidebar-border: 265 12% 16%;
+  --sidebar-primary: 262 75% 62%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 8% 14%;
-  --sidebar-accent-foreground: 20 8% 82%;
-  --sidebar-ring: 16 92% 54%;
-  --chart-1: 16 92% 54%;
+  --sidebar-accent: 265 12% 13%;
+  --sidebar-accent-foreground: 265 12% 84%;
+  --sidebar-ring: 262 75% 62%;
+  --chart-1: 262 75% 62%;
   --chart-2: 145 60% 44%;
-  --chart-3: 0 76% 56%;
+  --chart-3: 4 76% 56%;
   --chart-4: 200 72% 52%;
-  --chart-5: 262 65% 65%;
+  --chart-5: 38 85% 56%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 }
 
 @layer base {
