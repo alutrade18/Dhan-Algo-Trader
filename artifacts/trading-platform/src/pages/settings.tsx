@@ -99,6 +99,19 @@ export default function Settings() {
   const isConnected = settingsData?.apiConnected ?? false;
   const maskedClientId = settingsData?.dhanClientId ?? "";
 
+  const { data: brokerStatus, refetch: refetchBrokerStatus } = useQuery<FundDetails & { connected: boolean }>({
+    queryKey: ["broker-status"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/broker/status`);
+      if (!res.ok) return { connected: false };
+      return res.json();
+    },
+    enabled: isConnected,
+    refetchInterval: 30000,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
   const { data: ksStatus, refetch: refetchKs } = useQuery<KillSwitchStatus>({
     queryKey: ["killswitch-status"],
     queryFn: async () => {
@@ -201,6 +214,7 @@ export default function Settings() {
         queryClient.invalidateQueries({ queryKey: ["healthz"] });
         queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
         queryClient.invalidateQueries({ queryKey: ["killswitch-status"] });
+        queryClient.invalidateQueries({ queryKey: ["broker-status"] });
       } else {
         toast({ title: `Connection failed: ${result.errorCode}`, description: result.errorMessage, variant: "destructive" });
       }
@@ -220,6 +234,7 @@ export default function Settings() {
       toast({ title: "Disconnected from broker" });
       queryClient.invalidateQueries({ queryKey: ["healthz"] });
       queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["broker-status"] });
     },
     onError: () => toast({ title: "Failed to disconnect", variant: "destructive" }),
   });
@@ -395,33 +410,43 @@ export default function Settings() {
                 {isConnected ? `Connected as ${maskedClientId}` : "Enter your Dhan credentials to enable live trading"}
               </CardDescription>
             </div>
-            {connectResult?.success ? (
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <Badge variant="outline" className="text-success border-success/30 bg-success/10 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Account Connected
-                  </Badge>
-                  <span className="font-mono text-xs text-muted-foreground flex items-center gap-1">
-                    <User className="w-3 h-3" />{connectResult.dhanClientId ?? maskedClientId}
-                  </span>
-                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground" disabled={refreshMutation.isPending} onClick={() => refreshMutation.mutate()}>
-                    <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
-                    Refresh
-                  </Button>
+            {isConnected ? (() => {
+              const funds: FundDetails = connectResult?.success
+                ? connectResult
+                : (brokerStatus?.connected ? brokerStatus : {});
+              const hasFunds = !!(funds.availableBalance !== undefined);
+              return (
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <Badge variant="outline" className="text-success border-success/30 bg-success/10 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Account Connected
+                    </Badge>
+                    <span className="font-mono text-xs text-muted-foreground flex items-center gap-1">
+                      <User className="w-3 h-3" />{funds.dhanClientId ?? maskedClientId}
+                    </span>
+                    <Button
+                      type="button" variant="ghost" size="sm"
+                      className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                      disabled={refreshMutation.isPending}
+                      onClick={() => { refreshMutation.mutate(); void refetchBrokerStatus(); }}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                  {hasFunds && (
+                    <div className="flex gap-4 text-xs flex-wrap justify-end">
+                      <span className="text-muted-foreground">Balance: <span className="font-semibold text-success">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                      <span className="text-muted-foreground">Withdrawable: <span className="font-semibold">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                      <span className="text-muted-foreground">Used Margin: <span className="font-semibold">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                      <span className="text-muted-foreground">SOD Limit: <span className="font-semibold">₹{(funds.sodLimit ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-4 text-xs">
-                  <span className="text-muted-foreground">Balance: <span className="font-semibold text-success">₹{(connectResult.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
-                  <span className="text-muted-foreground">Withdrawable: <span className="font-semibold">₹{(connectResult.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
-                  <span className="text-muted-foreground">Used Margin: <span className="font-semibold">₹{(connectResult.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
-                  <span className="text-muted-foreground">SOD Limit: <span className="font-semibold">₹{(connectResult.sodLimit ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
-                </div>
-              </div>
-            ) : (
-              <Badge
-                variant="outline"
-                className={isConnected ? "text-success border-success/30 bg-success/10" : "text-destructive border-destructive/30 bg-destructive/10"}
-              >
-                {isConnected ? "Connected" : "Disconnected"}
+              );
+            })() : (
+              <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10">
+                Disconnected
               </Badge>
             )}
           </div>
