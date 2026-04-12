@@ -3,23 +3,86 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, WifiOff, Search, X, Clock, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  RefreshCw,
+  WifiOff,
+  Search,
+  X,
+  Clock,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
 // dhanSecId  = security ID used in Dhan's option-chain & expiry-list API calls
 // dbSecId    = underlying_security_id stored in our instruments DB
 const INDEX_UNDERLYINGS = [
-  { label: "NIFTY 50",     symbol: "NIFTY",      dhanSecId: 13,    dbSecId: 26000, segment: "IDX_I", exchange: "NSE" as const },
-  { label: "BANK NIFTY",   symbol: "BANKNIFTY",  dhanSecId: 25,    dbSecId: 26009, segment: "IDX_I", exchange: "NSE" as const },
-  { label: "FIN NIFTY",    symbol: "FINNIFTY",   dhanSecId: 27,    dbSecId: 26037, segment: "IDX_I", exchange: "NSE" as const },
-  { label: "MIDCAP NIFTY", symbol: "MIDCPNIFTY", dhanSecId: 442,   dbSecId: 26074, segment: "IDX_I", exchange: "NSE" as const },
-  { label: "SENSEX",       symbol: "SENSEX",     dhanSecId: 1,     dbSecId: 1,     segment: "IDX_I", exchange: "NSE" as const },
-  { label: "BANKEX",       symbol: "BANKEX",     dhanSecId: 12,    dbSecId: 12,    segment: "IDX_I", exchange: "NSE" as const },
-  { label: "NIFTYNXT50",   symbol: "NIFTYNXT50", dhanSecId: 26013, dbSecId: 26013, segment: "IDX_I", exchange: "NSE" as const },
+  {
+    label: "NIFTY 50",
+    symbol: "NIFTY",
+    dhanSecId: 13,
+    dbSecId: 26000,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
+  {
+    label: "BANK NIFTY",
+    symbol: "BANKNIFTY",
+    dhanSecId: 25,
+    dbSecId: 26009,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
+  {
+    label: "FIN NIFTY",
+    symbol: "FINNIFTY",
+    dhanSecId: 27,
+    dbSecId: 26037,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
+  {
+    label: "MIDCAP NIFTY",
+    symbol: "MIDCPNIFTY",
+    dhanSecId: 442,
+    dbSecId: 26074,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
+  {
+    label: "SENSEX",
+    symbol: "SENSEX",
+    dhanSecId: 1,
+    dbSecId: 1,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
+  {
+    label: "BANKEX",
+    symbol: "BANKEX",
+    dhanSecId: 12,
+    dbSecId: 12,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
+  {
+    label: "NIFTYNXT50",
+    symbol: "NIFTYNXT50",
+    dhanSecId: 26013,
+    dbSecId: 26013,
+    segment: "IDX_I",
+    exchange: "NSE" as const,
+  },
 ];
 
 type Mode = "index" | "stock";
@@ -53,29 +116,52 @@ function getISTMinutes(): { mins: number; day: number } {
   return { mins: ist.getHours() * 60 + ist.getMinutes(), day: ist.getDay() };
 }
 
-function computeMarketStatus(exchange: Exchange): { isOpen: boolean; label: string; color: string } {
+function computeMarketStatus(exchange: Exchange): {
+  isOpen: boolean;
+  label: string;
+  color: string;
+} {
   const { mins, day } = getISTMinutes();
   if (day === 0 || day === 6) {
-    return { isOpen: false, label: "Market closed · Weekend", color: "text-muted-foreground" };
+    return {
+      isOpen: false,
+      label: "Market closed · Weekend",
+      color: "text-muted-foreground",
+    };
   }
   const open = 8 * 60 + 50; // 08:50
   const close = exchange === "MCX" ? 23 * 60 + 59 : 18 * 60 + 40; // 23:59 or 18:40
   const closeLabel = exchange === "MCX" ? "11:59 PM" : "6:40 PM";
 
   if (mins < open) {
-    return { isOpen: false, label: `Pre-market · Opens 8:50 AM IST`, color: "text-amber-400" };
+    return {
+      isOpen: false,
+      label: `Pre-market · Opens 8:50 AM IST`,
+      color: "text-amber-400",
+    };
   }
   if (mins > close) {
-    return { isOpen: false, label: `Market closed · Opens 8:50 AM IST tomorrow`, color: "text-muted-foreground" };
+    return {
+      isOpen: false,
+      label: `Market closed · Opens 8:50 AM IST tomorrow`,
+      color: "text-muted-foreground",
+    };
   }
-  return { isOpen: true, label: `Live · Closes ${closeLabel} IST`, color: "text-emerald-400" };
+  return {
+    isOpen: true,
+    label: `Live · Closes ${closeLabel} IST`,
+    color: "text-emerald-400",
+  };
 }
 
 function useMarketStatus(exchange: Exchange) {
   const [status, setStatus] = useState(() => computeMarketStatus(exchange));
   useEffect(() => {
     setStatus(computeMarketStatus(exchange));
-    const id = setInterval(() => setStatus(computeMarketStatus(exchange)), 30_000);
+    const id = setInterval(
+      () => setStatus(computeMarketStatus(exchange)),
+      30_000,
+    );
     return () => clearInterval(id);
   }, [exchange]);
   return status;
@@ -89,19 +175,36 @@ function formatOI(oi: number) {
   return String(oi);
 }
 
-function DeltaBadge({ current, prev }: { current: number; prev: number | undefined }) {
+function DeltaBadge({
+  current,
+  prev,
+}: {
+  current: number;
+  prev: number | undefined;
+}) {
   if (prev === undefined || current === 0) return null;
   const delta = current - prev;
   if (Math.abs(delta) < 0.005) return null;
   const up = delta > 0;
   return (
-    <span className={`text-[10px] font-mono ${up ? "text-emerald-400" : "text-red-400"}`}>
-      {up ? "▲" : "▼"}{Math.abs(delta).toFixed(2)}
+    <span
+      className={`text-[10px] font-mono ${up ? "text-emerald-400" : "text-red-400"}`}
+    >
+      {up ? "▲" : "▼"}
+      {Math.abs(delta).toFixed(2)}
     </span>
   );
 }
 
-function OIBar({ value, max, side }: { value: number; max: number; side: "ce" | "pe" }) {
+function OIBar({
+  value,
+  max,
+  side,
+}: {
+  value: number;
+  max: number;
+  side: "ce" | "pe";
+}) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   const isCall = side === "ce";
   return (
@@ -132,22 +235,31 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    if (!q.trim()) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${BASE}api/instruments/option-underlyings?q=${encodeURIComponent(q)}`);
-        const data = await res.json() as StockUnderlying[];
+        const res = await fetch(
+          `${BASE}api/instruments/option-underlyings?q=${encodeURIComponent(q)}`,
+        );
+        const data = (await res.json()) as StockUnderlying[];
         setResults(Array.isArray(data) ? data : []);
         setOpen(true);
-      } finally { setLoading(false); }
+      } finally {
+        setLoading(false);
+      }
     }, 300);
   }, [q]);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     }
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
@@ -159,14 +271,18 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
         <Input
           value={q}
-          onChange={e => setQ(e.target.value)}
+          onChange={(e) => setQ(e.target.value)}
           placeholder="Search stock…"
           className="pl-8 pr-8 h-9 text-xs"
         />
         {q && (
           <button
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            onClick={() => { setQ(""); setResults([]); setOpen(false); }}
+            onClick={() => {
+              setQ("");
+              setResults([]);
+              setOpen(false);
+            }}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -178,13 +294,25 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
             <button
               key={i}
               className="w-full text-left px-3 py-2 text-xs hover:bg-muted/60 flex items-center gap-2"
-              onClick={() => { onSelect(r); setQ(r.underlyingSymbol ?? ""); setOpen(false); }}
+              onClick={() => {
+                onSelect(r);
+                setQ(r.underlyingSymbol ?? "");
+                setOpen(false);
+              }}
             >
-              <span className="font-mono font-semibold">{r.underlyingSymbol}</span>
-              <Badge variant="outline" className="text-[9px] px-1 py-0">{r.exchId}</Badge>
+              <span className="font-mono font-semibold">
+                {r.underlyingSymbol}
+              </span>
+              <Badge variant="outline" className="text-[9px] px-1 py-0">
+                {r.exchId}
+              </Badge>
             </button>
           ))}
-          {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>}
+          {loading && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">
+              Searching…
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -195,30 +323,39 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
 export default function OptionChain() {
   const [mode, setMode] = useState<Mode>("index");
   const [indexUnderlying, setIndexUnderlying] = useState(INDEX_UNDERLYINGS[0]);
-  const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
+  const [stockUnderlying, setStockUnderlying] =
+    useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
 
   // Active IDs / segment
-  const activeDbSecId = mode === "index"
-    ? indexUnderlying.dbSecId
-    : (stockUnderlying?.underlyingSecurityId ?? null);
-  const activeDhanSecId = mode === "index"
-    ? indexUnderlying.dhanSecId
-    : (stockUnderlying?.underlyingSecurityId ?? null);
+  const activeDbSecId =
+    mode === "index"
+      ? indexUnderlying.dbSecId
+      : (stockUnderlying?.underlyingSecurityId ?? null);
+  const activeDhanSecId =
+    mode === "index"
+      ? indexUnderlying.dhanSecId
+      : (stockUnderlying?.underlyingSecurityId ?? null);
   const activeInstrument = mode === "index" ? "OPTIDX" : "OPTSTK";
-  const activeSegment = mode === "index"
-    ? indexUnderlying.segment
-    : (stockUnderlying?.exchId === "BSE" ? "BSE_EQ" : "NSE_EQ");
-  const activeLabel = mode === "index"
-    ? indexUnderlying.label
-    : (stockUnderlying?.underlyingSymbol ?? "");
+  const activeSegment =
+    mode === "index"
+      ? indexUnderlying.segment
+      : stockUnderlying?.exchId === "BSE"
+        ? "BSE_EQ"
+        : "NSE_EQ";
+  const activeLabel =
+    mode === "index"
+      ? indexUnderlying.label
+      : (stockUnderlying?.underlyingSymbol ?? "");
   const activeExchange: Exchange = "NSE"; // All current underlyings are NSE/BSE (same F&O hours)
 
   // Market hours gate
   const marketStatus = useMarketStatus(activeExchange);
 
   // Expiry list via Dhan API
-  const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
+  const { data: expiryList = [], isLoading: expiryLoading } = useQuery<
+    string[]
+  >({
     queryKey: ["expiry-list-dhan", activeDhanSecId, activeSegment],
     queryFn: async () => {
       if (!activeDhanSecId) return [];
@@ -231,7 +368,7 @@ export default function OptionChain() {
         }),
       });
       if (!res.ok) throw new Error("Failed to load expiry list");
-      const json = await res.json() as { data?: string[] };
+      const json = (await res.json()) as { data?: string[] };
       return json.data ?? [];
     },
     enabled: !!activeDhanSecId,
@@ -240,13 +377,21 @@ export default function OptionChain() {
     retry: 1,
   });
 
-  useEffect(() => { setExpiry(""); }, [activeDhanSecId, activeSegment]);
+  useEffect(() => {
+    setExpiry("");
+  }, [activeDhanSecId, activeSegment]);
   useEffect(() => {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
   }, [expiryList, expiry]);
 
   // Option chain — gated by market hours; throttled server-side too
-  const { data: chain, isLoading: chainLoading, refetch, isFetching, error: chainError } = useQuery({
+  const {
+    data: chain,
+    isLoading: chainLoading,
+    refetch,
+    isFetching,
+    error: chainError,
+  } = useQuery({
     queryKey: ["option-chain", activeDhanSecId, activeSegment, expiry],
     queryFn: async () => {
       if (!expiry || !activeDhanSecId) return null;
@@ -260,10 +405,13 @@ export default function OptionChain() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? "Failed to fetch option chain");
       }
-      return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
+      return res.json() as Promise<{
+        data?: Record<string, unknown>;
+        ltp?: number;
+      }>;
     },
     enabled: !!expiry && !!activeDhanSecId && marketStatus.isOpen,
     refetchInterval: marketStatus.isOpen ? 10_000 : false,
@@ -279,14 +427,17 @@ export default function OptionChain() {
 
   const strikeKeys = Object.keys(rawChain);
   const strikes = strikeKeys
-    .map(k => parseFloat(k))
-    .filter(n => !isNaN(n) && n > 0)
+    .map((k) => parseFloat(k))
+    .filter((n) => !isNaN(n) && n > 0)
     .sort((a, b) => a - b);
 
   let maxOI = 1;
   for (const strike of strikes) {
-    const key = strikeKeys.find(k => parseFloat(k) === strike) ?? String(strike);
-    const s = rawChain[key] as Record<string, Record<string, unknown>> | undefined;
+    const key =
+      strikeKeys.find((k) => parseFloat(k) === strike) ?? String(strike);
+    const s = rawChain[key] as
+      | Record<string, Record<string, unknown>>
+      | undefined;
     const ce = s?.["ce"] ?? s?.["CE"] ?? {};
     const pe = s?.["pe"] ?? s?.["PE"] ?? {};
     const callOI = Number(ce.oi ?? ce.openInterest ?? 0);
@@ -295,53 +446,73 @@ export default function OptionChain() {
     if (putOI > maxOI) maxOI = putOI;
     entries.push({
       strikePrice: strike,
-      callLTP:    Number(ce.last_price ?? ce.ltp ?? 0),
+      callLTP: Number(ce.last_price ?? ce.ltp ?? 0),
       callOI,
       callVolume: Number(ce.volume ?? 0),
-      callIV:     Number(ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0),
-      putLTP:     Number(pe.last_price ?? pe.ltp ?? 0),
+      callIV: Number(
+        ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0,
+      ),
+      putLTP: Number(pe.last_price ?? pe.ltp ?? 0),
       putOI,
-      putVolume:  Number(pe.volume ?? 0),
-      putIV:      Number(pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0),
+      putVolume: Number(pe.volume ?? 0),
+      putIV: Number(
+        pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0,
+      ),
     });
   }
 
   // ── ATM & display slice ─────────────────────────────────────────
-  const atmStrike = underlyingLtp > 0 && strikes.length > 0
-    ? strikes.reduce((prev, curr) =>
-        Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev)
-    : 0;
+  const atmStrike =
+    underlyingLtp > 0 && strikes.length > 0
+      ? strikes.reduce((prev, curr) =>
+          Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp)
+            ? curr
+            : prev,
+        )
+      : 0;
 
   const totalCallOI = entries.reduce((a, e) => a + e.callOI, 0);
-  const totalPutOI  = entries.reduce((a, e) => a + e.putOI, 0);
+  const totalPutOI = entries.reduce((a, e) => a + e.putOI, 0);
   const pcr = totalCallOI > 0 ? totalPutOI / totalCallOI : 0;
 
   const displayEntries = (() => {
     if (entries.length === 0) return entries;
-    const atmIdx = entries.findIndex(e => e.strikePrice === atmStrike);
+    const atmIdx = entries.findIndex((e) => e.strikePrice === atmStrike);
     if (atmIdx < 0 || underlyingLtp <= 0) {
       const mid = Math.floor(entries.length / 2);
-      return entries.slice(Math.max(0, mid - 20), Math.min(entries.length, mid + 21));
+      return entries.slice(
+        Math.max(0, mid - 20),
+        Math.min(entries.length, mid + 21),
+      );
     }
-    return entries.slice(Math.max(0, atmIdx - 20), Math.min(entries.length, atmIdx + 21));
+    return entries.slice(
+      Math.max(0, atmIdx - 20),
+      Math.min(entries.length, atmIdx + 21),
+    );
   })();
 
   // ── Live LTP change tracking ─────────────────────────────────────
   // prevLTPRef holds LTP values from the PREVIOUS fetch cycle
-  const prevLTPRef = useRef<Map<number, { call: number; put: number }>>(new Map());
+  const prevLTPRef = useRef<Map<number, { call: number; put: number }>>(
+    new Map(),
+  );
 
   useEffect(() => {
     if (entries.length === 0) return;
     const newMap = new Map<number, { call: number; put: number }>();
-    entries.forEach(e => newMap.set(e.strikePrice, { call: e.callLTP, put: e.putLTP }));
+    entries.forEach((e) =>
+      newMap.set(e.strikePrice, { call: e.callLTP, put: e.putLTP }),
+    );
     // Seed on first load; on subsequent fetches keep prev visible for 8s then update
     if (prevLTPRef.current.size === 0) {
       prevLTPRef.current = newMap;
       return;
     }
-    const t = setTimeout(() => { prevLTPRef.current = newMap; }, 8_000);
+    const t = setTimeout(() => {
+      prevLTPRef.current = newMap;
+    }, 8_000);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chain]);
 
   const isLoading = expiryLoading || chainLoading;
@@ -351,7 +522,6 @@ export default function OptionChain() {
     <div className="space-y-4">
       {/* ── Header row: status (left) + controls (right) ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-
         {/* Left: market closed status — hidden when market is open */}
         {!marketStatus.isOpen && expiry && !chainError ? (
           <div className="flex items-start gap-2 min-w-0">
@@ -361,7 +531,8 @@ export default function OptionChain() {
                 Market is closed — live refresh paused
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                Manual Refresh still works · Auto-refresh resumes at 8:50 AM IST on next trading day.
+                Manual Refresh works · Auto-refresh resumes at 8:50 AM IST on
+                next trading day.
               </p>
             </div>
           </div>
@@ -374,13 +545,20 @@ export default function OptionChain() {
           <div className="flex rounded-md overflow-hidden border border-border text-xs">
             <button
               className={`px-3 py-1.5 ${mode === "index" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => { setMode("index"); setStockUnderlying(null); setExpiry(""); }}
+              onClick={() => {
+                setMode("index");
+                setStockUnderlying(null);
+                setExpiry("");
+              }}
             >
               Index
             </button>
             <button
               className={`px-3 py-1.5 ${mode === "stock" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => { setMode("stock"); setExpiry(""); }}
+              onClick={() => {
+                setMode("stock");
+                setExpiry("");
+              }}
             >
               Stock
             </button>
@@ -389,33 +567,53 @@ export default function OptionChain() {
           {mode === "index" ? (
             <Select
               value={String(indexUnderlying.dhanSecId)}
-              onValueChange={v => {
-                const u = INDEX_UNDERLYINGS.find(u => String(u.dhanSecId) === v);
-                if (u) { setIndexUnderlying(u); setExpiry(""); }
+              onValueChange={(v) => {
+                const u = INDEX_UNDERLYINGS.find(
+                  (u) => String(u.dhanSecId) === v,
+                );
+                if (u) {
+                  setIndexUnderlying(u);
+                  setExpiry("");
+                }
               }}
             >
-              <SelectTrigger className="w-36 text-xs h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-36 text-xs h-9">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {INDEX_UNDERLYINGS.map(u => (
-                  <SelectItem key={u.dhanSecId} value={String(u.dhanSecId)}>{u.label}</SelectItem>
+                {INDEX_UNDERLYINGS.map((u) => (
+                  <SelectItem key={u.dhanSecId} value={String(u.dhanSecId)}>
+                    {u.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           ) : (
-            <StockSearch onSelect={s => { setStockUnderlying(s); setExpiry(""); }} />
+            <StockSearch
+              onSelect={(s) => {
+                setStockUnderlying(s);
+                setExpiry("");
+              }}
+            />
           )}
 
           <Select
             value={expiry}
             onValueChange={setExpiry}
-            disabled={expiryLoading || expiryList.length === 0 || !activeDbSecId}
+            disabled={
+              expiryLoading || expiryList.length === 0 || !activeDbSecId
+            }
           >
             <SelectTrigger className="w-32 text-xs font-mono h-9">
-              <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
+              <SelectValue
+                placeholder={expiryLoading ? "Loading…" : "Expiry"}
+              />
             </SelectTrigger>
             <SelectContent>
-              {expiryList.map(e => (
-                <SelectItem key={e} value={e}>{e}</SelectItem>
+              {expiryList.map((e) => (
+                <SelectItem key={e} value={e}>
+                  {e}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -427,7 +625,9 @@ export default function OptionChain() {
             onClick={() => void refetch()}
             disabled={isFetching || !expiry || !activeDhanSecId}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
         </div>
@@ -440,7 +640,10 @@ export default function OptionChain() {
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">Spot:</span>
               <span className="font-mono font-bold text-foreground">
-                ₹{underlyingLtp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                ₹
+                {underlyingLtp.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
           )}
@@ -454,27 +657,36 @@ export default function OptionChain() {
           )}
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">PCR:</span>
-            <span className={`font-mono font-bold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}>
+            <span
+              className={`font-mono font-bold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}
+            >
               {pcr.toFixed(2)}
             </span>
-            {pcr > 1.2
-              ? <TrendingUp className="w-3 h-3 text-emerald-400" />
-              : pcr < 0.8
-              ? <TrendingDown className="w-3 h-3 text-red-400" />
-              : null}
+            {pcr > 1.2 ? (
+              <TrendingUp className="w-3 h-3 text-emerald-400" />
+            ) : pcr < 0.8 ? (
+              <TrendingDown className="w-3 h-3 text-red-400" />
+            ) : null}
             <span className="text-muted-foreground">
               {pcr > 1.2 ? "Bullish" : pcr < 0.8 ? "Bearish" : "Neutral"}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">Total Call OI:</span>
-            <span className="font-mono text-red-400">{formatOI(totalCallOI)}</span>
+            <span className="font-mono text-red-400">
+              {formatOI(totalCallOI)}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">Total Put OI:</span>
-            <span className="font-mono text-emerald-400">{formatOI(totalPutOI)}</span>
+            <span className="font-mono text-emerald-400">
+              {formatOI(totalPutOI)}
+            </span>
           </div>
-          <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+          <Badge
+            variant="outline"
+            className="text-[10px] border-primary/40 text-primary"
+          >
             {activeLabel} · {expiry}
           </Badge>
         </div>
@@ -489,7 +701,9 @@ export default function OptionChain() {
         </Card>
       ) : isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
         </div>
       ) : !expiry ? (
         <Card className="border-dashed">
@@ -510,7 +724,8 @@ export default function OptionChain() {
               <p className="text-xs text-muted-foreground">
                 {(chainError as Error).message?.includes("not Subscribed")
                   ? "Your Dhan account needs a Data API add-on. Enable it at dhan.co › Settings › Data APIs, then retry."
-                  : ((chainError as Error).message ?? "Check Dhan broker connection and retry.")}
+                  : ((chainError as Error).message ??
+                    "Check Dhan broker connection and retry.")}
               </p>
             </div>
           </CardContent>
@@ -519,7 +734,9 @@ export default function OptionChain() {
         <Card className="border-muted">
           <CardContent className="flex items-center gap-3 py-6 text-muted-foreground">
             <WifiOff className="w-5 h-5 shrink-0" />
-            <span className="text-sm">No data. Check your Dhan connection or select a different expiry.</span>
+            <span className="text-sm">
+              No data. Check your Dhan connection or select a different expiry.
+            </span>
           </CardContent>
         </Card>
       ) : (
@@ -533,7 +750,7 @@ export default function OptionChain() {
                   colSpan={5}
                   className="py-2 text-center text-[11px] font-semibold tracking-wide text-red-400 bg-red-400/5 border-r border-border"
                 >
-                  ← CALLS (CE) &nbsp;·&nbsp; Resistance / Sellers
+                  CALLS (CE) &nbsp;·&nbsp;
                 </th>
                 <th className="py-2 px-3 text-center text-[11px] font-semibold text-amber-400 bg-amber-400/5 whitespace-nowrap border-x border-border">
                   STRIKE
@@ -542,77 +759,113 @@ export default function OptionChain() {
                   colSpan={5}
                   className="py-2 text-center text-[11px] font-semibold tracking-wide text-emerald-400 bg-emerald-400/5 border-l border-border"
                 >
-                  PUTS (PE) &nbsp;·&nbsp; Support / Sellers →
+                  PUTS (PE) &nbsp;·&nbsp;
                 </th>
               </tr>
               {/* Column headers */}
               <tr className="border-b border-border bg-muted/20 text-muted-foreground">
-                {["OI Bar", "OI", "Volume", "IV%", "LTP"].map(h => (
-                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium">{h}</th>
+                {["OI Bar", "OI", "Volume", "IV%", "LTP"].map((h) => (
+                  <th
+                    key={`ce-${h}`}
+                    className="px-2.5 py-1.5 text-right font-medium"
+                  >
+                    {h}
+                  </th>
                 ))}
-                <th className="px-3 py-1.5 text-center font-medium border-x border-border">₹</th>
-                {["LTP", "IV%", "Volume", "OI", "OI Bar"].map(h => (
-                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium">{h}</th>
+                <th className="px-3 py-1.5 text-center font-medium border-x border-border">
+                  ₹
+                </th>
+                {["LTP", "IV%", "Volume", "OI", "OI Bar"].map((h) => (
+                  <th
+                    key={`pe-${h}`}
+                    className="px-2.5 py-1.5 text-right font-medium"
+                  >
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
 
             <tbody>
-              {displayEntries.map(e => {
+              {displayEntries.map((e) => {
                 const isATM = e.strikePrice === atmStrike;
                 const prev = prevLTPRef.current.get(e.strikePrice);
                 const callChange = prev ? e.callLTP - prev.call : 0;
-                const putChange  = prev ? e.putLTP  - prev.put  : 0;
+                const putChange = prev ? e.putLTP - prev.put : 0;
 
                 return (
                   <tr
                     key={e.strikePrice}
                     className={`
                       border-b border-border/30 transition-colors
-                      ${isATM
-                        ? "bg-amber-400/10 hover:bg-amber-400/15"
-                        : "hover:bg-muted/15"}
+                      ${
+                        isATM
+                          ? "bg-amber-400/10 hover:bg-amber-400/15"
+                          : "hover:bg-muted/15"
+                      }
                     `}
                   >
                     {/* ── CALL side ── */}
                     {/* OI Bar */}
-                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}
+                    >
                       <div className="flex justify-end">
                         <OIBar value={e.callOI} max={maxOI} side="ce" />
                       </div>
                     </td>
                     {/* OI value */}
-                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}
+                    >
                       <span className="text-red-400">{formatOI(e.callOI)}</span>
                     </td>
                     {/* Volume */}
-                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}
+                    >
                       {formatOI(e.callVolume)}
                     </td>
                     {/* IV */}
-                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}
+                    >
                       {e.callIV > 0 ? e.callIV.toFixed(1) : "—"}
                     </td>
                     {/* LTP + change */}
-                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}
+                    >
                       <div className="flex flex-col items-end">
-                        <span className={`font-mono font-semibold ${
-                          callChange > 0 ? "text-emerald-400" :
-                          callChange < 0 ? "text-red-400" : "text-foreground"
-                        }`}>
-                          ₹{e.callLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        <span
+                          className={`font-mono font-semibold ${
+                            callChange > 0
+                              ? "text-emerald-400"
+                              : callChange < 0
+                                ? "text-red-400"
+                                : "text-foreground"
+                          }`}
+                        >
+                          ₹
+                          {e.callLTP.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
                         </span>
                         <DeltaBadge current={e.callLTP} prev={prev?.call} />
                       </div>
                     </td>
 
                     {/* ── STRIKE ── */}
-                    <td className={`
+                    <td
+                      className={`
                       px-3 py-2 text-center font-mono font-bold border-x border-border whitespace-nowrap
-                      ${isATM
-                        ? "bg-amber-400/15 text-amber-400 text-[13px]"
-                        : "text-foreground/80"}
-                    `}>
+                      ${
+                        isATM
+                          ? "bg-amber-400/15 text-amber-400 text-[13px]"
+                          : "text-foreground/80"
+                      }
+                    `}
+                    >
                       {e.strikePrice.toLocaleString("en-IN")}
                       {isATM && (
                         <div className="text-[9px] font-bold text-amber-400 leading-none mt-0.5 tracking-wider">
@@ -623,31 +876,51 @@ export default function OptionChain() {
 
                     {/* ── PUT side ── */}
                     {/* LTP + change */}
-                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}
+                    >
                       <div className="flex flex-col items-end">
-                        <span className={`font-mono font-semibold ${
-                          putChange > 0 ? "text-emerald-400" :
-                          putChange < 0 ? "text-red-400" : "text-foreground"
-                        }`}>
-                          ₹{e.putLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        <span
+                          className={`font-mono font-semibold ${
+                            putChange > 0
+                              ? "text-emerald-400"
+                              : putChange < 0
+                                ? "text-red-400"
+                                : "text-foreground"
+                          }`}
+                        >
+                          ₹
+                          {e.putLTP.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
                         </span>
                         <DeltaBadge current={e.putLTP} prev={prev?.put} />
                       </div>
                     </td>
                     {/* IV */}
-                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}
+                    >
                       {e.putIV > 0 ? e.putIV.toFixed(1) : "—"}
                     </td>
                     {/* Volume */}
-                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}
+                    >
                       {formatOI(e.putVolume)}
                     </td>
                     {/* OI value */}
-                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}>
-                      <span className="text-emerald-400">{formatOI(e.putOI)}</span>
+                    <td
+                      className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}
+                    >
+                      <span className="text-emerald-400">
+                        {formatOI(e.putOI)}
+                      </span>
                     </td>
                     {/* OI Bar */}
-                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                    <td
+                      className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}
+                    >
                       <div className="flex justify-start">
                         <OIBar value={e.putOI} max={maxOI} side="pe" />
                       </div>
@@ -676,8 +949,8 @@ export default function OptionChain() {
             ATM (At The Money)
           </span>
           <span className="flex items-center gap-1">
-            <span className="text-emerald-400 text-[10px]">▲0.50</span>
-            / <span className="text-red-400 text-[10px]">▼0.50</span>
+            <span className="text-emerald-400 text-[10px]">▲0.50</span>/{" "}
+            <span className="text-red-400 text-[10px]">▼0.50</span>
             Last LTP Change
           </span>
         </div>
