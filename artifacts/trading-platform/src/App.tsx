@@ -13,6 +13,7 @@ import Strategies from "@/pages/strategies";
 import Backtesting from "@/pages/backtesting";
 import PaperTrading from "@/pages/paper-trading";
 import Settings from "@/pages/settings";
+import RiskManager from "@/pages/risk-manager";
 import Logs from "@/pages/logs";
 import SuperOrders from "@/pages/super-orders";
 import ForeverOrders from "@/pages/forever-orders";
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/backtesting" component={Backtesting} />
         <Route path="/paper-trading" component={PaperTrading} />
         <Route path="/settings" component={Settings} />
+        <Route path="/risk-manager" component={RiskManager} />
         <Route path="/logs" component={Logs} />
         <Route path="/super-orders" component={SuperOrders} />
         <Route path="/forever-orders" component={ForeverOrders} />
