@@ -67,17 +67,21 @@ export class DhanApiError extends Error {
   }
 
   toClientResponse() {
+    const rawData = this.data as Record<string, unknown> | null;
+    const rawMessage = typeof rawData?.errorMessage === "string" ? rawData.errorMessage : null;
     if (this.errorInfo) {
       return {
         errorCode: this.errorInfo.code,
-        errorMessage: this.errorInfo.message,
+        errorMessage: rawMessage && rawMessage !== this.errorInfo.message
+          ? `${this.errorInfo.message} (${rawMessage})`
+          : this.errorInfo.message,
         retryable: this.errorInfo.retryable,
         raw: this.data,
       };
     }
     return {
       errorCode: `HTTP-${this.status}`,
-      errorMessage: "An unexpected error occurred with the broker API.",
+      errorMessage: rawMessage ?? "An unexpected error occurred with the broker API.",
       retryable: false,
       raw: this.data,
     };
@@ -283,12 +287,15 @@ export const dhanClient = {
     productType: string[];
     enableKillSwitch: boolean;
   }) {
-    return dhanRequest("POST", "/pnlExit", {
-      profitValue: data.profitValue.toFixed(2),
-      lossValue: data.lossValue.toFixed(2),
+    const body = {
+      dhanClientId: credentials.clientId,
+      profitValue: String(data.profitValue),
+      lossValue: String(data.lossValue),
       productType: data.productType,
       enableKillSwitch: data.enableKillSwitch,
-    });
+    };
+    logger.info({ pnlBody: body }, "setPnlExit body");
+    return dhanRequest("POST", "/pnlExit", body);
   },
 
   async stopPnlExit() {

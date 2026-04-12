@@ -704,15 +704,13 @@ export default function Settings() {
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Apply to</label>
                   <div className="flex items-center gap-6 flex-wrap">
-                    {["INTRADAY", "DELIVERY"].map(type => (
-                      <label key={type} className="flex items-center gap-2 cursor-pointer text-sm">
-                        <Checkbox
-                          checked={pnlProductTypes.includes(type)}
-                          onCheckedChange={() => toggleProductType(type)}
-                        />
-                        {type}
-                      </label>
-                    ))}
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={pnlProductTypes.includes("INTRADAY")}
+                        onCheckedChange={() => toggleProductType("INTRADAY")}
+                      />
+                      INTRADAY
+                    </label>
                     <label className="flex items-center gap-2 cursor-pointer text-sm">
                       <Checkbox
                         checked={pnlForm.watch("enableKillSwitch")}
