@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useGetFundLimits } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -197,28 +197,35 @@ export default function Dashboard() {
     staleTime: msUntilNext9amIST(),
   });
 
+  // Period P&L — fetched live from backend using the correct formula:
+  //   periodPnl = currentBalance − openingBalance + periodWithdrawals − periodDeposits
+  // This mirrors the all-time formula but for a specific window.
+  // Never stored in DB — always computed from Dhan API on demand.
+  const presetDays = activeQuery.mode === "7d" ? 7 : activeQuery.mode === "30d" ? 30 : activeQuery.mode === "365d" ? 365 : null;
+  const { data: periodPnlData, isLoading: isPeriodPnlLoading } = useQuery<{ periodPnl: number }>({
+    queryKey: ["period-pnl", presetDays],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/dashboard/period-pnl?days=${presetDays}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: presetDays !== null,
+    refetchInterval: msUntilNext9amIST,
+    staleTime: msUntilNext9amIST(),
+  });
+
   const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
   const killTriggered = dhanKillActive || summary?.killSwitchTriggered;
 
-  // Period P&L: computed live from equity curve API data — never stored in DB.
-  // This is the net trading P&L for the selected period (excludes deposits & withdrawals).
-  // Uses the last `cumulative` value which accumulates only PNL-type entries.
-  const periodPnl = useMemo<number | null>(() => {
-    if (!equityCurve || equityCurve.length === 0) return null;
-    // Sum only PNL-type daily deltas (excludes DEPOSIT/WITHDRAWAL days)
-    return Math.round(
-      equityCurve.filter(p => p.type === "PNL").reduce((sum, p) => sum + p.pnl, 0) * 100
-    ) / 100;
-  }, [equityCurve]);
-
   // Total P&L card: show period-specific value when a preset is active,
   // otherwise show all-time value from the summary API.
+  // All values come from live Dhan API — nothing is persisted in DB.
   const isPreset = activeQuery.mode !== "custom";
-  const displayPnl   = isPreset && periodPnl !== null ? periodPnl : (summary?.totalPnl ?? 0);
+  const displayPnl   = isPreset && periodPnlData !== undefined ? periodPnlData.periodPnl : (summary?.totalPnl ?? 0);
   const displayLabel = activeQuery.mode === "7d"   ? "7D Net"  :
                        activeQuery.mode === "30d"  ? "30D Net" :
                        activeQuery.mode === "365d" ? "365D Net" : "All-Time Net";
-  const isPnlLoading = isPreset ? isEquityLoading : isSummaryLoading;
+  const isPnlLoading = isPreset ? isPeriodPnlLoading : isSummaryLoading;
 
   const equityData = (equityCurve ?? [])
     .filter(p => p.pnl !== 0 || p.runbal !== undefined)

@@ -164,6 +164,94 @@ function classifyLedgerEntry(narration: string): "DEPOSIT" | "WITHDRAWAL" | "PNL
   return "PNL";
 }
 
+/**
+ * Period P&L endpoint — same formula as all-time but for a specific window:
+ *   periodPnl = currentBalance − openingBalance + periodWithdrawals − periodDeposits
+ *
+ * openingBalance comes from the "OPENING BALANCE" ledger entry's runbal.
+ * Deposits and withdrawals are identified by narration (same logic as all-time).
+ * This value is NEVER stored in DB — always computed live from Dhan API.
+ */
+router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
+  try {
+    const days = parseInt(String(req.query.days || "365"), 10);
+    const now = new Date();
+    const toStr = now.toISOString().split("T")[0];
+    const from = new Date(now);
+    from.setDate(from.getDate() - (days - 1));
+    const fromStr = from.toISOString().split("T")[0];
+
+    const [fundsResult, ledgerResult] = await Promise.allSettled([
+      dhanClient.getFundLimits(),
+      dhanClient.getLedger(fromStr, toStr),
+    ]);
+
+    let currentBalance = 0;
+    if (fundsResult.status === "fulfilled") {
+      const f = fundsResult.value as Record<string, unknown>;
+      currentBalance = Number(f.availabelBalance || f.availableBalance || 0);
+    }
+
+    if (ledgerResult.status !== "fulfilled") {
+      res.status(500).json({ error: "Ledger fetch failed" });
+      return;
+    }
+
+    const entries = Array.isArray(ledgerResult.value)
+      ? (ledgerResult.value as Record<string, unknown>[])
+      : [];
+
+    // Extract opening balance from the first OPENING BALANCE entry's runbal field
+    let openingBalance = 0;
+    const openEntry = entries.find(e => {
+      const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+      return narr === "OPENING BALANCE";
+    });
+    if (openEntry) {
+      openingBalance = parseFloat(String(openEntry.runbal ?? "0").replace(/,/g, "")) || 0;
+    }
+
+    let periodDeposits = 0;
+    let periodWithdrawals = 0;
+
+    for (const e of entries) {
+      const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+      if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
+
+      const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
+      const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
+      const isCredit = !isNaN(credit) && credit > 0;
+      const isDebit  = !isNaN(debit)  && debit  > 0;
+      if (!isCredit && !isDebit) continue;
+
+      const isDeposit =
+        narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
+        narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
+        narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
+        narr.includes("FUNDS ADDED") ||
+        (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
+
+      const isWithdrawal =
+        narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
+        narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
+        narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
+        (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
+
+      if (isDeposit && isCredit)      periodDeposits    += credit;
+      else if (isWithdrawal && isDebit) periodWithdrawals += debit;
+    }
+
+    const periodPnl = Math.round(
+      (currentBalance - openingBalance + periodWithdrawals - periodDeposits) * 100
+    ) / 100;
+
+    res.json({ periodPnl, currentBalance, openingBalance, periodDeposits, periodWithdrawals, days });
+  } catch (e) {
+    req.log.error({ err: e }, "Period P&L error");
+    res.status(500).json({ error: "Failed to compute period P&L" });
+  }
+});
+
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
     const source = String(req.query.source ?? "local");
