@@ -130,12 +130,26 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
   }
 });
 
+// Per-key throttle: Dhan allows 1 unique request per 3 seconds for option chain
+const optionChainLastFetch = new Map<string, number>();
+const OPTION_CHAIN_MIN_INTERVAL_MS = 3_500; // slightly above 3s to be safe
+
 router.post("/market/option-chain", async (req, res): Promise<void> => {
   const parsed = GetOptionChainBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  // Rate gate: one unique request per 3.5 seconds
+  const key = `${parsed.data.underSecurityId}:${parsed.data.underExchangeSegment}:${parsed.data.expiry}`;
+  const last = optionChainLastFetch.get(key) ?? 0;
+  const elapsed = Date.now() - last;
+  if (elapsed < OPTION_CHAIN_MIN_INTERVAL_MS) {
+    const wait = OPTION_CHAIN_MIN_INTERVAL_MS - elapsed;
+    await new Promise(r => setTimeout(r, wait));
+  }
+  optionChainLastFetch.set(key, Date.now());
 
   try {
     const raw = await dhanClient.getOptionChain({

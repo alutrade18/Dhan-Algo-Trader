@@ -148,27 +148,38 @@ export default function OptionChain() {
     ? indexUnderlying.label
     : (stockUnderlying?.underlyingSymbol ?? "");
 
+  // Expiry list via Dhan API — fires only for the active underlying
   const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
-    queryKey: ["expiry-list-db", activeDbSecId, activeInstrument],
+    queryKey: ["expiry-list-dhan", activeDhanSecId, activeSegment],
     queryFn: async () => {
-      if (!activeDbSecId) return [];
-      const res = await fetch(`${BASE}api/market/expiry-list?underlyingSecId=${activeDbSecId}&instrument=${activeInstrument}`);
+      if (!activeDhanSecId) return [];
+      const res = await fetch(`${BASE}api/market/expiry-list`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          underSecurityId: String(activeDhanSecId),
+          underExchangeSegment: activeSegment,
+        }),
+      });
       if (!res.ok) throw new Error("Failed to load expiry list");
       const json = await res.json() as { data?: string[] };
       return json.data ?? [];
     },
-    enabled: !!activeDbSecId,
-    staleTime: 600_000,
+    enabled: !!activeDhanSecId,
+    staleTime: 300_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   useEffect(() => {
     setExpiry("");
-  }, [activeDbSecId, activeInstrument]);
+  }, [activeDhanSecId, activeSegment]);
 
   useEffect(() => {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
   }, [expiryList, expiry]);
 
+  // Option chain — max 1 request per 10 seconds; only for the active script + expiry
   const { data: chain, isLoading: chainLoading, refetch, isFetching, error: chainError } = useQuery({
     queryKey: ["option-chain", activeDhanSecId, activeSegment, expiry],
     queryFn: async () => {
@@ -189,8 +200,9 @@ export default function OptionChain() {
       return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
     enabled: !!expiry && !!activeDhanSecId,
-    refetchInterval: 180_000,
-    staleTime: 60_000,
+    refetchInterval: 10_000,
+    staleTime: 8_000,
+    refetchOnWindowFocus: false,
     retry: 0,
   });
 
@@ -235,12 +247,24 @@ export default function OptionChain() {
     ? strikes.reduce((prev, curr) => Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev)
     : 0;
 
+  // PCR computed from ALL strikes, display limited to 20 below + ATM + 20 above
   const totalCallOI = entries.reduce((a, e) => a + e.callOI, 0);
   const totalPutOI  = entries.reduce((a, e) => a + e.putOI, 0);
   const pcr = totalCallOI > 0 ? totalPutOI / totalCallOI : 0;
 
+  // Show only 20 strikes below ATM and 20 above ATM (41 max) to avoid rate-limit flooding
+  const displayEntries = (() => {
+    if (entries.length === 0) return entries;
+    const atmIdx = entries.findIndex(e => e.strikePrice === atmStrike);
+    if (atmIdx < 0 || underlyingLtp <= 0) {
+      const mid = Math.floor(entries.length / 2);
+      return entries.slice(Math.max(0, mid - 20), Math.min(entries.length, mid + 21));
+    }
+    return entries.slice(Math.max(0, atmIdx - 20), Math.min(entries.length, atmIdx + 21));
+  })();
+
   const isLoading = expiryLoading || chainLoading;
-  const hasData = entries.length > 0;
+  const hasData = displayEntries.length > 0;
 
   return (
     <div className="space-y-4">
@@ -248,7 +272,7 @@ export default function OptionChain() {
         <div>
           <h1 className="text-xl font-bold">Option Chain</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Live F&amp;O data · Auto-refresh every 3 min
+            Live F&amp;O data · Auto-refresh every 10 sec · ±20 strikes around ATM
           </p>
         </div>
 
@@ -399,7 +423,7 @@ export default function OptionChain() {
               </tr>
             </thead>
             <tbody>
-              {entries.map(e => {
+              {displayEntries.map(e => {
                 const isATM = e.strikePrice === atmStrike;
                 return (
                   <tr
