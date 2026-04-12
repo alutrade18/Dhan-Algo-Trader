@@ -582,20 +582,17 @@ export default function Settings() {
               Telegram Alerts
             </CardTitle>
             <CardDescription className="text-xs">
-              Receive trade alerts on Telegram · Bot created via @BotFather
+              Receive trade alerts on Telegram
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Bot Token</label>
-                <p className="text-xs text-muted-foreground">
-                  From @BotFather — format: <code className="text-[10px] bg-muted px-1 py-0.5 rounded font-mono">1234567890:ABCDefghijklmnopqrstuvwxyz1234567</code>
-                </p>
                 <div className="relative">
                   <Input
                     type={showBotToken ? "text" : "password"}
-                    placeholder="e.g. 1234567890:ABCDefghijklmn..."
+                    placeholder=""
                     className="pr-10 font-mono text-xs"
                     autoComplete="off"
                     {...telegramForm.register("telegramBotToken")}
@@ -611,20 +608,9 @@ export default function Settings() {
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Chat ID</label>
-                <div className="rounded-md border border-muted bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">How to get your Chat ID:</p>
-                  <ol className="list-decimal list-inside space-y-0.5">
-                    <li>Open Telegram and send any message to your bot <span className="font-mono text-primary">@Rajesh_Algo_Tradingbot</span></li>
-                    <li>Open this URL in a browser (replace TOKEN with your bot token):</li>
-                  </ol>
-                  <code className="block text-[10px] bg-muted px-2 py-1 rounded break-all font-mono mt-1">
-                    https://api.telegram.org/bot{"<TOKEN>"}/getUpdates
-                  </code>
-                  <p>Find <code className="font-mono">"id"</code> inside <code className="font-mono">"chat"</code> — that number is your Chat ID.</p>
-                </div>
                 <Input
                   type="text"
-                  placeholder="e.g. 987654321 or -100123456789 (group)"
+                  placeholder=""
                   autoComplete="off"
                   className="font-mono text-xs"
                   {...telegramForm.register("telegramChatId")}
