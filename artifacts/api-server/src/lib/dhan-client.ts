@@ -194,6 +194,10 @@ export const dhanClient = {
     return allTrades;
   },
 
+  async getLedger(fromDate: string, toDate: string) {
+    return dhanRequest("GET", `/ledger?from-date=${fromDate}&to-date=${toDate}`);
+  },
+
   async getFundLimits(overrideCredentials?: { clientId: string; accessToken: string }) {
     return dhanRequest("GET", "/fundlimit", undefined, overrideCredentials);
   },

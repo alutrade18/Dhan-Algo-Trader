@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { IndianRupee, TrendingUp, Briefcase, Activity, ShieldAlert, Search } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { IndianRupee, TrendingUp, Briefcase, Activity, ShieldAlert, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -18,6 +20,19 @@ const formatCurrency = (val?: number) =>
   val !== undefined
     ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(val)
     : "₹0";
+
+function toYMD(d: Date) {
+  return d.toISOString().split("T")[0];
+}
+function daysAgo(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+}
+function fmtDate(d?: Date) {
+  if (!d) return "—";
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 function StatCard({ title, value, inlineTag, icon: Icon, isLoading, valueClass }: {
   title: string; value: string; inlineTag?: string; icon: React.ElementType; isLoading?: boolean; valueClass?: string;
@@ -52,21 +67,11 @@ interface DashboardSummaryExt {
   activeStrategies?: number;
   winRate?: number;
   killSwitchTriggered?: boolean;
-  killSwitchEnabled?: boolean;
   dailyLossAmount?: number;
   maxDailyLoss?: number;
 }
 
 type DateMode = "7d" | "30d" | "365d" | "custom";
-
-function todayStr() {
-  return new Date().toISOString().split("T")[0];
-}
-function daysAgoStr(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split("T")[0];
-}
 
 const PRESETS: { label: string; mode: Exclude<DateMode, "custom">; days: number }[] = [
   { label: "7D",   mode: "7d",   days: 6   },
@@ -82,10 +87,13 @@ export default function Dashboard() {
   const fundsData = funds as (typeof funds & { availableBalance?: number; utilizedAmount?: number }) | undefined;
 
   const [dateMode, setDateMode] = useState<DateMode>("7d");
-  const [fromDate, setFromDate] = useState(daysAgoStr(6));
-  const [toDate, setToDate] = useState(todayStr());
+  const [calOpen, setCalOpen] = useState(false);
+  const [range, setRange] = useState<DateRange | undefined>({
+    from: daysAgo(6),
+    to: new Date(),
+  });
   const [activeQuery, setActiveQuery] = useState<{ mode: DateMode; from: string; to: string }>({
-    mode: "7d", from: daysAgoStr(6), to: todayStr(),
+    mode: "7d", from: toYMD(daysAgo(6)), to: toYMD(new Date()),
   });
 
   const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
@@ -107,7 +115,7 @@ export default function Dashboard() {
   const { data: equityCurve, isLoading: isEquityLoading } = useQuery<EquityPoint[]>({
     queryKey: equityQueryKey,
     queryFn: async () => {
-      let url = `${BASE}api/dashboard/equity-curve?source=dhan`;
+      let url = `${BASE}api/dashboard/equity-curve?source=ledger`;
       if (activeQuery.mode === "7d") url += "&days=7";
       else if (activeQuery.mode === "30d") url += "&days=30";
       else if (activeQuery.mode === "365d") url += "&days=365";
@@ -139,19 +147,23 @@ export default function Dashboard() {
   ];
 
   function handlePreset(preset: typeof PRESETS[0]) {
-    const from = daysAgoStr(preset.days);
-    const to = todayStr();
+    const from = daysAgo(preset.days);
+    const to = new Date();
     setDateMode(preset.mode);
-    setFromDate(from);
-    setToDate(to);
-    setActiveQuery({ mode: preset.mode, from, to });
+    setRange({ from, to });
+    setActiveQuery({ mode: preset.mode, from: toYMD(from), to: toYMD(to) });
   }
 
-  function handleSearch() {
-    if (!fromDate || !toDate) return;
-    setActiveQuery({ mode: "custom", from: fromDate, to: toDate });
+  function applyCustomRange() {
+    if (!range?.from || !range?.to) return;
     setDateMode("custom");
+    setActiveQuery({ mode: "custom", from: toYMD(range.from), to: toYMD(range.to) });
+    setCalOpen(false);
   }
+
+  const dateLabel = activeQuery.mode !== "custom"
+    ? `${fmtDate(range?.from)} — ${fmtDate(range?.to)}`
+    : `${fmtDate(range?.from)} — ${fmtDate(range?.to)}`;
 
   return (
     <div className="space-y-4">
@@ -210,38 +222,51 @@ export default function Dashboard() {
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-            <CardTitle className="text-sm">Equity Curve — Dhan Real-Time</CardTitle>
+            <CardTitle className="text-sm">Equity Curve — Dhan Ledger</CardTitle>
             <div className="flex items-center gap-1.5 flex-wrap">
               {PRESETS.map(p => (
                 <Button
                   key={p.mode}
                   variant={activeQuery.mode === p.mode ? "default" : "outline"}
-                  size="sm" className="h-6 px-2.5 text-xs"
+                  size="sm" className="h-7 px-2.5 text-xs"
                   onClick={() => handlePreset(p)}
                 >{p.label}</Button>
               ))}
-              <div className="flex items-center gap-1 ml-1">
-                <Input
-                  type="date"
-                  value={fromDate}
-                  onChange={e => { setFromDate(e.target.value); setDateMode("custom"); }}
-                  className="h-6 text-xs px-1.5 w-[118px]"
-                />
-                <span className="text-xs text-muted-foreground">—</span>
-                <Input
-                  type="date"
-                  value={toDate}
-                  onChange={e => { setToDate(e.target.value); setDateMode("custom"); }}
-                  className="h-6 text-xs px-1.5 w-[118px]"
-                />
-                <Button
-                  size="sm" className="h-6 px-2 text-xs gap-1"
-                  onClick={handleSearch}
-                  title="Search custom date range"
-                >
-                  <Search className="h-3 w-3" />
-                </Button>
-              </div>
+
+              <Popover open={calOpen} onOpenChange={setCalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={dateMode === "custom" ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 px-2.5 text-xs gap-1.5 max-w-[260px]"
+                  >
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{dateLabel}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    selected={range}
+                    onSelect={setRange}
+                    numberOfMonths={2}
+                    disabled={{ after: new Date() }}
+                    captionLayout="label"
+                  />
+                  <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
+                    <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setCalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm" className="text-xs h-7"
+                      onClick={applyCustomRange}
+                      disabled={!range?.from || !range?.to}
+                    >
+                      Apply Range
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardHeader>
@@ -292,7 +317,7 @@ export default function Dashboard() {
             </ResponsiveContainer>
           ) : (
             <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
-              No trades found for this period — your Dhan trade history will appear here
+              No ledger entries found for this period — your Dhan account ledger will appear here
             </div>
           )}
         </CardContent>

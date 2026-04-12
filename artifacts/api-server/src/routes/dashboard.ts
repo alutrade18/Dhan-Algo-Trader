@@ -130,7 +130,9 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
-    const useDhan = req.query.source === "dhan";
+    const source = String(req.query.source ?? "local");
+    const useDhan = source === "dhan";
+    const useLedger = source === "ledger";
     const points: Array<{ date: string; pnl: number; cumulative: number }> = [];
 
     let startDate: Date;
@@ -164,7 +166,51 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
     const fromStr = startDate.toISOString().split("T")[0];
     const toStr = endDate.toISOString().split("T")[0];
 
-    if (useDhan) {
+    if (useLedger) {
+      try {
+        const raw = await dhanClient.getLedger(fromStr, toStr);
+        const entries = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+
+        const dailyBalance = new Map<string, number>();
+
+        for (const e of entries) {
+          const voucher = String(e.voucherdate ?? "");
+          if (!voucher) continue;
+          const parsed = new Date(voucher);
+          if (isNaN(parsed.getTime())) continue;
+          const dateKey = parsed.toISOString().split("T")[0];
+          const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
+          if (!isNaN(bal)) {
+            dailyBalance.set(dateKey, bal);
+          }
+        }
+
+        const sortedDates = Array.from(dailyBalance.keys()).sort();
+        if (sortedDates.length === 0) { res.json([]); return; }
+
+        let prevBal = dailyBalance.get(sortedDates[0])!;
+        points.push({ date: sortedDates[0], pnl: 0, cumulative: 0 });
+
+        for (let i = 1; i < sortedDates.length; i++) {
+          const d = sortedDates[i];
+          const bal = dailyBalance.get(d)!;
+          const pnl = Math.round((bal - prevBal) * 100) / 100;
+          points.push({ date: d, pnl, cumulative: 0 });
+          prevBal = bal;
+        }
+
+        let cumulative = 0;
+        for (const p of points) {
+          cumulative += p.pnl;
+          p.cumulative = Math.round(cumulative * 100) / 100;
+        }
+        res.json(points);
+        return;
+      } catch {
+        res.json([]);
+        return;
+      }
+    } else if (useDhan) {
       try {
         const trades = await dhanClient.getAllTradeHistory(fromStr, toStr);
         const dailyMap = new Map<string, number>();
