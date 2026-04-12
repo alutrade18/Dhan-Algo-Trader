@@ -139,7 +139,7 @@ export default function TradeHistory() {
           type="date"
           value={toDate}
           onChange={e => setToDate(e.target.value)}
-          max={toYMD(new Date())}
+          min={fromDate}
           className="w-36 text-xs font-mono h-9"
         />
         <Button size="sm" className="gap-1.5 h-9" onClick={fetchLedger} disabled={loading}>
