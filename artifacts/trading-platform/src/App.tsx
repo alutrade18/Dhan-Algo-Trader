@@ -13,6 +13,7 @@ import Strategies from "@/pages/strategies";
 import Backtesting from "@/pages/backtesting";
 import PaperTrading from "@/pages/paper-trading";
 import Settings from "@/pages/settings";
+import Logs from "@/pages/logs";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/backtesting" component={Backtesting} />
         <Route path="/paper-trading" component={PaperTrading} />
         <Route path="/settings" component={Settings} />
+        <Route path="/logs" component={Logs} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

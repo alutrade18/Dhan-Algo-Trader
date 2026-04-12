@@ -130,6 +130,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
+    const useDhan = req.query.source === "dhan";
     const points: Array<{ date: string; pnl: number; cumulative: number }> = [];
 
     let startDate: Date;
@@ -148,8 +149,8 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
         .from(tradeLogsTable)
         .where(sql`${tradeLogsTable.status} = 'success'`);
       const minDate = firstRow?.minDate;
-      if (!minDate) { res.json([]); return; }
-      startDate = new Date(minDate + "T00:00:00Z");
+      if (!minDate && !useDhan) { res.json([]); return; }
+      startDate = minDate ? new Date(minDate + "T00:00:00Z") : new Date();
       endDate = new Date();
       endDate.setHours(0, 0, 0, 0);
     } else {
@@ -160,27 +161,52 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
       startDate.setDate(startDate.getDate() - (days - 1));
     }
 
-    const cur = new Date(startDate);
-    while (cur <= endDate) {
-      const nextDay = new Date(cur);
-      nextDay.setDate(nextDay.getDate() + 1);
+    const fromStr = startDate.toISOString().split("T")[0];
+    const toStr = endDate.toISOString().split("T")[0];
 
-      const [row] = await db
-        .select({
-          dailyPnl: sql<number>`coalesce(sum(${tradeLogsTable.pnl}::numeric), 0)::float`,
-        })
-        .from(tradeLogsTable)
-        .where(
-          sql`${tradeLogsTable.executedAt} >= ${cur.toISOString()} AND ${tradeLogsTable.executedAt} < ${nextDay.toISOString()} AND ${tradeLogsTable.status} = 'success'`
-        );
+    if (useDhan) {
+      try {
+        const trades = await dhanClient.getAllTradeHistory(fromStr, toStr);
+        const dailyMap = new Map<string, number>();
 
-      points.push({
-        date: cur.toISOString().split("T")[0],
-        pnl: row?.dailyPnl ?? 0,
-        cumulative: 0,
-      });
+        for (const t of trades as Record<string, unknown>[]) {
+          const timeStr = String(t.exchangeTradeTime ?? t.createTime ?? "");
+          const dateKey = timeStr.split(" ")[0] ?? timeStr.split("T")[0];
+          if (!dateKey || dateKey.length < 10) continue;
+          const profit = parseFloat(String(t.realizedProfit ?? t.profit ?? 0));
+          if (!isNaN(profit)) {
+            dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + profit);
+          }
+        }
 
-      cur.setDate(cur.getDate() + 1);
+        const cur = new Date(startDate);
+        while (cur <= endDate) {
+          const key = cur.toISOString().split("T")[0];
+          points.push({ date: key, pnl: Math.round((dailyMap.get(key) ?? 0) * 100) / 100, cumulative: 0 });
+          cur.setDate(cur.getDate() + 1);
+        }
+      } catch {
+        res.json([]);
+        return;
+      }
+    } else {
+      const cur = new Date(startDate);
+      while (cur <= endDate) {
+        const nextDay = new Date(cur);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        const [row] = await db
+          .select({
+            dailyPnl: sql<number>`coalesce(sum(${tradeLogsTable.pnl}::numeric), 0)::float`,
+          })
+          .from(tradeLogsTable)
+          .where(
+            sql`${tradeLogsTable.executedAt} >= ${cur.toISOString()} AND ${tradeLogsTable.executedAt} < ${nextDay.toISOString()} AND ${tradeLogsTable.status} = 'success'`
+          );
+
+        points.push({ date: cur.toISOString().split("T")[0], pnl: row?.dailyPnl ?? 0, cumulative: 0 });
+        cur.setDate(cur.getDate() + 1);
+      }
     }
 
     let cumulative = 0;

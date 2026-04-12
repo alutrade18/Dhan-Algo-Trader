@@ -9,6 +9,7 @@ import {
   Settings,
   ShieldAlert,
   X,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
   { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/logs", label: "Logs", icon: ScrollText },
 ];
 
 function BullIcon({ className }: { className?: string }) {

@@ -22,6 +22,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/backtesting": "Backtesting",
   "/paper-trading": "Paper Trading",
   "/settings": "Settings",
+  "/logs": "Logs",
 };
 
 function isNSEMarketOpen(): boolean {
