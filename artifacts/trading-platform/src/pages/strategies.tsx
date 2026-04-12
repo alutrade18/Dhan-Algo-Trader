@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useGetStrategies,
   useToggleStrategy,
@@ -34,6 +34,79 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+const BASE_URL = import.meta.env.BASE_URL;
+
+const STRATEGY_TEMPLATES = [
+  { label: "RSI Oversold", type: "scalping" as const, timeframeMinutes: 5, entryConditions: [{ indicator: "RSI", comparator: "<", value: "30", period: "14" }], exitConditions: [{ indicator: "RSI", comparator: ">", value: "60", period: "14" }] },
+  { label: "EMA Cross", type: "custom" as const, timeframeMinutes: 15, entryConditions: [{ indicator: "EMA", comparator: "crosses_above", value: "200", period: "9" }], exitConditions: [{ indicator: "EMA", comparator: "crosses_below", value: "200", period: "9" }] },
+  { label: "MACD Signal", type: "custom" as const, timeframeMinutes: 15, entryConditions: [{ indicator: "MACD", comparator: ">", value: "0", period: "12" }], exitConditions: [{ indicator: "MACD", comparator: "<", value: "0", period: "12" }] },
+  { label: "VWAP Bounce", type: "scalping" as const, timeframeMinutes: 5, entryConditions: [{ indicator: "Price", comparator: ">", value: "0", period: "" }, { indicator: "VWAP", comparator: ">", value: "0", period: "" }], exitConditions: [] },
+];
+
+interface EngineStatus {
+  running: boolean;
+  lastRun?: string;
+  nextRun?: string;
+  activeStrategies?: number;
+}
+
+function EngineStatusWidget() {
+  const [status, setStatus] = useState<EngineStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchStatus = () => {
+      fetch(`${BASE_URL}api/strategies/engine/status`)
+        .then(r => r.json())
+        .then(d => setStatus(d as EngineStatus))
+        .catch(() => {});
+    };
+    fetchStatus();
+    const id = setInterval(fetchStatus, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const toggle = async () => {
+    if (!status) return;
+    setLoading(true);
+    try {
+      await fetch(`${BASE_URL}api/strategies/engine/${status.running ? "stop" : "start"}`, { method: "POST" });
+      const r = await fetch(`${BASE_URL}api/strategies/engine/status`);
+      setStatus(await r.json() as EngineStatus);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!status) return null;
+
+  return (
+    <Card className={cn("border", status.running ? "border-success/30 bg-success/5" : "border-border")}>
+      <CardContent className="py-3 px-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className={cn("w-2 h-2 rounded-full", status.running ? "bg-success animate-pulse" : "bg-muted-foreground")} />
+          <div>
+            <span className="text-sm font-medium">Strategy Engine</span>
+            <span className={cn("ml-2 text-xs", status.running ? "text-success" : "text-muted-foreground")}>
+              {status.running ? "Running" : "Stopped"}
+            </span>
+            {status.activeStrategies !== undefined && (
+              <span className="ml-2 text-xs text-muted-foreground">{status.activeStrategies} active</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {status.lastRun && <span>Last: {new Date(status.lastRun).toLocaleTimeString("en-IN")}</span>}
+          {status.nextRun && status.running && <span>Next: {new Date(status.nextRun).toLocaleTimeString("en-IN")}</span>}
+          <Button size="sm" variant={status.running ? "outline" : "default"} className="h-7 text-xs" onClick={toggle} disabled={loading}>
+            {loading ? "..." : status.running ? "Stop Engine" : "Start Engine"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 const formatCurrency = (val?: number) =>
   val !== undefined
@@ -290,7 +363,29 @@ export default function Strategies() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <EngineStatusWidget />
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-1">Quick Template:</span>
+          {STRATEGY_TEMPLATES.map(t => (
+            <Button
+              key={t.label}
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => {
+                setEntryConditions(t.entryConditions);
+                setExitConditions(t.exitConditions);
+                form.setValue("type", t.type);
+                form.setValue("timeframeMinutes", t.timeframeMinutes);
+                setDialogOpen(true);
+              }}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}>
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-2" /> Create Strategy</Button>
@@ -384,7 +479,22 @@ export default function Strategies() {
                   )} />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-4 gap-4">
+                  <FormField control={form.control} name="timeframeMinutes" render={({ field }) => (
+                    <FormItem><FormLabel>Timeframe</FormLabel>
+                      <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString() ?? ""}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="1">1 min</SelectItem>
+                          <SelectItem value="3">3 min</SelectItem>
+                          <SelectItem value="5">5 min</SelectItem>
+                          <SelectItem value="15">15 min</SelectItem>
+                          <SelectItem value="30">30 min</SelectItem>
+                          <SelectItem value="60">1 hour</SelectItem>
+                        </SelectContent>
+                      </Select><FormMessage />
+                    </FormItem>
+                  )} />
                   <FormField control={form.control} name="entryPrice" render={({ field }) => (
                     <FormItem><FormLabel>Entry Price</FormLabel><FormControl><Input type="number" step="0.05" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />

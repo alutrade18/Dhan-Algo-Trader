@@ -51,8 +51,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
+  const [staticIpError, setStaticIpError] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const handler = () => setStaticIpError(true);
+    window.addEventListener("dhan:staticip-error", handler);
+    return () => window.removeEventListener("dhan:staticip-error", handler);
+  }, []);
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { refetchInterval: 30000 } });
   const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { refetchInterval: 60000 } });
@@ -251,6 +258,16 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </header>
 
+        {staticIpError && (
+          <div className="bg-destructive/10 border-b border-destructive/30 px-4 py-2.5 flex items-center justify-between gap-3">
+            <p className="text-xs text-destructive font-medium">
+              ⚠️ DH-911: Dhan API blocked — your server IP is not whitelisted. Add it in Dhan developer settings, then reconnect.
+            </p>
+            <button className="text-xs text-destructive underline underline-offset-2 hover:no-underline" onClick={() => setStaticIpError(false)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <div className="mx-auto max-w-[1400px]">
             {children}

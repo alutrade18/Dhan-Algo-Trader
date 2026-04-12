@@ -64,28 +64,30 @@ export default function TradeHistory() {
     staleTime: 60000,
   });
 
-  const { data: ledger = [], isLoading: ledgerLoading, refetch: refetchLedger, isFetching: ledgerFetching } = useQuery<LedgerEntry[]>({
-    queryKey: ["ledger", submitted.from, submitted.to],
-    queryFn: async () => {
-      const url = `${BASE}api/market/ltp`;
-      const res = await fetch(`${BASE}api/dashboard/equity-curve?source=ledger&from=${submitted.from}&to=${submitted.to}`);
-      if (!res.ok) return [];
-      const data = await res.json() as { points?: unknown[] };
-      return (data.points ?? []) as LedgerEntry[];
-    },
-    staleTime: 60000,
-  });
+  const [ledgerFrom, setLedgerFrom] = useState(monthAgo());
+  const [ledgerTo, setLedgerTo] = useState(today());
+  const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
 
-  const { data: ledgerRaw = [], isLoading: ledgerRawLoading } = useQuery<LedgerEntry[]>({
-    queryKey: ["ledger-raw", submitted.from, submitted.to],
-    queryFn: async () => {
-      const res = await fetch(`${BASE}api/trades/history?fromDate=${submitted.from}&toDate=${submitted.to}&ledger=1`);
-      if (!res.ok) return [];
-      return [];
-    },
-    staleTime: 60000,
-    enabled: false,
-  });
+  const fetchLedger = async () => {
+    setLedgerLoading(true);
+    setLedgerError(null);
+    try {
+      const res = await fetch(`${BASE}api/trades/ledger?from=${ledgerFrom}&to=${ledgerTo}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string; errorMessage?: string };
+        throw new Error(err.errorMessage ?? err.error ?? "Failed to load ledger");
+      }
+      const data = await res.json() as LedgerEntry[] | { data?: LedgerEntry[] };
+      setLedgerData(Array.isArray(data) ? data : (data.data ?? []));
+    } catch (e: unknown) {
+      setLedgerError(e instanceof Error ? e.message : "Unknown error");
+      setLedgerData([]);
+    } finally {
+      setLedgerLoading(false);
+    }
+  };
 
   function handleSearch() {
     setSubmitted({ from, to });
@@ -207,23 +209,35 @@ export default function TradeHistory() {
         </TabsContent>
 
         <TabsContent value="ledger" className="space-y-3 mt-3">
-          <div className="flex justify-end">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">From</div>
+            <Input type="date" value={ledgerFrom} onChange={e => setLedgerFrom(e.target.value)} className="w-36 text-xs font-mono" max={ledgerTo} />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">To</div>
+            <Input type="date" value={ledgerTo} onChange={e => setLedgerTo(e.target.value)} className="w-36 text-xs font-mono" max={today()} />
+            <Button size="sm" className="gap-1.5" onClick={fetchLedger} disabled={ledgerLoading}>
+              <Search className="w-3.5 h-3.5" /> {ledgerLoading ? "Loading..." : "Fetch Ledger"}
+            </Button>
             <Button
-              variant="outline" size="sm" className="gap-1.5 h-7 text-xs"
-              onClick={() => exportCSV(ledger as Record<string, unknown>[], `ledger_${submitted.from}_${submitted.to}.csv`)}
-              disabled={ledger.length === 0}
+              variant="outline" size="sm" className="gap-1.5 h-8 text-xs ml-auto"
+              onClick={() => exportCSV(ledgerData as Record<string, unknown>[], `ledger_${ledgerFrom}_${ledgerTo}.csv`)}
+              disabled={ledgerData.length === 0}
             >
               <Download className="w-3 h-3" /> Export CSV
             </Button>
           </div>
 
+          {ledgerError && (
+            <Card className="border-destructive/30 bg-destructive/5">
+              <CardContent className="py-4 text-center text-sm text-destructive">{ledgerError}</CardContent>
+            </Card>
+          )}
+
           {ledgerLoading ? (
             <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : ledger.length === 0 ? (
+          ) : ledgerData.length === 0 && !ledgerError ? (
             <Card className="border-dashed">
               <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                <p>Ledger data loads from the Dashboard equity curve endpoint.</p>
-                <p className="mt-1 text-xs">Select a date range and search to view ledger entries.</p>
+                Select a date range and click Fetch Ledger to view your account statement.
               </CardContent>
             </Card>
           ) : (
@@ -237,7 +251,7 @@ export default function TradeHistory() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ledger.map((row, i) => (
+                  {ledgerData.map((row, i) => (
                     <tr key={i} className="border-b border-border/50 hover:bg-muted/20">
                       <td className="px-3 py-2 text-xs font-mono text-muted-foreground">{String(row.voucherdate ?? "—")}</td>
                       <td className="px-3 py-2 text-xs max-w-[200px] truncate">{String(row.narration ?? "—")}</td>

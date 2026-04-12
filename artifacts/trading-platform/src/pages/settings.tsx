@@ -92,6 +92,40 @@ interface PnlExitStatus {
   message?: string;
 }
 
+function TokenExpiryWarning() {
+  const BASE = import.meta.env.BASE_URL;
+  const [info, setInfo] = useState<{ hasToken: boolean; tokenUpdatedAt?: string } | null>(null);
+
+  useEffect(() => {
+    fetch(`${BASE}api/broker/token-info`).then(r => r.json()).then(setInfo).catch(() => {});
+  }, []);
+
+  if (!info?.hasToken || !info.tokenUpdatedAt) return null;
+  const updated = new Date(info.tokenUpdatedAt);
+  const expiresAt = new Date(updated.getTime() + 24 * 60 * 60 * 1000);
+  const hoursLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hoursLeft > 4) return null;
+
+  return (
+    <div className="mb-4 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 flex items-center justify-between gap-3">
+      <p className="text-xs text-amber-400">
+        ⚠️ Token expires in ~{Math.max(0, Math.floor(hoursLeft))}h {Math.floor((hoursLeft % 1) * 60)}m. Renew now to avoid disruption.
+      </p>
+      <button
+        className="text-xs text-amber-400 border border-amber-500/40 px-2.5 py-1 rounded hover:bg-amber-500/20 transition-colors"
+        onClick={async () => {
+          const res = await fetch(`${BASE}api/broker/renew-token`, { method: "POST" });
+          const d = await res.json();
+          if (d.success) alert("Token renewed successfully!");
+          else alert("Renewal failed. Please generate a new token from Dhan web.");
+        }}
+      >
+        Renew Token
+      </button>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { data: settings, isLoading } = useGetSettings();
   const queryClient = useQueryClient();
@@ -424,6 +458,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-4 w-full">
+      <TokenExpiryWarning />
       {/* Row 1 — Broker Connection (full width) */}
       <Card className="border-primary/20">
         <CardHeader>
