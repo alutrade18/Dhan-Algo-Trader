@@ -210,19 +210,19 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
   
-  /* Remove scrollbars for cleaner terminal look */
+  /* Scrollbars */
   ::-webkit-scrollbar {
     width: 6px;
-    height: 6px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: transparent;
+    @apply bg-muted/40 rounded-full;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 rounded-full;
+    @apply bg-muted-foreground/40 rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
+    @apply bg-muted-foreground/70;
   }
 
   /* Light theme — blue calendar icon */

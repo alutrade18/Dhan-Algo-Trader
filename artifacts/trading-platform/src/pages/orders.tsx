@@ -855,8 +855,8 @@ export default function OrdersPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="text-sm w-max min-w-full">
+                <div className="overflow-x-scroll">
+                  <table className="table-auto text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
                         {[
@@ -1135,9 +1135,8 @@ export default function OrdersPage() {
                 </div>
               ) : (
                 <div>
-                <div className="overflow-x-auto">
-                  <div className="max-h-[520px] overflow-y-auto">
-                  <table className="text-sm w-max min-w-full">
+                <div className="overflow-x-scroll overflow-y-auto max-h-[520px]">
+                  <table className="table-auto text-sm">
                     <thead className="sticky top-0 z-10 bg-card">
                       <tr className="border-b border-border bg-muted/30">
                         {[
@@ -1260,7 +1259,6 @@ export default function OrdersPage() {
                       })}
                     </tbody>
                   </table>
-                  </div>
                 </div>
                 {totalHistoryPages > 1 && (
                   <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
