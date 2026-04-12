@@ -171,7 +171,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                   title="Emergency Stop — pause all strategies and activate Dhan kill switch"
                 >
                   <ShieldAlert className="h-3.5 w-3.5" />
-                  <span className="hidden md:inline">{dhanKillActive ? "Kill Active" : "Emergency Stop"}</span>
+                  <span className="hidden md:inline">
+                    {dhanKillActive ? "Kill Switch Activated" : "Activate Kill Switch"}
+                  </span>
                 </Button>
               </div>
             )}
