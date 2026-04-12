@@ -300,11 +300,14 @@ export default function Logs() {
   const errorCount = logs.filter((l) => l.level === "error").length;
   const warnCount = logs.filter((l) => l.level === "warn").length;
 
+  // Same height constant for both tables — keeps them identical in size
+  const TABLE_H = "calc(100vh - 230px)";
+
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 72px)" }}>
-      <Tabs defaultValue="app" className="flex flex-col flex-1 min-h-0">
+    <div className="space-y-3">
+      <Tabs defaultValue="app">
         {/* ── Tab bar row ── */}
-        <div className="flex items-center gap-2 flex-shrink-0 mb-3">
+        <div className="flex items-center gap-2 mb-3">
           <TabsList className="h-8">
             <TabsTrigger value="app" className="text-xs px-3">Application Logs</TabsTrigger>
             <TabsTrigger value="trade" className="text-xs px-3">Strategy Trade Logs</TabsTrigger>
@@ -333,17 +336,18 @@ export default function Logs() {
         </div>
 
         {/* ── APPLICATION LOGS ── */}
-        <TabsContent value="app" className="flex-1 min-h-0 mt-0">
-          <Card className="flex flex-col h-full">
-            <CardContent className="flex flex-col flex-1 min-h-0 px-3 pb-3 pt-3">
-              <div className="flex items-center justify-end mb-2 flex-shrink-0">
+        <TabsContent value="app" className="mt-0">
+          <Card>
+            <CardContent className="px-3 pb-3 pt-3 space-y-2">
+              <div className="flex items-center justify-end">
                 <span className="text-xs text-muted-foreground">
                   {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
                 </span>
               </div>
               <div
                 ref={tableScrollRef}
-                className="flex-1 min-h-0 overflow-auto rounded-md border border-border"
+                className="overflow-auto rounded-md border border-border"
+                style={{ height: TABLE_H }}
               >
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
@@ -375,7 +379,7 @@ export default function Logs() {
                 </table>
               </div>
               {total > LIMIT && (
-                <div className="flex items-center justify-between pt-2 flex-shrink-0">
+                <div className="flex items-center justify-between pt-1">
                   <Button variant="outline" size="sm" className="text-xs h-7"
                     disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                     Previous
@@ -394,10 +398,10 @@ export default function Logs() {
         </TabsContent>
 
         {/* ── STRATEGY TRADE LOGS ── */}
-        <TabsContent value="trade" className="flex-1 min-h-0 mt-0">
-          <Card className="flex flex-col h-full">
-            <CardContent className="flex flex-col flex-1 min-h-0 px-3 pb-3 pt-3">
-              <div className="flex-1 min-h-0 overflow-auto rounded-md border border-border">
+        <TabsContent value="trade" className="mt-0">
+          <Card>
+            <CardContent className="px-3 pb-3 pt-3">
+              <div className="overflow-auto rounded-md border border-border" style={{ height: TABLE_H }}>
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
