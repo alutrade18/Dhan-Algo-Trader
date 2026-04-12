@@ -301,18 +301,14 @@ export default function Logs() {
   const warnCount = logs.filter((l) => l.level === "warn").length;
 
   return (
-    <div className="space-y-4">
-      <Tabs defaultValue="app">
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex flex-col" style={{ height: "calc(100vh - 72px)" }}>
+      <Tabs defaultValue="app" className="flex flex-col flex-1 min-h-0">
+        {/* ── Tab bar row ── */}
+        <div className="flex items-center gap-2 flex-shrink-0 mb-3">
           <TabsList className="h-8">
-            <TabsTrigger value="app" className="text-xs px-3">
-              Application Logs
-            </TabsTrigger>
-            <TabsTrigger value="trade" className="text-xs px-3">
-              Strategy Trade Logs
-            </TabsTrigger>
+            <TabsTrigger value="app" className="text-xs px-3">Application Logs</TabsTrigger>
+            <TabsTrigger value="trade" className="text-xs px-3">Strategy Trade Logs</TabsTrigger>
           </TabsList>
-
           <div className="flex items-center gap-2 ml-auto">
             {errorCount > 0 && (
               <span className="text-[10px] font-mono rounded border border-destructive/30 bg-destructive/10 text-destructive px-2 py-0.5">
@@ -325,8 +321,7 @@ export default function Logs() {
               </span>
             )}
             <Button
-              variant="outline"
-              size="sm"
+              variant="outline" size="sm"
               className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
               onClick={handleClearView}
               title="Clears UI view only — all logs remain permanently in the database"
@@ -338,37 +333,23 @@ export default function Logs() {
         </div>
 
         {/* ── APPLICATION LOGS ── */}
-        <TabsContent value="app" className="mt-3">
-          <Card>
-            <CardContent className="px-4 pb-4 pt-3">
-              <div className="flex items-center justify-end mb-2">
+        <TabsContent value="app" className="flex-1 min-h-0 mt-0">
+          <Card className="flex flex-col h-full">
+            <CardContent className="flex flex-col flex-1 min-h-0 px-3 pb-3 pt-3">
+              <div className="flex items-center justify-end mb-2 flex-shrink-0">
                 <span className="text-xs text-muted-foreground">
                   {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
                 </span>
               </div>
-
-              {/* Table */}
               <div
                 ref={tableScrollRef}
-                className="overflow-auto rounded-md border border-border"
-                style={{ maxHeight: "calc(100vh - 210px)", minHeight: "300px" }}
+                className="flex-1 min-h-0 overflow-auto rounded-md border border-border"
               >
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
-                      {[
-                        "Time",
-                        "Level",
-                        "Category",
-                        "Action",
-                        "Status",
-                        "Code",
-                        "",
-                      ].map((h) => (
-                        <th
-                          key={h}
-                          className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap"
-                        >
+                      {["Time", "Level", "Category", "Action", "Status", "Code", ""].map((h) => (
+                        <th key={h} className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -376,20 +357,15 @@ export default function Logs() {
                   </thead>
                   <tbody>
                     {isLoading ? (
-                      Array.from({ length: 8 }).map((_, i) => (
+                      Array.from({ length: 12 }).map((_, i) => (
                         <tr key={i} className="border-b border-border/40">
-                          <td colSpan={7} className="px-3 py-2">
-                            <Skeleton className="h-4 w-full" />
-                          </td>
+                          <td colSpan={7} className="px-3 py-2"><Skeleton className="h-4 w-full" /></td>
                         </tr>
                       ))
                     ) : logs.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-12 text-center text-sm text-muted-foreground"
-                        >
-                          No logs found here.
+                        <td colSpan={7} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                          No logs found.
                         </td>
                       </tr>
                     ) : (
@@ -398,28 +374,17 @@ export default function Logs() {
                   </tbody>
                 </table>
               </div>
-
               {total > LIMIT && (
-                <div className="flex items-center justify-between pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-7"
-                    disabled={page === 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  >
+                <div className="flex items-center justify-between pt-2 flex-shrink-0">
+                  <Button variant="outline" size="sm" className="text-xs h-7"
+                    disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                     Previous
                   </Button>
                   <span className="text-xs text-muted-foreground">
                     Page {page + 1} of {Math.ceil(total / LIMIT)}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-7"
-                    disabled={(page + 1) * LIMIT >= total}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
+                  <Button variant="outline" size="sm" className="text-xs h-7"
+                    disabled={(page + 1) * LIMIT >= total} onClick={() => setPage((p) => p + 1)}>
                     Next
                   </Button>
                 </div>
@@ -429,34 +394,18 @@ export default function Logs() {
         </TabsContent>
 
         {/* ── STRATEGY TRADE LOGS ── */}
-        <TabsContent value="trade" className="mt-3">
-          <Card>
-            <CardContent className="px-4 pb-4 pt-4">
-              <div
-                className="overflow-auto rounded-md border border-border"
-                style={{ maxHeight: "calc(100vh - 280px)", minHeight: "240px" }}
-              >
+        <TabsContent value="trade" className="flex-1 min-h-0 mt-0">
+          <Card className="flex flex-col h-full">
+            <CardContent className="flex flex-col flex-1 min-h-0 px-3 pb-3 pt-3">
+              <div className="flex-1 min-h-0 overflow-auto rounded-md border border-border">
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
-                      {[
-                        "Time",
-                        "Symbol",
-                        "Side",
-                        "Qty",
-                        "Price",
-                        "Status",
-                        "P&L",
-                        "Strategy",
-                        "Order ID",
-                      ].map((h) => (
-                        <th
-                          key={h}
-                          className={cn(
-                            "px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap",
-                            ["Qty", "Price", "P&L"].includes(h) && "text-right",
-                          )}
-                        >
+                      {["Time", "Symbol", "Side", "Qty", "Price", "Status", "P&L", "Strategy", "Order ID"].map((h) => (
+                        <th key={h} className={cn(
+                          "px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap",
+                          ["Qty", "Price", "P&L"].includes(h) && "text-right"
+                        )}>
                           {h}
                         </th>
                       ))}
@@ -464,26 +413,19 @@ export default function Logs() {
                   </thead>
                   <tbody>
                     {tradeLogsLoading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
+                      Array.from({ length: 12 }).map((_, i) => (
                         <tr key={i} className="border-b border-border/40">
-                          <td colSpan={9} className="px-3 py-2">
-                            <Skeleton className="h-4 w-full" />
-                          </td>
+                          <td colSpan={9} className="px-3 py-2"><Skeleton className="h-4 w-full" /></td>
                         </tr>
                       ))
                     ) : tradeLogs.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={9}
-                          className="px-4 py-12 text-center text-sm text-muted-foreground"
-                        >
-                          No strategy trades logs here.{" "}
+                        <td colSpan={9} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                          No logs found.
                         </td>
                       </tr>
                     ) : (
-                      tradeLogs.map((log) => (
-                        <TradeLogRow key={log.id} log={log} />
-                      ))
+                      tradeLogs.map((log) => <TradeLogRow key={log.id} log={log} />)
                     )}
                   </tbody>
                 </table>
