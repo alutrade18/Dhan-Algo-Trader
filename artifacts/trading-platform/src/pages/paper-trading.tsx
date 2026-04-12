@@ -9,8 +9,6 @@ export default function PaperTrading() {
       <div className="space-y-1.5">
         <h2 className="text-2xl font-semibold tracking-tight">Paper Trading</h2>
         <p className="text-muted-foreground text-sm max-w-xs">
-          Simulated trading with zero real capital is on the way. Practice your
-          strategies in a live market environment without any risk.
         </p>
       </div>
       <span className="rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-xs font-medium text-primary tracking-wide uppercase">

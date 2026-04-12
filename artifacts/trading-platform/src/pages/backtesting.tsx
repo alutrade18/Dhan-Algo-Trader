@@ -9,8 +9,6 @@ export default function Backtesting() {
       <div className="space-y-1.5">
         <h2 className="text-2xl font-semibold tracking-tight">Backtesting</h2>
         <p className="text-muted-foreground text-sm max-w-xs">
-          Historical strategy backtesting is under development. Test your ideas
-          against years of market data before going live.
         </p>
       </div>
       <span className="rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-xs font-medium text-primary tracking-wide uppercase">
