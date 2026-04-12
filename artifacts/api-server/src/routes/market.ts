@@ -53,8 +53,8 @@ router.post("/market/historical", async (req, res): Promise<void> => {
       exchangeSegment: parsed.data.exchangeSegment,
       instrumentType: parsed.data.instrumentType,
       expiryCode: parsed.data.expiryCode,
-      fromDate: parsed.data.fromDate,
-      toDate: parsed.data.toDate,
+      fromDate: parsed.data.fromDate instanceof Date ? parsed.data.fromDate.toISOString().slice(0, 10) : String(parsed.data.fromDate),
+      toDate: parsed.data.toDate instanceof Date ? parsed.data.toDate.toISOString().slice(0, 10) : String(parsed.data.toDate),
     });
     const r = result as Record<string, unknown>;
     const candles = Array.isArray(r.data) ? r.data : [];
@@ -116,7 +116,7 @@ router.post("/market/option-chain", async (req, res): Promise<void> => {
     const raw = await dhanClient.getOptionChain({
       underSecurityId: parsed.data.underSecurityId,
       underExchangeSegment: parsed.data.underExchangeSegment,
-      expiry: parsed.data.expiry,
+      expiry: parsed.data.expiry instanceof Date ? parsed.data.expiry.toISOString().slice(0, 10) : String(parsed.data.expiry),
     });
     const r = raw as Record<string, unknown>;
     const chainData = (r.data ?? r) as Record<string, unknown>;

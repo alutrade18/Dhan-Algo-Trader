@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Sidebar } from "./sidebar";
-import { useHealthCheck, useGetFundLimits } from "@workspace/api-client-react";
+import { useHealthCheck, useGetFundLimits, getHealthCheckQueryKey, getGetFundLimitsQueryKey } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,8 +61,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => window.removeEventListener("dhan:staticip-error", handler);
   }, []);
 
-  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { refetchInterval: 30000 } });
-  const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { refetchInterval: 60000 } });
+  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
+  const { data: funds, isLoading: isFundsLoading, isRefetching: isFundsRefetching, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: 60000 } });
   const { resolvedTheme, toggleTheme } = useTheme();
 
   useEffect(() => {

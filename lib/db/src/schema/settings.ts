@@ -19,6 +19,7 @@ export const settingsTable = pgTable("settings", {
   telegramBotToken: text("telegram_bot_token"),
   telegramChatId: text("telegram_chat_id"),
   killSwitchEnabled: boolean("kill_switch_enabled").notNull().default(false),
+  tokenGeneratedAt: timestamp("token_generated_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

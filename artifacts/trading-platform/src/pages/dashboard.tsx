@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useGetFundLimits } from "@workspace/api-client-react";
+import { useGetFundLimits, getGetFundLimitsQueryKey } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -147,7 +147,7 @@ function CustomTooltip({ active, payload, label }: {
 
 export default function Dashboard() {
   const { data: funds, isLoading: isFundsLoading } = useGetFundLimits({
-    query: { refetchInterval: msUntilNext9amIST, staleTime: msUntilNext9amIST() },
+    query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: msUntilNext9amIST, staleTime: msUntilNext9amIST() },
   });
 
   const { data: summary, isLoading: isSummaryLoading } = useQuery<DashboardSummary>({

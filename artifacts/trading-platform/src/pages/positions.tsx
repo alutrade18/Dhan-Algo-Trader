@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
-import { useGetPositions } from "@workspace/api-client-react";
+import { useGetPositions, GetPositionsQueryResult } from "@workspace/api-client-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Position } from "@workspace/api-zod/src/generated/types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { marketSocket } from "@/lib/market-socket";
 import { RefreshCw, LogOut } from "lucide-react";
+
+type Position = NonNullable<GetPositionsQueryResult>[number];
 
 const BASE = import.meta.env.BASE_URL;
 const fmt = (v?: number) => v !== undefined ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(v) : "—";

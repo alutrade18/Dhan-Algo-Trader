@@ -27,13 +27,16 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Strategy } from "@workspace/api-zod/src/generated/types";
+import { GetStrategiesQueryResult } from "@workspace/api-client-react";
 import {
   Play, Pause, Trash2, Zap, Plus, Settings2, X, PlusCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+type Strategy = NonNullable<GetStrategiesQueryResult>[number];
 
 const BASE_URL = import.meta.env.BASE_URL;
 

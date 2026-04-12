@@ -160,6 +160,30 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - `zod` is NOT in api-server dependencies — never import zod directly in route files; use `@workspace/api-zod`
 - Telegram alerts are fire-and-forget (`void sendTelegramAlert(...)`) — never await in request handlers
 - `/api/strategies/performance` route MUST be registered BEFORE `/api/strategies/:id` in Express (otherwise "performance" matches `:id`)
+- `/api/strategies/engine/status|start|stop` routes MUST be registered BEFORE `/api/strategies/:id` for the same reason
 - `/api/strategies/pause-all` POST is a custom endpoint not in the OpenAPI spec — called directly via fetch
 - Settings `PUT` endpoint handles `telegramBotToken`, `telegramChatId`, `killSwitchEnabled` directly from `req.body` (not via Zod UpdateSettingsBody which doesn't include these fields)
 - Paper trading: only fetch real price for the currently selected symbol (1 quote request/5s); other symbols use simulated prices to avoid rate limiting
+- `Position` and `Strategy` types in frontend are derived via `NonNullable<GetPositionsQueryResult>[number]` / `NonNullable<GetStrategiesQueryResult>[number]` — do NOT import from `@workspace/api-zod` which is not in trading-platform deps
+- TanStack Query v5 / Orval v8: when passing `{ query: { ... } }` options to generated hooks, always include `queryKey: getXyzQueryKey()` to satisfy `UseQueryOptions` type
+
+## Recent Changes
+
+### Phase 3 — Frontend UI Upgrades
+- **positions.tsx**: Full rewrite — live LTP via Socket.io WebSocket, real-time unrealized P&L per row, summary boxes (Unrealized / Realized / Total), "Exit Single" and "Exit All" buttons with AlertDialog confirmation, INTRADAY-only filter
+- **strategies.tsx**: Added `EngineStatusWidget` (shows auto-trading engine status with Start/Stop), `STRATEGY_TEMPLATES` quick-select dropdown, `timeframeMinutes` field in create/edit form
+- **trade-history.tsx**: Fixed ledger tab to call `GET /api/trades/ledger` directly; `credit`/`debit` parsed as floats; all-time P&L computed as `availableBalance + totalWithdrawals − totalDeposits`, skipping OPENING/CLOSING BALANCE narrations
+- **settings.tsx**: Added `TokenExpiryWarning` banner (warns when Dhan token generated >23h ago)
+- **app-layout.tsx**: Added `DH-911` static-IP banner (dispatched by `api-error-handler.ts`); `getHealthCheckQueryKey()` and `getGetFundLimitsQueryKey()` passed to fix TanStack Query v5 types
+- **src/lib/api-error-handler.ts**: Created — `checkForDH911(res)` helper that dispatches `dhan:staticip-error` custom event on HTTP 900
+
+### Phase 4 — Schema Changes
+- **strategies schema**: Added `timeframeMinutes integer default 15` and `instrumentType varchar(20)` columns; `pnpm --filter @workspace/db run push` applied
+- **settings schema**: Added `tokenGeneratedAt timestamp` column to track when Dhan access token was last set
+
+### Phase 5 — TypeScript Cleanup
+- **api-zod/src/index.ts**: Removed re-export of `./generated/types` to fix Zod/TS interface name collisions
+- **market.ts**: Fixed `Date→string` conversion for `fromDate`/`toDate`/`expiry` fields
+- **positions.tsx / strategies.tsx**: Changed imports from `@workspace/api-zod/src/generated/types` (not in dep tree) to inline type aliases derived from `GetPositionsQueryResult` / `GetStrategiesQueryResult` exported by `@workspace/api-client-react`
+- **app-layout.tsx / dashboard.tsx**: Added `queryKey` to Orval hook options to satisfy TanStack Query v5 `UseQueryOptions` type requirement
+- Full `pnpm run typecheck` passes with zero errors across all packages
