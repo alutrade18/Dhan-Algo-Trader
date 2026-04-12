@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   useGetFundLimits,
   getGetFundLimitsQueryKey,
+  useGetSettings,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -253,6 +254,16 @@ function CustomTooltip({
 }
 
 export default function Dashboard() {
+  const { data: settingsRaw } = useGetSettings({ query: { staleTime: 60_000 } });
+  const settings = settingsRaw as (typeof settingsRaw & { dashboardWidgets?: Record<string, boolean> }) | undefined;
+  const widgets = {
+    todayPnl: settings?.dashboardWidgets?.todayPnl !== false,
+    totalPnl: settings?.dashboardWidgets?.totalPnl !== false,
+    availableBalance: settings?.dashboardWidgets?.availableBalance !== false,
+    activeStrategies: settings?.dashboardWidgets?.activeStrategies !== false,
+    equityCurve: settings?.dashboardWidgets?.equityCurve !== false,
+  };
+
   const { data: funds, isLoading: isFundsLoading } = useGetFundLimits({
     query: {
       queryKey: getGetFundLimitsQueryKey(),
@@ -464,59 +475,50 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Today P&L"
-          value={formatCurrency(todayPnl)}
-          inlineTag="Realized + Unrealized"
-          icon={TrendingUp}
-          isLoading={isSummaryLoading}
-          valueClass={
-            todayPnl > 0
-              ? "text-success"
-              : todayPnl < 0
-                ? "text-destructive"
-                : ""
-          }
-        />
-        <StatCard
-          title="Total P&L"
-          value={formatCurrency(displayPnl)}
-          inlineTag={displayLabel}
-          icon={Activity}
-          isLoading={isPnlLoading}
-          valueClass={
-            displayPnl > 0
-              ? "text-success"
-              : displayPnl < 0
-                ? "text-destructive"
-                : ""
-          }
-        />
-        <StatCard
-          title="Available Balance"
-          value={
-            availBal !== undefined && availBal !== null
-              ? formatCurrency(availBal)
-              : "—"
-          }
-          inlineTag={
-            usedMargin !== undefined
-              ? `Used: ${formatCurrency(usedMargin)}`
-              : undefined
-          }
-          icon={IndianRupee}
-          isLoading={isFundsLoading}
-        />
-        <StatCard
-          title="Active Strategies"
-          value={String(activeStrategies)}
-          inlineTag={`Win Rate: ${winRate.toFixed(1)}%`}
-          icon={Briefcase}
-          isLoading={isSummaryLoading}
-        />
-      </div>
+      {(widgets.todayPnl || widgets.totalPnl || widgets.availableBalance || widgets.activeStrategies) && (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          {widgets.todayPnl && (
+            <StatCard
+              title="Today P&L"
+              value={formatCurrency(todayPnl)}
+              inlineTag="Realized + Unrealized"
+              icon={TrendingUp}
+              isLoading={isSummaryLoading}
+              valueClass={todayPnl > 0 ? "text-success" : todayPnl < 0 ? "text-destructive" : ""}
+            />
+          )}
+          {widgets.totalPnl && (
+            <StatCard
+              title="Total P&L"
+              value={formatCurrency(displayPnl)}
+              inlineTag={displayLabel}
+              icon={Activity}
+              isLoading={isPnlLoading}
+              valueClass={displayPnl > 0 ? "text-success" : displayPnl < 0 ? "text-destructive" : ""}
+            />
+          )}
+          {widgets.availableBalance && (
+            <StatCard
+              title="Available Balance"
+              value={availBal !== undefined && availBal !== null ? formatCurrency(availBal) : "—"}
+              inlineTag={usedMargin !== undefined ? `Used: ${formatCurrency(usedMargin)}` : undefined}
+              icon={IndianRupee}
+              isLoading={isFundsLoading}
+            />
+          )}
+          {widgets.activeStrategies && (
+            <StatCard
+              title="Active Strategies"
+              value={String(activeStrategies)}
+              inlineTag={`Win Rate: ${winRate.toFixed(1)}%`}
+              icon={Briefcase}
+              isLoading={isSummaryLoading}
+            />
+          )}
+        </div>
+      )}
 
+      {widgets.equityCurve && (
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between flex-wrap">
@@ -656,6 +658,7 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

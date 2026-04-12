@@ -89,10 +89,22 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - "Emergency Stop" button → pauses all strategies AND enables kill switch
 - Recent Alerts panel with last 5 activity entries
 
-### Settings
-- Broker Connection card (existing functionality preserved)
-- Risk Management card: Daily Loss Limit field + Emergency Kill Switch toggle
-- Telegram Alerts card: Bot Token + Chat ID fields with mask/unmask toggle
+### Settings (Major Expansion)
+- **Broker Connection** — credentials, balance display, refresh, disconnect
+- **Risk Management** — Daily Loss Limit field (blocks orders if exceeded)
+- **Telegram Alerts** — Bot Token + Chat ID with mask/reveal toggle, test ping on save, reset button
+- **Emergency Kill Switch** — Toggle on Dhan (1 reset/day, auto-resets 8:30 AM IST). Optional 4-digit PIN protection (stored in DB, verified via `POST /api/settings/verify-pin` before toggle). PIN dialog shown in-page.
+- **P&L Based Exit** — Set Dhan profit/loss thresholds; product type checkboxes; optional kill switch on trigger
+- **Auto Square-Off Timer** — Toggle + IST time picker (default 15:14); backend scheduler checks every 30s, fires on weekdays only; logs to audit log + Telegram alert
+- **Trading Guards** — Max trades per day, Max position size (fixed ₹ or % capital), Trading hours override (IST start/end); all wired through `runOrderGuards()` called before every `POST /api/orders`
+- **Instrument Blacklist** — Add/remove symbols; all blacklisted symbols blocked at order placement
+- **Notification Preferences** — Per-event Telegram toggle (Order Filled, Target Hit, SL Hit, Kill Switch, Token Expiry, Strategy Change, Auto Square-Off, Daily P&L Summary)
+- **Browser Push Notifications** — Native Notification API; enable button requests browser permission; test notification button
+- **Trading Defaults** — Default Product Type, Order Type, Default Quantity pre-fills across order forms
+- **Dashboard Widgets** — Toggle visibility of each stat card and equity curve (persisted in DB, read on dashboard mount)
+- **Refresh Interval** — Select 5/10/15/30/60s (persisted in DB settings)
+- **Kill Switch PIN** — Set/change/remove 4-digit PIN; required before kill switch activate/deactivate
+- **Audit Log** — Last 50 settings changes with timestamps, action, field, old/new value (IST formatted)
 
 ## API Endpoints
 

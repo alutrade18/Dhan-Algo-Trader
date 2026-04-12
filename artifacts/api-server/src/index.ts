@@ -8,6 +8,7 @@ import { marketFeedWS } from "./lib/market-feed-ws";
 import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
 import { strategyEngine } from "./lib/strategy-engine";
+import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
 
 const rawPort = process.env["PORT"];
 
@@ -72,6 +73,7 @@ async function loadSavedCredentials() {
 loadSavedCredentials().then(() => {
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
+    startAutoSquareOffScheduler();
     db.select().from(settingsTable).limit(1).then(([s]) => {
       if (s?.enableAutoTrading && !s?.killSwitchEnabled) {
         strategyEngine.start();

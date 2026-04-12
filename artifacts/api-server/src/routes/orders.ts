@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
 import { handleRouteError } from "../lib/route-error";
 import { recordOrderModification } from "../lib/rate-limiter";
+import { runOrderGuards } from "../lib/order-guards";
 import {
   PlaceOrderBody,
   ModifyOrderBody,
@@ -43,6 +44,16 @@ router.post("/orders", async (req, res): Promise<void> => {
   }
 
   try {
+    const guard = await runOrderGuards({
+      tradingSymbol: String(parsed.data.securityId),
+      price: parsed.data.price ?? 0,
+      quantity: parsed.data.quantity,
+    });
+    if (!guard.allowed) {
+      res.status(403).json({ errorCode: "DH-906", errorMessage: guard.reason ?? "Order blocked by trading guard", retryable: false });
+      return;
+    }
+
     const result = await dhanClient.placeOrder({
       security_id: parsed.data.securityId,
       exchange_segment: parsed.data.exchangeSegment,
