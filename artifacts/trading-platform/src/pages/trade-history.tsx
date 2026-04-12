@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, RefreshCw, Wallet } from "lucide-react";
+import { Download, RefreshCw, Wallet, CalendarIcon } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -40,13 +40,14 @@ function displayToYmd(display: string): string {
   return isNaN(new Date(ymd).getTime()) ? "" : ymd;
 }
 
-/** Controlled date input that shows DD-MM-YYYY but stores YYYY-MM-DD */
+/** Controlled date input: shows DD-MM-YYYY text + calendar icon opens native picker */
 function DateField({
   value, onChange, min, max,
 }: { value: string; onChange: (ymd: string) => void; min?: string; max?: string }) {
   const [text, setText] = useState(() => ymdToDisplay(value));
+  const pickerRef = useRef<HTMLInputElement>(null);
 
-  // Sync when parent value changes (e.g. midnight auto-update)
+  // Sync text when parent value changes (e.g. midnight auto-update)
   useEffect(() => {
     setText(ymdToDisplay(value));
   }, [value]);
@@ -61,16 +62,37 @@ function DateField({
   }
 
   return (
-    <Input
-      type="text"
-      value={text}
-      placeholder="DD-MM-YYYY"
-      maxLength={10}
-      className="w-36 text-xs font-mono h-9"
-      onChange={e => setText(e.target.value)}
-      onBlur={e => commit(e.target.value)}
-      onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
-    />
+    <div className="relative flex items-center">
+      <Input
+        type="text"
+        value={text}
+        placeholder="DD-MM-YYYY"
+        maxLength={10}
+        className="w-36 text-xs font-mono h-9 pr-8"
+        onChange={e => setText(e.target.value)}
+        onBlur={e => commit(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+      />
+      {/* Calendar icon triggers the hidden native date picker */}
+      <button
+        type="button"
+        className="absolute right-2 text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => pickerRef.current?.showPicker()}
+        tabIndex={-1}
+      >
+        <CalendarIcon className="w-3.5 h-3.5" />
+      </button>
+      <input
+        ref={pickerRef}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={e => { onChange(e.target.value); setText(ymdToDisplay(e.target.value)); }}
+        className="sr-only absolute inset-0 w-0 h-0 opacity-0 pointer-events-none"
+        tabIndex={-1}
+      />
+    </div>
   );
 }
 
