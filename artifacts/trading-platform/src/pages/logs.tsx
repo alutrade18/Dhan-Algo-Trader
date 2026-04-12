@@ -190,7 +190,7 @@ export default function Logs() {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (level !== "all") p.set("level", level);
       if (category !== "all") p.set("category", category);
-      if (resetTs) p.set("fromDate", resetTs.slice(0, 10));
+      if (resetTs) p.set("fromTimestamp", resetTs);
       const res = await fetch(`${BASE}api/logs?${p}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();

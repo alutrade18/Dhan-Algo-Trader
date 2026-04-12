@@ -13,6 +13,7 @@ router.get("/logs", async (req, res): Promise<void> => {
       search,
       fromDate,
       toDate,
+      fromTimestamp,
       page = "0",
       limit = "100",
     } = req.query as Record<string, string>;
@@ -29,7 +30,10 @@ router.get("/logs", async (req, res): Promise<void> => {
     if (category && category !== "all") {
       conditions.push(eq(appLogsTable.category, category));
     }
-    if (fromDate) {
+    if (fromTimestamp) {
+      // Precise ISO timestamp filter — used by "Delete" view reset on frontend
+      conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
+    } else if (fromDate) {
       conditions.push(gte(appLogsTable.createdAt, new Date(fromDate + "T00:00:00Z")));
     }
     if (toDate) {
