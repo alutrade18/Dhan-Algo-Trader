@@ -6,23 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, WifiOff, Search, X } from "lucide-react";
+import { RefreshCw, WifiOff, Search, X, Clock, TrendingUp, TrendingDown } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
 // dhanSecId  = security ID used in Dhan's option-chain & expiry-list API calls
-// dbSecId    = underlying_security_id stored in our instruments DB (for local expiry query)
+// dbSecId    = underlying_security_id stored in our instruments DB
 const INDEX_UNDERLYINGS = [
-  { label: "NIFTY 50",       symbol: "NIFTY",      dhanSecId: 13,   dbSecId: 26000, segment: "IDX_I" },
-  { label: "BANK NIFTY",     symbol: "BANKNIFTY",  dhanSecId: 25,   dbSecId: 26009, segment: "IDX_I" },
-  { label: "FIN NIFTY",      symbol: "FINNIFTY",   dhanSecId: 27,   dbSecId: 26037, segment: "IDX_I" },
-  { label: "MIDCAP NIFTY",   symbol: "MIDCPNIFTY", dhanSecId: 442,  dbSecId: 26074, segment: "IDX_I" },
-  { label: "SENSEX",         symbol: "SENSEX",     dhanSecId: 1,    dbSecId: 1,     segment: "IDX_I" },
-  { label: "BANKEX",         symbol: "BANKEX",     dhanSecId: 12,   dbSecId: 12,    segment: "IDX_I" },
-  { label: "NIFTYNXT50",     symbol: "NIFTYNXT50", dhanSecId: 26013,dbSecId: 26013, segment: "IDX_I" },
+  { label: "NIFTY 50",     symbol: "NIFTY",      dhanSecId: 13,    dbSecId: 26000, segment: "IDX_I", exchange: "NSE" as const },
+  { label: "BANK NIFTY",   symbol: "BANKNIFTY",  dhanSecId: 25,    dbSecId: 26009, segment: "IDX_I", exchange: "NSE" as const },
+  { label: "FIN NIFTY",    symbol: "FINNIFTY",   dhanSecId: 27,    dbSecId: 26037, segment: "IDX_I", exchange: "NSE" as const },
+  { label: "MIDCAP NIFTY", symbol: "MIDCPNIFTY", dhanSecId: 442,   dbSecId: 26074, segment: "IDX_I", exchange: "NSE" as const },
+  { label: "SENSEX",       symbol: "SENSEX",     dhanSecId: 1,     dbSecId: 1,     segment: "IDX_I", exchange: "NSE" as const },
+  { label: "BANKEX",       symbol: "BANKEX",     dhanSecId: 12,    dbSecId: 12,    segment: "IDX_I", exchange: "NSE" as const },
+  { label: "NIFTYNXT50",   symbol: "NIFTYNXT50", dhanSecId: 26013, dbSecId: 26013, segment: "IDX_I", exchange: "NSE" as const },
 ];
 
 type Mode = "index" | "stock";
+type Exchange = "NSE" | "MCX";
 
 interface StockUnderlying {
   underlyingSymbol: string | null;
@@ -42,25 +43,86 @@ interface OptionEntry {
   putIV: number;
 }
 
+// ── Market Hours (IST) ──────────────────────────────────────────────
+// NSE F&O / Stock Options  : Mon-Fri 08:50 → 18:40
+// MCX F&O                  : Mon-Fri 08:50 → 23:59
+function getISTMinutes(): { mins: number; day: number } {
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60_000;
+  const ist = new Date(utcMs + 5.5 * 3_600_000);
+  return { mins: ist.getHours() * 60 + ist.getMinutes(), day: ist.getDay() };
+}
+
+function computeMarketStatus(exchange: Exchange): { isOpen: boolean; label: string; color: string } {
+  const { mins, day } = getISTMinutes();
+  if (day === 0 || day === 6) {
+    return { isOpen: false, label: "Market closed · Weekend", color: "text-muted-foreground" };
+  }
+  const open = 8 * 60 + 50; // 08:50
+  const close = exchange === "MCX" ? 23 * 60 + 59 : 18 * 60 + 40; // 23:59 or 18:40
+  const closeLabel = exchange === "MCX" ? "11:59 PM" : "6:40 PM";
+
+  if (mins < open) {
+    return { isOpen: false, label: `Pre-market · Opens 8:50 AM IST`, color: "text-amber-400" };
+  }
+  if (mins > close) {
+    return { isOpen: false, label: `Market closed · Opens 8:50 AM IST tomorrow`, color: "text-muted-foreground" };
+  }
+  return { isOpen: true, label: `Live · Closes ${closeLabel} IST`, color: "text-emerald-400" };
+}
+
+function useMarketStatus(exchange: Exchange) {
+  const [status, setStatus] = useState(() => computeMarketStatus(exchange));
+  useEffect(() => {
+    setStatus(computeMarketStatus(exchange));
+    const id = setInterval(() => setStatus(computeMarketStatus(exchange)), 30_000);
+    return () => clearInterval(id);
+  }, [exchange]);
+  return status;
+}
+
+// ── Formatters ──────────────────────────────────────────────────────
 function formatOI(oi: number) {
   if (oi >= 10_000_000) return `${(oi / 10_000_000).toFixed(2)}Cr`;
-  if (oi >= 100_000)    return `${(oi / 100_000).toFixed(1)}L`;
-  if (oi >= 1_000)      return `${(oi / 1_000).toFixed(1)}K`;
+  if (oi >= 100_000) return `${(oi / 100_000).toFixed(1)}L`;
+  if (oi >= 1_000) return `${(oi / 1_000).toFixed(1)}K`;
   return String(oi);
+}
+
+function DeltaBadge({ current, prev }: { current: number; prev: number | undefined }) {
+  if (prev === undefined || current === 0) return null;
+  const delta = current - prev;
+  if (Math.abs(delta) < 0.005) return null;
+  const up = delta > 0;
+  return (
+    <span className={`text-[10px] font-mono ${up ? "text-emerald-400" : "text-red-400"}`}>
+      {up ? "▲" : "▼"}{Math.abs(delta).toFixed(2)}
+    </span>
+  );
 }
 
 function OIBar({ value, max, side }: { value: number; max: number; side: "ce" | "pe" }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const isCall = side === "ce";
   return (
-    <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">
+    <div className="w-16 h-2.5 rounded-full bg-muted/40 overflow-hidden">
       <div
-        className={`h-full rounded-full ${side === "ce" ? "bg-emerald-400/60" : "bg-red-400/60"}`}
-        style={{ width: `${pct}%`, float: side === "ce" ? "right" : "left" }}
+        className={`h-full rounded-full transition-all duration-500 ${
+          isCall
+            ? "bg-gradient-to-r from-red-600 to-red-400"
+            : "bg-gradient-to-l from-emerald-600 to-emerald-400"
+        }`}
+        style={{
+          width: `${pct}%`,
+          marginLeft: isCall ? "auto" : "0",
+          float: isCall ? "right" : "left",
+        }}
       />
     </div>
   );
 }
 
+// ── Stock Symbol Search ─────────────────────────────────────────────
 function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -102,7 +164,10 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
           className="pl-8 pr-8 h-9 text-xs"
         />
         {q && (
-          <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setQ(""); setResults([]); setOpen(false); }}>
+          <button
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onClick={() => { setQ(""); setResults([]); setOpen(false); }}
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         )}
@@ -126,14 +191,14 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
   );
 }
 
+// ── Main Component ──────────────────────────────────────────────────
 export default function OptionChain() {
   const [mode, setMode] = useState<Mode>("index");
   const [indexUnderlying, setIndexUnderlying] = useState(INDEX_UNDERLYINGS[0]);
   const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
 
-  // dbSecId → used for local DB expiry list query (matches instruments.underlying_security_id)
-  // dhanSecId → used for Dhan API calls (option chain, expiry list from Dhan)
+  // Active IDs / segment
   const activeDbSecId = mode === "index"
     ? indexUnderlying.dbSecId
     : (stockUnderlying?.underlyingSecurityId ?? null);
@@ -147,8 +212,12 @@ export default function OptionChain() {
   const activeLabel = mode === "index"
     ? indexUnderlying.label
     : (stockUnderlying?.underlyingSymbol ?? "");
+  const activeExchange: Exchange = "NSE"; // All current underlyings are NSE/BSE (same F&O hours)
 
-  // Expiry list via Dhan API — fires only for the active underlying
+  // Market hours gate
+  const marketStatus = useMarketStatus(activeExchange);
+
+  // Expiry list via Dhan API
   const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
     queryKey: ["expiry-list-dhan", activeDhanSecId, activeSegment],
     queryFn: async () => {
@@ -171,15 +240,12 @@ export default function OptionChain() {
     retry: 1,
   });
 
-  useEffect(() => {
-    setExpiry("");
-  }, [activeDhanSecId, activeSegment]);
-
+  useEffect(() => { setExpiry(""); }, [activeDhanSecId, activeSegment]);
   useEffect(() => {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
   }, [expiryList, expiry]);
 
-  // Option chain — max 1 request per 10 seconds; only for the active script + expiry
+  // Option chain — gated by market hours; throttled server-side too
   const { data: chain, isLoading: chainLoading, refetch, isFetching, error: chainError } = useQuery({
     queryKey: ["option-chain", activeDhanSecId, activeSegment, expiry],
     queryFn: async () => {
@@ -199,19 +265,18 @@ export default function OptionChain() {
       }
       return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
-    enabled: !!expiry && !!activeDhanSecId,
-    refetchInterval: 10_000,
+    enabled: !!expiry && !!activeDhanSecId && marketStatus.isOpen,
+    refetchInterval: marketStatus.isOpen ? 10_000 : false,
     staleTime: 8_000,
     refetchOnWindowFocus: false,
     retry: 0,
   });
 
-  // rawChain is now the oc object: { "25650.000000": { ce: {...}, pe: {...} }, ... }
+  // ── Parse chain data ─────────────────────────────────────────────
   const rawChain = chain?.data ?? {};
   const underlyingLtp = Number(chain?.ltp ?? 0);
   const entries: OptionEntry[] = [];
 
-  // Dhan uses float string keys like "25650.000000" — parseFloat them, then find by value
   const strikeKeys = Object.keys(rawChain);
   const strikes = strikeKeys
     .map(k => parseFloat(k))
@@ -220,16 +285,14 @@ export default function OptionChain() {
 
   let maxOI = 1;
   for (const strike of strikes) {
-    // Find original key that matches this float value (handles "25650.000000" → 25650)
     const key = strikeKeys.find(k => parseFloat(k) === strike) ?? String(strike);
     const s = rawChain[key] as Record<string, Record<string, unknown>> | undefined;
-    // Dhan returns lowercase ce/pe
     const ce = s?.["ce"] ?? s?.["CE"] ?? {};
     const pe = s?.["pe"] ?? s?.["PE"] ?? {};
     const callOI = Number(ce.oi ?? ce.openInterest ?? 0);
-    const putOI  = Number(pe.oi ?? pe.openInterest ?? 0);
+    const putOI = Number(pe.oi ?? pe.openInterest ?? 0);
     if (callOI > maxOI) maxOI = callOI;
-    if (putOI  > maxOI) maxOI = putOI;
+    if (putOI > maxOI) maxOI = putOI;
     entries.push({
       strikePrice: strike,
       callLTP:    Number(ce.last_price ?? ce.ltp ?? 0),
@@ -243,16 +306,16 @@ export default function OptionChain() {
     });
   }
 
+  // ── ATM & display slice ─────────────────────────────────────────
   const atmStrike = underlyingLtp > 0 && strikes.length > 0
-    ? strikes.reduce((prev, curr) => Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev)
+    ? strikes.reduce((prev, curr) =>
+        Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev)
     : 0;
 
-  // PCR computed from ALL strikes, display limited to 20 below + ATM + 20 above
   const totalCallOI = entries.reduce((a, e) => a + e.callOI, 0);
   const totalPutOI  = entries.reduce((a, e) => a + e.putOI, 0);
   const pcr = totalCallOI > 0 ? totalPutOI / totalCallOI : 0;
 
-  // Show only 20 strikes below ATM and 20 above ATM (41 max) to avoid rate-limit flooding
   const displayEntries = (() => {
     if (entries.length === 0) return entries;
     const atmIdx = entries.findIndex(e => e.strikePrice === atmStrike);
@@ -263,20 +326,46 @@ export default function OptionChain() {
     return entries.slice(Math.max(0, atmIdx - 20), Math.min(entries.length, atmIdx + 21));
   })();
 
+  // ── Live LTP change tracking ─────────────────────────────────────
+  // prevLTPRef holds LTP values from the PREVIOUS fetch cycle
+  const prevLTPRef = useRef<Map<number, { call: number; put: number }>>(new Map());
+
+  useEffect(() => {
+    if (entries.length === 0) return;
+    const newMap = new Map<number, { call: number; put: number }>();
+    entries.forEach(e => newMap.set(e.strikePrice, { call: e.callLTP, put: e.putLTP }));
+    // Seed on first load; on subsequent fetches keep prev visible for 8s then update
+    if (prevLTPRef.current.size === 0) {
+      prevLTPRef.current = newMap;
+      return;
+    }
+    const t = setTimeout(() => { prevLTPRef.current = newMap; }, 8_000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chain]);
+
   const isLoading = expiryLoading || chainLoading;
   const hasData = displayEntries.length > 0;
 
   return (
     <div className="space-y-4">
+      {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Option Chain</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Live F&amp;O data · Auto-refresh every 10 sec · ±20 strikes around ATM
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <Clock className="w-3 h-3 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">
+              ±20 strikes around ATM · Refresh every 10 sec
+            </p>
+            <span className={`text-xs font-medium ${marketStatus.color}`}>
+              · {marketStatus.label}
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Index / Stock toggle */}
           <div className="flex rounded-md overflow-hidden border border-border text-xs">
             <button
               className={`px-3 py-1.5 ${mode === "index" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -339,31 +428,67 @@ export default function OptionChain() {
         </div>
       </div>
 
+      {/* ── Market closed banner ── */}
+      {!marketStatus.isOpen && expiry && !chainError && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-400">Market is closed — live refresh paused</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {marketStatus.label} · Manual Refresh still works. Auto-refresh resumes at 8:50 AM IST on next trading day.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Stats bar ── */}
       {hasData && (
         <div className="flex items-center gap-6 flex-wrap text-xs">
           {underlyingLtp > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">Spot:</span>
-              <span className="font-mono font-semibold">₹{underlyingLtp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              <span className="font-mono font-bold text-foreground">
+                ₹{underlyingLtp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          {atmStrike > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">ATM:</span>
+              <span className="font-mono font-bold text-amber-400">
+                ₹{atmStrike.toLocaleString("en-IN")}
+              </span>
             </div>
           )}
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">PCR:</span>
-            <span className={`font-mono font-semibold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}>{pcr.toFixed(2)}</span>
-            <span className="text-muted-foreground">{pcr > 1.2 ? "Bullish" : pcr < 0.8 ? "Bearish" : "Neutral"}</span>
+            <span className={`font-mono font-bold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}>
+              {pcr.toFixed(2)}
+            </span>
+            {pcr > 1.2
+              ? <TrendingUp className="w-3 h-3 text-emerald-400" />
+              : pcr < 0.8
+              ? <TrendingDown className="w-3 h-3 text-red-400" />
+              : null}
+            <span className="text-muted-foreground">
+              {pcr > 1.2 ? "Bullish" : pcr < 0.8 ? "Bearish" : "Neutral"}
+            </span>
           </div>
-          {atmStrike > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">ATM:</span>
-              <span className="font-mono font-semibold text-amber-400">₹{atmStrike.toLocaleString("en-IN")}</span>
-            </div>
-          )}
-          <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-400/30">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Total Call OI:</span>
+            <span className="font-mono text-red-400">{formatOI(totalCallOI)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Total Put OI:</span>
+            <span className="font-mono text-emerald-400">{formatOI(totalPutOI)}</span>
+          </div>
+          <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
             {activeLabel} · {expiry}
           </Badge>
         </div>
       )}
 
+      {/* ── States ── */}
       {mode === "stock" && !stockUnderlying ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -371,7 +496,9 @@ export default function OptionChain() {
           </CardContent>
         </Card>
       ) : isLoading ? (
-        <div className="space-y-2">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        <div className="space-y-2">
+          {Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+        </div>
       ) : !expiry ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -400,63 +527,167 @@ export default function OptionChain() {
         <Card className="border-muted">
           <CardContent className="flex items-center gap-3 py-6 text-muted-foreground">
             <WifiOff className="w-5 h-5 shrink-0" />
-            <span className="text-sm">No data available. Connect your Dhan account or try a different expiry.</span>
+            <span className="text-sm">No data. Check your Dhan connection or select a different expiry.</span>
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-xs">
+        /* ── Option Chain Table ── */
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th colSpan={5} className="text-center py-2 text-emerald-400 font-medium border-r border-border">CALL (CE)</th>
-                <th className="text-center py-2 text-amber-400 font-semibold px-3 whitespace-nowrap">STRIKE</th>
-                <th colSpan={5} className="text-center py-2 text-red-400 font-medium border-l border-border">PUT (PE)</th>
+              {/* Section labels */}
+              <tr className="border-b border-border">
+                <th
+                  colSpan={5}
+                  className="py-2 text-center text-[11px] font-semibold tracking-wide text-red-400 bg-red-400/5 border-r border-border"
+                >
+                  ← CALLS (CE) &nbsp;·&nbsp; Resistance / Sellers
+                </th>
+                <th className="py-2 px-3 text-center text-[11px] font-semibold text-amber-400 bg-amber-400/5 whitespace-nowrap border-x border-border">
+                  STRIKE
+                </th>
+                <th
+                  colSpan={5}
+                  className="py-2 text-center text-[11px] font-semibold tracking-wide text-emerald-400 bg-emerald-400/5 border-l border-border"
+                >
+                  PUTS (PE) &nbsp;·&nbsp; Support / Sellers →
+                </th>
               </tr>
-              <tr className="border-b border-border bg-muted/20">
-                {["OI Bar", "OI", "Vol", "IV%", "LTP"].map(h => (
-                  <th key={`ce-${h}`} className="px-2 py-1.5 text-right text-muted-foreground font-medium">{h}</th>
+              {/* Column headers */}
+              <tr className="border-b border-border bg-muted/20 text-muted-foreground">
+                {["OI Bar", "OI", "Volume", "IV%", "LTP"].map(h => (
+                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium">{h}</th>
                 ))}
-                <th className="px-3 py-1.5 text-center text-muted-foreground font-medium border-x border-border">₹</th>
-                {["LTP", "IV%", "Vol", "OI", "OI Bar"].map(h => (
-                  <th key={`pe-${h}`} className="px-2 py-1.5 text-right text-muted-foreground font-medium">{h}</th>
+                <th className="px-3 py-1.5 text-center font-medium border-x border-border">₹</th>
+                {["LTP", "IV%", "Volume", "OI", "OI Bar"].map(h => (
+                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
+
             <tbody>
               {displayEntries.map(e => {
                 const isATM = e.strikePrice === atmStrike;
+                const prev = prevLTPRef.current.get(e.strikePrice);
+                const callChange = prev ? e.callLTP - prev.call : 0;
+                const putChange  = prev ? e.putLTP  - prev.put  : 0;
+
                 return (
                   <tr
                     key={e.strikePrice}
-                    className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${isATM ? "bg-amber-400/5" : ""}`}
+                    className={`
+                      border-b border-border/30 transition-colors
+                      ${isATM
+                        ? "bg-amber-400/10 hover:bg-amber-400/15"
+                        : "hover:bg-muted/15"}
+                    `}
                   >
-                    <td className="px-2 py-1.5 text-right">
-                      <OIBar value={e.callOI} max={maxOI} side="ce" />
+                    {/* ── CALL side ── */}
+                    {/* OI Bar */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                      <div className="flex justify-end">
+                        <OIBar value={e.callOI} max={maxOI} side="ce" />
+                      </div>
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-emerald-400/80">{formatOI(e.callOI)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatOI(e.callVolume)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.callIV.toFixed(1)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono font-semibold text-emerald-400">
-                      ₹{e.callLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    {/* OI value */}
+                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}>
+                      <span className="text-red-400">{formatOI(e.callOI)}</span>
                     </td>
-                    <td className={`px-3 py-1.5 text-center font-mono font-bold border-x border-border whitespace-nowrap ${isATM ? "text-amber-400" : "text-foreground"}`}>
+                    {/* Volume */}
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
+                      {formatOI(e.callVolume)}
+                    </td>
+                    {/* IV */}
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
+                      {e.callIV > 0 ? e.callIV.toFixed(1) : "—"}
+                    </td>
+                    {/* LTP + change */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                      <div className="flex flex-col items-end">
+                        <span className={`font-mono font-semibold ${
+                          callChange > 0 ? "text-emerald-400" :
+                          callChange < 0 ? "text-red-400" : "text-foreground"
+                        }`}>
+                          ₹{e.callLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                        <DeltaBadge current={e.callLTP} prev={prev?.call} />
+                      </div>
+                    </td>
+
+                    {/* ── STRIKE ── */}
+                    <td className={`
+                      px-3 py-2 text-center font-mono font-bold border-x border-border whitespace-nowrap
+                      ${isATM
+                        ? "bg-amber-400/15 text-amber-400 text-[13px]"
+                        : "text-foreground/80"}
+                    `}>
                       {e.strikePrice.toLocaleString("en-IN")}
-                      {isATM && <span className="ml-1 text-[9px] text-amber-400">ATM</span>}
+                      {isATM && (
+                        <div className="text-[9px] font-bold text-amber-400 leading-none mt-0.5 tracking-wider">
+                          ◆ ATM
+                        </div>
+                      )}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono font-semibold text-red-400">
-                      ₹{e.putLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+
+                    {/* ── PUT side ── */}
+                    {/* LTP + change */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      <div className="flex flex-col items-end">
+                        <span className={`font-mono font-semibold ${
+                          putChange > 0 ? "text-emerald-400" :
+                          putChange < 0 ? "text-red-400" : "text-foreground"
+                        }`}>
+                          ₹{e.putLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                        <DeltaBadge current={e.putLTP} prev={prev?.put} />
+                      </div>
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.putIV.toFixed(1)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatOI(e.putVolume)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-red-400/80">{formatOI(e.putOI)}</td>
-                    <td className="px-2 py-1.5 text-right">
-                      <OIBar value={e.putOI} max={maxOI} side="pe" />
+                    {/* IV */}
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      {e.putIV > 0 ? e.putIV.toFixed(1) : "—"}
+                    </td>
+                    {/* Volume */}
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      {formatOI(e.putVolume)}
+                    </td>
+                    {/* OI value */}
+                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      <span className="text-emerald-400">{formatOI(e.putOI)}</span>
+                    </td>
+                    {/* OI Bar */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      <div className="flex justify-start">
+                        <OIBar value={e.putOI} max={maxOI} side="pe" />
+                      </div>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Legend */}
+      {hasData && (
+        <div className="flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-1.5 rounded-full bg-gradient-to-r from-red-600 to-red-400 inline-block" />
+            Call OI bar (resistance)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 inline-block" />
+            Put OI bar (support)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-amber-400">◆</span>
+            ATM (At The Money)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-emerald-400 text-[10px]">▲0.50</span>
+            / <span className="text-red-400 text-[10px]">▼0.50</span>
+            LTP change since last refresh
+          </span>
         </div>
       )}
     </div>
