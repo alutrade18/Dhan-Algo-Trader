@@ -1,46 +1,56 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, TrendingUp, TrendingDown, WifiOff } from "lucide-react";
+import { RefreshCw, WifiOff, Search, X } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
-const UNDERLYINGS = [
-  { label: "NIFTY 50", securityId: "13", segment: "IDX_I" },
-  { label: "BANK NIFTY", securityId: "25", segment: "IDX_I" },
-  { label: "FIN NIFTY", securityId: "27", segment: "IDX_I" },
-  { label: "MIDCAP NIFTY", securityId: "442", segment: "IDX_I" },
-  { label: "SENSEX", securityId: "1", segment: "BSE_EQ" },
+const INDEX_UNDERLYINGS = [
+  { label: "NIFTY 50",       symbol: "NIFTY",      underlyingSecId: 26000, segment: "IDX_I" },
+  { label: "BANK NIFTY",     symbol: "BANKNIFTY",  underlyingSecId: 26009, segment: "IDX_I" },
+  { label: "FIN NIFTY",      symbol: "FINNIFTY",   underlyingSecId: 26037, segment: "IDX_I" },
+  { label: "MIDCAP NIFTY",   symbol: "MIDCPNIFTY", underlyingSecId: 26074, segment: "IDX_I" },
+  { label: "SENSEX",         symbol: "SENSEX",     underlyingSecId: 1,     segment: "IDX_I" },
+  { label: "BANKEX",         symbol: "BANKEX",     underlyingSecId: 12,    segment: "IDX_I" },
+  { label: "NIFTYNXT50",     symbol: "NIFTYNXT50", underlyingSecId: 26013, segment: "IDX_I" },
 ];
 
+type Mode = "index" | "stock";
+
+interface StockUnderlying {
+  underlyingSymbol: string | null;
+  underlyingSecurityId: number | null;
+  exchId: string;
+}
+
 interface OptionEntry {
-  strikePrice?: number;
-  callLTP?: number;
-  callOI?: number;
-  callVolume?: number;
-  callIV?: number;
-  putLTP?: number;
-  putOI?: number;
-  putVolume?: number;
-  putIV?: number;
-  [key: string]: unknown;
+  strikePrice: number;
+  callLTP: number;
+  callOI: number;
+  callVolume: number;
+  callIV: number;
+  putLTP: number;
+  putOI: number;
+  putVolume: number;
+  putIV: number;
 }
 
 function formatOI(oi: number) {
-  if (oi >= 10000000) return `${(oi / 10000000).toFixed(2)}Cr`;
-  if (oi >= 100000) return `${(oi / 100000).toFixed(1)}L`;
-  if (oi >= 1000) return `${(oi / 1000).toFixed(1)}K`;
+  if (oi >= 10_000_000) return `${(oi / 10_000_000).toFixed(2)}Cr`;
+  if (oi >= 100_000)    return `${(oi / 100_000).toFixed(1)}L`;
+  if (oi >= 1_000)      return `${(oi / 1_000).toFixed(1)}K`;
   return String(oi);
 }
 
 function OIBar({ value, max, side }: { value: number; max: number; side: "ce" | "pe" }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
-    <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+    <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">
       <div
         className={`h-full rounded-full ${side === "ce" ? "bg-emerald-400/60" : "bg-red-400/60"}`}
         style={{ width: `${pct}%`, float: side === "ce" ? "right" : "left" }}
@@ -49,119 +59,257 @@ function OIBar({ value, max, side }: { value: number; max: number; side: "ce" | 
   );
 }
 
+function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<StockUnderlying[]>([]);
+  const [loading, setLoading] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${BASE}api/instruments/option-underlyings?q=${encodeURIComponent(q)}`);
+        const data = await res.json() as StockUnderlying[];
+        setResults(Array.isArray(data) ? data : []);
+        setOpen(true);
+      } finally { setLoading(false); }
+    }, 300);
+  }, [q]);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-52">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <Input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Search stock…"
+          className="pl-8 pr-8 h-9 text-xs"
+        />
+        {q && (
+          <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => { setQ(""); setResults([]); setOpen(false); }}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
+          {results.map((r, i) => (
+            <button
+              key={i}
+              className="w-full text-left px-3 py-2 text-xs hover:bg-muted/60 flex items-center gap-2"
+              onClick={() => { onSelect(r); setQ(r.underlyingSymbol ?? ""); setOpen(false); }}
+            >
+              <span className="font-mono font-semibold">{r.underlyingSymbol}</span>
+              <Badge variant="outline" className="text-[9px] px-1 py-0">{r.exchId}</Badge>
+            </button>
+          ))}
+          {loading && <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OptionChain() {
-  const [underlying, setUnderlying] = useState(UNDERLYINGS[0]);
+  const [mode, setMode] = useState<Mode>("index");
+  const [indexUnderlying, setIndexUnderlying] = useState(INDEX_UNDERLYINGS[0]);
+  const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
 
+  const activeSecId = mode === "index"
+    ? indexUnderlying.underlyingSecId
+    : (stockUnderlying?.underlyingSecurityId ?? null);
+  const activeInstrument = mode === "index" ? "OPTIDX" : "OPTSTK";
+  const activeSegment = mode === "index"
+    ? indexUnderlying.segment
+    : (stockUnderlying?.exchId === "BSE" ? "BSE_EQ" : "NSE_EQ");
+  const activeLabel = mode === "index"
+    ? indexUnderlying.label
+    : (stockUnderlying?.underlyingSymbol ?? "");
+
   const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
-    queryKey: ["expiry-list", underlying.securityId],
+    queryKey: ["expiry-list-db", activeSecId, activeInstrument],
     queryFn: async () => {
-      const res = await fetch(`${BASE}api/market/expiry-list`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ underSecurityId: underlying.securityId, underExchangeSegment: underlying.segment }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      const data = await res.json() as { data?: string[] };
-      return data.data ?? [];
+      if (!activeSecId) return [];
+      const res = await fetch(`${BASE}api/market/expiry-list?underlyingSecId=${activeSecId}&instrument=${activeInstrument}`);
+      if (!res.ok) throw new Error("Failed to load expiry list");
+      const json = await res.json() as { data?: string[] };
+      return json.data ?? [];
     },
-    staleTime: 300000,
+    enabled: !!activeSecId,
+    staleTime: 600_000,
   });
+
+  useEffect(() => {
+    setExpiry("");
+  }, [activeSecId, activeInstrument]);
 
   useEffect(() => {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
   }, [expiryList, expiry]);
 
-  const { data: chain, isLoading: chainLoading, refetch, isFetching } = useQuery({
-    queryKey: ["option-chain", underlying.securityId, expiry],
+  const { data: chain, isLoading: chainLoading, refetch, isFetching, error: chainError } = useQuery({
+    queryKey: ["option-chain", activeSecId, activeSegment, expiry],
     queryFn: async () => {
-      if (!expiry) return null;
+      if (!expiry || !activeSecId) return null;
       const res = await fetch(`${BASE}api/market/option-chain`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ underSecurityId: underlying.securityId, underExchangeSegment: underlying.segment, expiry }),
+        body: JSON.stringify({
+          underSecurityId: String(activeSecId),
+          underExchangeSegment: activeSegment,
+          expiry,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(err.error ?? "Failed to fetch option chain");
       }
-      return res.json() as Promise<{ data?: unknown }>;
+      return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
-    enabled: !!expiry,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    enabled: !!expiry && !!activeSecId,
+    refetchInterval: 180_000,
+    staleTime: 60_000,
+    retry: 0,
   });
 
-  const rawChain = chain?.data as Record<string, unknown> | undefined;
+  const rawChain = chain?.data ?? {};
+  const underlyingLtp = Number(chain?.ltp ?? rawChain?.last_price ?? 0);
   const entries: OptionEntry[] = [];
-  let atmStrike = 0;
 
-  if (rawChain) {
-    const strikes = Object.keys(rawChain).map(Number).sort((a, b) => a - b);
-    let maxOI = 0;
-    for (const strike of strikes) {
-      const s = rawChain[String(strike)] as Record<string, Record<string, unknown>> | undefined;
-      const ce = s?.["CE"] ?? {};
-      const pe = s?.["PE"] ?? {};
-      const entry: OptionEntry = {
-        strikePrice: strike,
-        callLTP: Number(ce.last_price ?? 0),
-        callOI: Number(ce.oi ?? 0),
-        callVolume: Number(ce.volume ?? 0),
-        callIV: Number(ce.iv ?? 0),
-        putLTP: Number(pe.last_price ?? 0),
-        putOI: Number(pe.oi ?? 0),
-        putVolume: Number(pe.volume ?? 0),
-        putIV: Number(pe.iv ?? 0),
-      };
-      entries.push(entry);
-      if (Number(ce.oi ?? 0) > maxOI) maxOI = Number(ce.oi ?? 0);
-      if (Number(pe.oi ?? 0) > maxOI) maxOI = Number(pe.oi ?? 0);
-    }
-    const underlying_ltp = Number(rawChain.last_price ?? 0);
-    if (underlying_ltp > 0 && strikes.length > 0) {
-      atmStrike = strikes.reduce((prev, curr) => Math.abs(curr - underlying_ltp) < Math.abs(prev - underlying_ltp) ? curr : prev);
-    }
+  const strikes = Object.keys(rawChain)
+    .map(Number)
+    .filter(n => !isNaN(n) && n > 0)
+    .sort((a, b) => a - b);
+
+  let maxOI = 1;
+  for (const strike of strikes) {
+    const s = rawChain[String(strike)] as Record<string, Record<string, unknown>> | undefined;
+    const ce = s?.["CE"] ?? {};
+    const pe = s?.["PE"] ?? {};
+    const callOI = Number(ce.oi ?? ce.openInterest ?? 0);
+    const putOI  = Number(pe.oi ?? pe.openInterest ?? 0);
+    if (callOI > maxOI) maxOI = callOI;
+    if (putOI  > maxOI) maxOI = putOI;
+    entries.push({
+      strikePrice: strike,
+      callLTP:    Number(ce.last_price ?? ce.ltp ?? 0),
+      callOI,
+      callVolume: Number(ce.volume ?? 0),
+      callIV:     Number(ce.iv ?? ce.impliedVolatility ?? 0),
+      putLTP:     Number(pe.last_price ?? pe.ltp ?? 0),
+      putOI,
+      putVolume:  Number(pe.volume ?? 0),
+      putIV:      Number(pe.iv ?? pe.impliedVolatility ?? 0),
+    });
   }
 
-  const maxOI = Math.max(...entries.map(e => Math.max(e.callOI ?? 0, e.putOI ?? 0)), 1);
-  const pcr = entries.reduce((a, e) => a + (e.putOI ?? 0), 0) / Math.max(entries.reduce((a, e) => a + (e.callOI ?? 0), 0), 1);
+  const atmStrike = underlyingLtp > 0 && strikes.length > 0
+    ? strikes.reduce((prev, curr) => Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev)
+    : 0;
+
+  const totalCallOI = entries.reduce((a, e) => a + e.callOI, 0);
+  const totalPutOI  = entries.reduce((a, e) => a + e.putOI, 0);
+  const pcr = totalCallOI > 0 ? totalPutOI / totalCallOI : 0;
 
   const isLoading = expiryLoading || chainLoading;
+  const hasData = entries.length > 0;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Option Chain</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Live F&O data · Auto-refresh every 60s · Max 1 req/3s</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Live F&amp;O data · Auto-refresh every 3 min
+          </p>
         </div>
+
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={underlying.securityId} onValueChange={v => {
-            const u = UNDERLYINGS.find(u => u.securityId === v);
-            if (u) { setUnderlying(u); setExpiry(""); }
-          }}>
-            <SelectTrigger className="w-36 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {UNDERLYINGS.map(u => <SelectItem key={u.securityId} value={u.securityId}>{u.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={expiry} onValueChange={setExpiry} disabled={expiryLoading || expiryList.length === 0}>
-            <SelectTrigger className="w-32 text-xs font-mono">
-              <SelectValue placeholder={expiryLoading ? "Loading..." : "Expiry"} />
+          <div className="flex rounded-md overflow-hidden border border-border text-xs">
+            <button
+              className={`px-3 py-1.5 ${mode === "index" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => { setMode("index"); setStockUnderlying(null); setExpiry(""); }}
+            >
+              Index
+            </button>
+            <button
+              className={`px-3 py-1.5 ${mode === "stock" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => { setMode("stock"); setExpiry(""); }}
+            >
+              Stock
+            </button>
+          </div>
+
+          {mode === "index" ? (
+            <Select
+              value={String(indexUnderlying.underlyingSecId)}
+              onValueChange={v => {
+                const u = INDEX_UNDERLYINGS.find(u => String(u.underlyingSecId) === v);
+                if (u) { setIndexUnderlying(u); setExpiry(""); }
+              }}
+            >
+              <SelectTrigger className="w-36 text-xs h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {INDEX_UNDERLYINGS.map(u => (
+                  <SelectItem key={u.underlyingSecId} value={String(u.underlyingSecId)}>{u.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <StockSearch onSelect={s => { setStockUnderlying(s); setExpiry(""); }} />
+          )}
+
+          <Select
+            value={expiry}
+            onValueChange={setExpiry}
+            disabled={expiryLoading || expiryList.length === 0 || !activeSecId}
+          >
+            <SelectTrigger className="w-32 text-xs font-mono h-9">
+              <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
             </SelectTrigger>
             <SelectContent>
-              {expiryList.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+              {expiryList.map(e => (
+                <SelectItem key={e} value={e}>{e}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refetch()} disabled={isFetching || !expiry}>
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9"
+            onClick={() => void refetch()}
+            disabled={isFetching || !expiry || !activeSecId}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
           </Button>
         </div>
       </div>
 
-      {entries.length > 0 && (
+      {hasData && (
         <div className="flex items-center gap-6 flex-wrap text-xs">
+          {underlyingLtp > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Spot:</span>
+              <span className="font-mono font-semibold">₹{underlyingLtp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">PCR:</span>
             <span className={`font-mono font-semibold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}>{pcr.toFixed(2)}</span>
@@ -169,21 +317,49 @@ export default function OptionChain() {
           </div>
           {atmStrike > 0 && (
             <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground">ATM Strike:</span>
+              <span className="text-muted-foreground">ATM:</span>
               <span className="font-mono font-semibold text-amber-400">₹{atmStrike.toLocaleString("en-IN")}</span>
             </div>
           )}
           <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-400/30">
-            {underlying.label} · {expiry}
+            {activeLabel} · {expiry}
           </Badge>
         </div>
       )}
 
-      {isLoading ? (
-        <div className="space-y-2">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+      {mode === "stock" && !stockUnderlying ? (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            Search for a stock symbol above to view its option chain.
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
       ) : !expiry ? (
-        <Card className="border-dashed"><CardContent className="py-10 text-center text-sm text-muted-foreground">Select an expiry date to load the option chain.</CardContent></Card>
-      ) : entries.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            Select an expiry date to load the option chain.
+          </CardContent>
+        </Card>
+      ) : chainError ? (
+        <Card className="border-amber-400/20 bg-amber-400/5">
+          <CardContent className="flex items-start gap-3 py-5">
+            <WifiOff className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-400">
+                {(chainError as Error).message?.includes("not Subscribed")
+                  ? "Dhan Data API subscription required"
+                  : "Failed to load option chain"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {(chainError as Error).message?.includes("not Subscribed")
+                  ? "Your Dhan account needs a Data API add-on. Enable it at dhan.co › Settings › Data APIs, then retry."
+                  : ((chainError as Error).message ?? "Check Dhan broker connection and retry.")}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !hasData ? (
         <Card className="border-muted">
           <CardContent className="flex items-center gap-3 py-6 text-muted-foreground">
             <WifiOff className="w-5 h-5 shrink-0" />
@@ -195,37 +371,50 @@ export default function OptionChain() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                <th colSpan={4} className="text-center py-2 text-emerald-400 font-medium border-r border-border">CALL (CE)</th>
-                <th className="text-center py-2 text-amber-400 font-semibold px-3">STRIKE</th>
-                <th colSpan={4} className="text-center py-2 text-red-400 font-medium border-l border-border">PUT (PE)</th>
+                <th colSpan={5} className="text-center py-2 text-emerald-400 font-medium border-r border-border">CALL (CE)</th>
+                <th className="text-center py-2 text-amber-400 font-semibold px-3 whitespace-nowrap">STRIKE</th>
+                <th colSpan={5} className="text-center py-2 text-red-400 font-medium border-l border-border">PUT (PE)</th>
               </tr>
               <tr className="border-b border-border bg-muted/20">
-                {["OI", "Vol", "IV", "LTP"].map(h => <th key={`ce-${h}`} className="px-2 py-1.5 text-right text-muted-foreground font-medium">{h}</th>)}
+                {["OI Bar", "OI", "Vol", "IV%", "LTP"].map(h => (
+                  <th key={`ce-${h}`} className="px-2 py-1.5 text-right text-muted-foreground font-medium">{h}</th>
+                ))}
                 <th className="px-3 py-1.5 text-center text-muted-foreground font-medium border-x border-border">₹</th>
-                {["LTP", "IV", "Vol", "OI"].map(h => <th key={`pe-${h}`} className="px-2 py-1.5 text-right text-muted-foreground font-medium">{h}</th>)}
+                {["LTP", "IV%", "Vol", "OI", "OI Bar"].map(h => (
+                  <th key={`pe-${h}`} className="px-2 py-1.5 text-right text-muted-foreground font-medium">{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {entries.map(e => {
                 const isATM = e.strikePrice === atmStrike;
                 return (
-                  <tr key={e.strikePrice} className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${isATM ? "bg-amber-400/5" : ""}`}>
-                    <td className="px-2 py-1.5 text-right font-mono text-emerald-400/80">{formatOI(e.callOI ?? 0)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatOI(e.callVolume ?? 0)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{(e.callIV ?? 0).toFixed(1)}%</td>
-                    <td className="px-2 py-1.5 text-right font-mono font-semibold text-emerald-400">
-                      ₹{(e.callLTP ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  <tr
+                    key={e.strikePrice}
+                    className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${isATM ? "bg-amber-400/5" : ""}`}
+                  >
+                    <td className="px-2 py-1.5 text-right">
+                      <OIBar value={e.callOI} max={maxOI} side="ce" />
                     </td>
-                    <td className={`px-3 py-1.5 text-center font-mono font-bold border-x border-border ${isATM ? "text-amber-400" : "text-foreground"}`}>
-                      {(e.strikePrice ?? 0).toLocaleString("en-IN")}
+                    <td className="px-2 py-1.5 text-right font-mono text-emerald-400/80">{formatOI(e.callOI)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatOI(e.callVolume)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.callIV.toFixed(1)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono font-semibold text-emerald-400">
+                      ₹{e.callLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className={`px-3 py-1.5 text-center font-mono font-bold border-x border-border whitespace-nowrap ${isATM ? "text-amber-400" : "text-foreground"}`}>
+                      {e.strikePrice.toLocaleString("en-IN")}
                       {isATM && <span className="ml-1 text-[9px] text-amber-400">ATM</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right font-mono font-semibold text-red-400">
-                      ₹{(e.putLTP ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      ₹{e.putLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{(e.putIV ?? 0).toFixed(1)}%</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatOI(e.putVolume ?? 0)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-red-400/80">{formatOI(e.putOI ?? 0)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{e.putIV.toFixed(1)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{formatOI(e.putVolume)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-red-400/80">{formatOI(e.putOI)}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <OIBar value={e.putOI} max={maxOI} side="pe" />
+                    </td>
                   </tr>
                 );
               })}

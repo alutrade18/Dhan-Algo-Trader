@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
+import { db, instrumentsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 import {
   GetMarketQuoteBody,
   GetHistoricalDataBody,
@@ -7,6 +9,15 @@ import {
   GetOptionChainBody,
   GetExpiryListBody,
 } from "@workspace/api-zod";
+
+function excelSerialToISO(serial: number): string {
+  const date = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
+  return date.toISOString().slice(0, 10);
+}
+
+function isExcelSerial(v: unknown): v is number {
+  return typeof v === "number" && v > 40000 && v < 60000;
+}
 
 const router: IRouter = Router();
 
@@ -102,15 +113,61 @@ router.post("/market/option-chain", async (req, res): Promise<void> => {
   }
 
   try {
-    const data = await dhanClient.getOptionChain({
+    const raw = await dhanClient.getOptionChain({
       underSecurityId: parsed.data.underSecurityId,
       underExchangeSegment: parsed.data.underExchangeSegment,
       expiry: parsed.data.expiry,
     });
-    res.json({ data });
-  } catch (e) {
+    const r = raw as Record<string, unknown>;
+    const chainData = (r.data ?? r) as Record<string, unknown>;
+    res.json({ data: chainData, ltp: r.last_price ?? chainData.last_price ?? 0 });
+  } catch (e: unknown) {
     req.log.error({ err: e }, "Failed to fetch option chain");
-    res.status(500).json({ error: "Failed to fetch option chain" });
+    const dhanErr = e as { data?: { data?: Record<string, string> } };
+    const errData = dhanErr?.data?.data ?? {};
+    const dhanMsg = Object.values(errData)[0];
+    const message = dhanMsg
+      ? `Dhan: ${dhanMsg}`
+      : "Failed to fetch option chain";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.get("/market/expiry-list", async (req, res): Promise<void> => {
+  const underlyingSecId = Number(req.query.underlyingSecId);
+  const instrument = String(req.query.instrument ?? "OPTIDX");
+
+  if (!underlyingSecId || isNaN(underlyingSecId)) {
+    res.status(400).json({ error: "underlyingSecId required" });
+    return;
+  }
+
+  try {
+    const rows = await db
+      .selectDistinct({ expiryDate: instrumentsTable.expiryDate })
+      .from(instrumentsTable)
+      .where(
+        and(
+          eq(instrumentsTable.underlyingSecurityId, underlyingSecId),
+          eq(instrumentsTable.instrument, instrument),
+          sql`${instrumentsTable.expiryDate} IS NOT NULL`
+        )
+      )
+      .orderBy(instrumentsTable.expiryDate);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const expiries = rows
+      .map(r => {
+        const raw = r.expiryDate!;
+        const serial = Number(raw);
+        return isExcelSerial(serial) ? excelSerialToISO(serial) : raw;
+      })
+      .filter(d => d >= today);
+
+    res.json({ data: expiries });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch expiry list from DB");
+    res.status(500).json({ error: "Failed to fetch expiry list" });
   }
 });
 
@@ -131,6 +188,47 @@ router.post("/market/expiry-list", async (req, res): Promise<void> => {
   } catch (e) {
     req.log.error({ err: e }, "Failed to fetch expiry list");
     res.status(500).json({ error: "Failed to fetch expiry list" });
+  }
+});
+
+router.get("/market/option-strikes", async (req, res): Promise<void> => {
+  const underlyingSecId = Number(req.query.underlyingSecId);
+  const expiry = String(req.query.expiry ?? "");
+  const instrument = String(req.query.instrument ?? "OPTIDX");
+
+  if (!underlyingSecId || !expiry) {
+    res.status(400).json({ error: "underlyingSecId and expiry required" });
+    return;
+  }
+
+  try {
+    const expirySerial = String(Math.round(new Date(expiry).getTime() / 86400000 + 25569));
+
+    const rows = await db
+      .select({
+        securityId: instrumentsTable.securityId,
+        exchId: instrumentsTable.exchId,
+        segment: instrumentsTable.segment,
+        symbolName: instrumentsTable.symbolName,
+        strikePrice: instrumentsTable.strikePrice,
+        optionType: instrumentsTable.optionType,
+        lotSize: instrumentsTable.lotSize,
+        expiryDate: instrumentsTable.expiryDate,
+      })
+      .from(instrumentsTable)
+      .where(
+        and(
+          eq(instrumentsTable.underlyingSecurityId, underlyingSecId),
+          eq(instrumentsTable.instrument, instrument),
+          sql`${instrumentsTable.expiryDate}::text = ${expirySerial}`
+        )
+      )
+      .orderBy(instrumentsTable.strikePrice);
+
+    res.json({ data: rows });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch option strikes");
+    res.status(500).json({ error: "Failed" });
   }
 });
 

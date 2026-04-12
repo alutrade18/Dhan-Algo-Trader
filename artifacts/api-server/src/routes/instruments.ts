@@ -4,6 +4,37 @@ import { eq, or, like, ilike, and, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+router.get("/instruments/option-underlyings", async (req, res): Promise<void> => {
+  const q = String(req.query.q ?? "").trim().toUpperCase();
+  if (!q || q.length < 1) {
+    res.status(400).json({ error: "q param required" });
+    return;
+  }
+
+  try {
+    const rows = await db
+      .selectDistinct({
+        underlyingSymbol: instrumentsTable.underlyingSymbol,
+        underlyingSecurityId: instrumentsTable.underlyingSecurityId,
+        exchId: instrumentsTable.exchId,
+      })
+      .from(instrumentsTable)
+      .where(
+        and(
+          eq(instrumentsTable.instrument, "OPTSTK"),
+          ilike(instrumentsTable.underlyingSymbol, `${q}%`)
+        )
+      )
+      .orderBy(instrumentsTable.underlyingSymbol)
+      .limit(15);
+
+    res.json(rows);
+  } catch (err) {
+    req.log.error({ err }, "option underlyings search error");
+    res.status(500).json({ error: "Search failed" });
+  }
+});
+
 router.get("/instruments/search", async (req, res): Promise<void> => {
   const q = String(req.query.q ?? "").trim();
   const instrument = req.query.instrument as string | undefined;
