@@ -275,7 +275,7 @@ export default function SuperOrders() {
               <SymbolSearch
                 value={selectedInstrument}
                 onChange={handleInstrumentSelect}
-                placeholder="Search by name (e.g. RELIANCE, NIFTY)..."
+                placeholder="Search symbol..."
               />
             </div>
 
@@ -333,7 +333,7 @@ export default function SuperOrders() {
                   <Input
                     type="number"
                     step="0.05"
-                    placeholder={ltpLoading ? "Fetching live price..." : "Enter price manually"}
+                    placeholder="0.00"
                     value={form.price}
                     onChange={e => handlePriceChange(e.target.value)}
                     className="font-mono text-xs pr-8"
