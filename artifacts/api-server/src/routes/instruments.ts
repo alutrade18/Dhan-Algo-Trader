@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, instrumentsTable } from "@workspace/db";
-import { eq, or, like, ilike, and, sql } from "drizzle-orm";
+import { eq, or, like, ilike, and, sql, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -38,6 +38,8 @@ router.get("/instruments/option-underlyings", async (req, res): Promise<void> =>
 router.get("/instruments/search", async (req, res): Promise<void> => {
   const q = String(req.query.q ?? "").trim();
   const instrument = req.query.instrument as string | undefined;
+  // instruments (plural) — comma-separated list: "EQUITY,FUTSTK,OPTSTK"
+  const instrumentsParam = req.query.instruments as string | undefined;
   const exch = req.query.exch as string | undefined;
   const limit = Math.min(Number(req.query.limit ?? 20), 100);
 
@@ -56,7 +58,14 @@ router.get("/instruments/search", async (req, res): Promise<void> => {
       ),
     ];
 
-    if (instrument) {
+    if (instrumentsParam) {
+      const types = instrumentsParam.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (types.length === 1) {
+        conditions.push(eq(instrumentsTable.instrument, types[0]));
+      } else if (types.length > 1) {
+        conditions.push(inArray(instrumentsTable.instrument, types));
+      }
+    } else if (instrument) {
       conditions.push(eq(instrumentsTable.instrument, instrument.toUpperCase()));
     }
     if (exch) {

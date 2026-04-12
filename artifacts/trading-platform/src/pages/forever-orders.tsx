@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,10 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Plus, X, Clock, TrendingUp, TrendingDown, WifiOff } from "lucide-react";
+import { RefreshCw, Plus, X, Clock, TrendingUp, TrendingDown, WifiOff, Loader2 } from "lucide-react";
 import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
+const DEFAULT_QTY = 5;
+
+const EQUITY_FNO_INSTRUMENTS = ["EQUITY", "FUTSTK", "OPTSTK"];
 
 interface ForeverOrder {
   orderId?: string;
@@ -30,6 +33,32 @@ interface ForeverOrder {
   [key: string]: unknown;
 }
 
+interface FormState {
+  security_id: string;
+  exchange_segment: string;
+  transaction_type: string;
+  product_type: string;
+  order_type: string;
+  quantity: string;
+  price: string;
+  trigger_price: string;
+  price1: string;
+  trigger_price1: string;
+}
+
+const BLANK_FORM: FormState = {
+  security_id: "",
+  exchange_segment: "NSE_EQ",
+  transaction_type: "BUY",
+  product_type: "INTRADAY",
+  order_type: "SINGLE",
+  quantity: String(DEFAULT_QTY),
+  price: "",
+  trigger_price: "",
+  price1: "",
+  trigger_price1: "",
+};
+
 function statusColor(status: string) {
   const s = status?.toUpperCase();
   if (s === "TRADED") return "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
@@ -43,21 +72,57 @@ export default function ForeverOrders() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
-  const [form, setForm] = useState({
-    security_id: "", exchange_segment: "NSE_EQ", transaction_type: "BUY",
-    order_type: "SINGLE", quantity: "", price: "", trigger_price: "",
-    price1: "", trigger_price1: "",
-  });
+  const [form, setForm] = useState<FormState>(BLANK_FORM);
+  const [ltpLoading, setLtpLoading] = useState(false);
+  const [ltpUnavailable, setLtpUnavailable] = useState(false);
+
+  const fetchLtp = useCallback(async (exchSeg: string, secId: string) => {
+    if (!secId) return;
+    setLtpLoading(true);
+    setLtpUnavailable(false);
+    try {
+      const res = await fetch(`${BASE}api/market/ltp?exchSeg=${encodeURIComponent(exchSeg)}&secId=${encodeURIComponent(secId)}`);
+      if (!res.ok) { setLtpUnavailable(true); return; }
+      const data = await res.json() as { ltp?: number };
+      if (data.ltp && data.ltp > 0) {
+        setForm(p => ({ ...p, price: String(parseFloat(data.ltp!.toFixed(2))), trigger_price: String(parseFloat(data.ltp!.toFixed(2))) }));
+        setLtpUnavailable(false);
+      } else {
+        setLtpUnavailable(true);
+      }
+    } catch {
+      setLtpUnavailable(true);
+    } finally {
+      setLtpLoading(false);
+    }
+  }, []);
 
   function handleInstrumentSelect(inst: InstrumentResult | null) {
     setSelectedInstrument(inst);
+    setLtpUnavailable(false);
     if (inst) {
+      const segMap: Record<string, string> = {
+        E: `${inst.exchId}_EQ`,
+        F: `${inst.exchId}_FNO`,
+        I: `IDX_I`,
+        D: `${inst.exchId}_CURR`,
+        C: `${inst.exchId}_COMM`,
+      };
+      const exchSeg = segMap[inst.segment] ?? `${inst.exchId}_${inst.segment}`;
+      const defaultQty = inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : String(DEFAULT_QTY);
       setForm(p => ({
         ...p,
         security_id: String(inst.securityId),
-        exchange_segment: `${inst.exchId}_${inst.segment === "E" ? "EQ" : inst.segment === "F" ? "FNO" : inst.segment}`,
-        quantity: inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : p.quantity,
+        exchange_segment: exchSeg,
+        quantity: defaultQty,
+        price: "",
+        trigger_price: "",
+        price1: "",
+        trigger_price1: "",
       }));
+      void fetchLtp(exchSeg, String(inst.securityId));
+    } else {
+      setForm(BLANK_FORM);
     }
   }
 
@@ -82,7 +147,7 @@ export default function ForeverOrders() {
         exchange_segment: form.exchange_segment,
         transaction_type: form.transaction_type,
         order_type: form.order_type,
-        product_type: "INTRADAY",
+        product_type: form.product_type,
         quantity: Number(form.quantity),
         price: Number(form.price),
         trigger_price: Number(form.trigger_price),
@@ -97,15 +162,16 @@ export default function ForeverOrders() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { errorMessage?: string };
-        throw new Error(err.errorMessage ?? "Order failed");
+        const err = await res.json().catch(() => ({})) as { errorMessage?: string; error?: string };
+        throw new Error(err.errorMessage ?? err.error ?? "Order failed");
       }
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Forever Order Placed" });
+      toast({ title: "Forever Order Placed", description: `${selectedInstrument?.symbolName ?? ""} order placed successfully` });
       setShowForm(false);
       setSelectedInstrument(null);
+      setForm(BLANK_FORM);
       void queryClient.invalidateQueries({ queryKey: ["forever-orders"] });
     },
     onError: (e: Error) => toast({ title: "Order Failed", description: e.message, variant: "destructive" }),
@@ -133,7 +199,7 @@ export default function ForeverOrders() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Clock className="w-5 h-5 text-primary" /> Forever Orders
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">GTT (Good Till Triggered) and OCO orders</p>
+          <p className="text-xs text-muted-foreground mt-0.5">GTT (Good Till Triggered) and OCO orders — Equity &amp; F&amp;O only</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refetch()} disabled={isFetching}>
@@ -159,30 +225,56 @@ export default function ForeverOrders() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Plus className="w-4 h-4" /> Place Forever Order
+              <Badge variant="outline" className={`ml-auto text-[10px] ${form.product_type === "CNC" ? "text-blue-400 border-blue-400/30 bg-blue-400/10" : "text-amber-400 border-amber-400/30 bg-amber-400/10"}`}>
+                {form.product_type}
+              </Badge>
             </CardTitle>
-            <CardDescription className="text-xs">GTT order — fires once trigger is hit · SINGLE or OCO</CardDescription>
+            <CardDescription className="text-xs">GTT order — fires once trigger is hit · SINGLE or OCO · Equity &amp; F&amp;O only</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Symbol</label>
-              <SymbolSearch value={selectedInstrument} onChange={handleInstrumentSelect} placeholder="Search by name or security ID..." />
+              <label className="text-xs font-medium">Search Symbol</label>
+              <SymbolSearch
+                value={selectedInstrument}
+                onChange={handleInstrumentSelect}
+                placeholder="Search symbol..."
+                filterInstruments={EQUITY_FNO_INSTRUMENTS}
+              />
             </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Security ID</label>
-                <Input placeholder="e.g. 1333" value={form.security_id} onChange={e => setForm(p => ({ ...p, security_id: e.target.value }))} className="font-mono text-xs" />
+                <label className="text-xs font-medium">Symbol</label>
+                <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-xs font-mono min-h-[34px] flex items-center">
+                  {selectedInstrument
+                    ? <span className="font-semibold">{selectedInstrument.symbolName}</span>
+                    : <span className="text-muted-foreground">—</span>}
+                </div>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Exchange</label>
-                <Select value={form.exchange_segment} onValueChange={v => setForm(p => ({ ...p, exchange_segment: v }))}>
+                <div className="px-3 py-2 rounded-md border border-border bg-muted/30 text-xs font-mono min-h-[34px] flex items-center">
+                  <span className={selectedInstrument ? "font-semibold" : "text-muted-foreground"}>
+                    {selectedInstrument ? form.exchange_segment : "—"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Product</label>
+                <Select value={form.product_type} onValueChange={v => setForm(p => ({ ...p, product_type: v }))}>
                   <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["NSE_EQ", "NSE_FNO", "BSE_EQ", "BSE_FNO", "MCX_COMM"].map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    <SelectItem value="INTRADAY">INTRADAY</SelectItem>
+                    <SelectItem value="CNC">CNC</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Type</label>
+                <label className="text-xs font-medium">Order Type</label>
                 <Select value={form.order_type} onValueChange={v => setForm(p => ({ ...p, order_type: v }))}>
                   <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -191,6 +283,7 @@ export default function ForeverOrders() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Side</label>
                 <Select value={form.transaction_type} onValueChange={v => setForm(p => ({ ...p, transaction_type: v }))}>
@@ -201,36 +294,55 @@ export default function ForeverOrders() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Qty</label>
-                <Input type="number" placeholder="0" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} className="font-mono text-xs" />
+                <Input type="number" min={1} step={1} value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} className="font-mono text-xs" />
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Price ₹</label>
-                <Input type="number" placeholder="0.00" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className="font-mono text-xs" />
+                <label className="text-xs font-medium">
+                  Price ₹
+                  {ltpLoading && <span className="text-muted-foreground font-normal ml-1">(fetching...)</span>}
+                  {!ltpLoading && ltpUnavailable && <span className="text-amber-400 font-normal ml-1">(enter manually)</span>}
+                  {!ltpLoading && !ltpUnavailable && form.price && <span className="text-emerald-400 font-normal ml-1">(live)</span>}
+                </label>
+                <div className="relative">
+                  <Input type="number" step="0.05" placeholder="0.00" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className="font-mono text-xs pr-8" />
+                  {ltpLoading && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                </div>
+                {ltpUnavailable && <p className="text-[10px] text-amber-400/80">Live price unavailable — enter manually</p>}
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Trigger ₹</label>
-                <Input type="number" placeholder="0.00" value={form.trigger_price} onChange={e => setForm(p => ({ ...p, trigger_price: e.target.value }))} className="font-mono text-xs" />
+                <label className="text-xs font-medium text-amber-400">Trigger Price ₹</label>
+                <Input type="number" step="0.05" placeholder="0.00" value={form.trigger_price} onChange={e => setForm(p => ({ ...p, trigger_price: e.target.value }))} className="font-mono text-xs border-amber-400/30 focus-visible:ring-amber-400/50" />
               </div>
+
               {form.order_type === "OCO" && (
                 <>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-red-400">SL Price ₹</label>
-                    <Input type="number" placeholder="0.00" value={form.price1} onChange={e => setForm(p => ({ ...p, price1: e.target.value }))} className="font-mono text-xs" />
+                    <Input type="number" step="0.05" placeholder="0.00" value={form.price1} onChange={e => setForm(p => ({ ...p, price1: e.target.value }))} className="font-mono text-xs border-red-400/30 focus-visible:ring-red-400/50" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-red-400">SL Trigger ₹</label>
-                    <Input type="number" placeholder="0.00" value={form.trigger_price1} onChange={e => setForm(p => ({ ...p, trigger_price1: e.target.value }))} className="font-mono text-xs" />
+                    <Input type="number" step="0.05" placeholder="0.00" value={form.trigger_price1} onChange={e => setForm(p => ({ ...p, trigger_price1: e.target.value }))} className="font-mono text-xs border-red-400/30 focus-visible:ring-red-400/50" />
                   </div>
                 </>
               )}
             </div>
+
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => placeMutation.mutate()} disabled={placeMutation.isPending || !form.security_id || !form.quantity}>
+              <Button
+                size="sm"
+                className={form.transaction_type === "SELL" ? "bg-red-500 hover:bg-red-600" : ""}
+                onClick={() => placeMutation.mutate()}
+                disabled={placeMutation.isPending || !form.security_id || !form.quantity || ltpLoading}
+              >
                 {placeMutation.isPending ? "Placing..." : "Place Order"}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setSelectedInstrument(null); setForm(BLANK_FORM); }}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
@@ -249,8 +361,8 @@ export default function ForeverOrders() {
           <table className="w-full table-auto text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Symbol", "Side", "Type", "Qty", "Price", "Trigger", "Status", ""].map(h => (
-                  <th key={h} className={`px-3 py-2.5 text-xs font-medium text-muted-foreground ${h === "" || h === "Qty" || h === "Price" || h === "Trigger" ? "text-right" : "text-left"}`}>{h}</th>
+                {["Symbol", "Side", "Product", "Type", "Qty", "Price", "Trigger", "Status", ""].map(h => (
+                  <th key={h} className={`px-3 py-2.5 text-xs font-medium text-muted-foreground ${!h || h === "Qty" || h === "Price" || h === "Trigger" ? "text-right" : "text-left"}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -266,6 +378,7 @@ export default function ForeverOrders() {
                         ? <span className="flex items-center gap-1 text-emerald-400 text-xs font-medium"><TrendingUp className="w-3 h-3" />BUY</span>
                         : <span className="flex items-center gap-1 text-red-400 text-xs font-medium"><TrendingDown className="w-3 h-3" />SELL</span>}
                     </td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{String(o.productType ?? "—")}</td>
                     <td className="px-3 py-2.5 text-xs">{String(o.legName ?? o.orderType ?? "GTT")}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs">{o.quantity ?? "—"}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs">₹{Number(o.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>

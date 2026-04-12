@@ -27,6 +27,7 @@ interface Props {
   onChange?: (instrument: InstrumentResult | null) => void;
   placeholder?: string;
   filterInstrument?: string;
+  filterInstruments?: string[];
   filterExch?: string;
   disabled?: boolean;
   className?: string;
@@ -51,7 +52,7 @@ function instrumentColor(instrument: string) {
   return "text-muted-foreground border-muted";
 }
 
-export function SymbolSearch({ value, onChange, placeholder = "Search symbol...", filterInstrument, filterExch, disabled, className }: Props) {
+export function SymbolSearch({ value, onChange, placeholder = "Search symbol...", filterInstrument, filterInstruments, filterExch, disabled, className }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<InstrumentResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -69,7 +70,11 @@ export function SymbolSearch({ value, onChange, placeholder = "Search symbol..."
     setLoading(true);
     try {
       const params = new URLSearchParams({ q, limit: "15" });
-      if (filterInstrument) params.set("instrument", filterInstrument);
+      if (filterInstruments && filterInstruments.length > 0) {
+        params.set("instruments", filterInstruments.join(","));
+      } else if (filterInstrument) {
+        params.set("instrument", filterInstrument);
+      }
       if (filterExch) params.set("exch", filterExch);
       const res = await fetch(`${BASE}api/instruments/search?${params}`, { signal: ac.signal });
       if (!res.ok) throw new Error("Search failed");
@@ -82,7 +87,7 @@ export function SymbolSearch({ value, onChange, placeholder = "Search symbol..."
     } finally {
       setLoading(false);
     }
-  }, [filterInstrument, filterExch]);
+  }, [filterInstrument, filterInstruments, filterExch]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void search(query); }, 200);
