@@ -23,6 +23,57 @@ function daysAgo(n: number) {
   return d;
 }
 
+/** YYYY-MM-DD → DD-MM-YYYY */
+function ymdToDisplay(ymd: string): string {
+  if (!ymd || ymd.length !== 10) return ymd;
+  const [y, m, d] = ymd.split("-");
+  return `${d}-${m}-${y}`;
+}
+
+/** DD-MM-YYYY → YYYY-MM-DD, returns "" if invalid */
+function displayToYmd(display: string): string {
+  const parts = display.trim().replace(/\//g, "-").split("-");
+  if (parts.length !== 3) return "";
+  const [d, m, y] = parts;
+  if (y.length !== 4) return "";
+  const ymd = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  return isNaN(new Date(ymd).getTime()) ? "" : ymd;
+}
+
+/** Controlled date input that shows DD-MM-YYYY but stores YYYY-MM-DD */
+function DateField({
+  value, onChange, min, max,
+}: { value: string; onChange: (ymd: string) => void; min?: string; max?: string }) {
+  const [text, setText] = useState(() => ymdToDisplay(value));
+
+  // Sync when parent value changes (e.g. midnight auto-update)
+  useEffect(() => {
+    setText(ymdToDisplay(value));
+  }, [value]);
+
+  function commit(raw: string) {
+    const ymd = displayToYmd(raw);
+    if (!ymd) { setText(ymdToDisplay(value)); return; }
+    if (min && ymd < min) { setText(ymdToDisplay(value)); return; }
+    if (max && ymd > max) { setText(ymdToDisplay(value)); return; }
+    onChange(ymd);
+    setText(ymdToDisplay(ymd));
+  }
+
+  return (
+    <Input
+      type="text"
+      value={text}
+      placeholder="DD-MM-YYYY"
+      maxLength={10}
+      className="w-36 text-xs font-mono h-9"
+      onChange={e => setText(e.target.value)}
+      onBlur={e => commit(e.target.value)}
+      onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+    />
+  );
+}
+
 function formatDisplayDate(raw: string): string {
   if (!raw || raw === "—") return "—";
   const d = new Date(raw);
@@ -151,22 +202,9 @@ export default function TradeHistory() {
       {/* ── Controls ── */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground">From</span>
-        <Input
-          type="date"
-          value={fromDate}
-          onChange={e => setFromDate(e.target.value)}
-          max={toDate}
-          className="w-36 text-xs font-mono h-9"
-        />
+        <DateField value={fromDate} onChange={setFromDate} max={toDate} />
         <span className="text-xs text-muted-foreground">To</span>
-        <Input
-          type="date"
-          value={toDate}
-          onChange={e => setToDate(e.target.value)}
-          min={fromDate}
-          max={today}
-          className="w-36 text-xs font-mono h-9"
-        />
+        <DateField value={toDate} onChange={setToDate} min={fromDate} max={today} />
         <Button size="sm" className="gap-1.5 h-9" onClick={fetchLedger} disabled={loading}>
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           {loading ? "Loading…" : "Fetch Ledger"}
