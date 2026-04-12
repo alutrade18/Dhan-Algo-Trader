@@ -361,10 +361,7 @@ export default function OptionChain() {
                 Market is closed — live refresh paused
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                {marketStatus.label} · Manual Refresh still works.
-              </p>
-              <p className="text-xs text-muted-foreground leading-snug">
-                Auto-refresh resumes at 8:50 AM IST on next trading day.
+                Manual Refresh still works · Auto-refresh resumes at 8:50 AM IST on next trading day.
               </p>
             </div>
           </div>
