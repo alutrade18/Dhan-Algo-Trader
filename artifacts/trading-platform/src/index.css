@@ -72,97 +72,97 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME ─────────────────────────────────── */
+/* ── LIGHT THEME — Zerodha Kite White ─────────────── */
 :root,
 .light {
-  --background: 210 28% 97%;
-  --foreground: 214 40% 12%;
-  --border: 213 22% 86%;
-  --input: 213 22% 86%;
-  --ring: 214 72% 44%;
+  --background: 210 18% 97%;
+  --foreground: 220 28% 10%;
+  --border: 214 18% 88%;
+  --input: 214 18% 88%;
+  --ring: 158 58% 38%;
   --card: 0 0% 100%;
-  --card-foreground: 214 40% 12%;
-  --card-border: 213 22% 86%;
+  --card-foreground: 220 28% 10%;
+  --card-border: 214 18% 88%;
   --popover: 0 0% 100%;
-  --popover-foreground: 214 40% 12%;
-  --popover-border: 213 22% 86%;
-  --primary: 214 72% 44%;
+  --popover-foreground: 220 28% 10%;
+  --popover-border: 214 18% 88%;
+  --primary: 158 58% 38%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 211 28% 92%;
-  --secondary-foreground: 214 35% 18%;
-  --muted: 210 24% 95%;
-  --muted-foreground: 214 18% 42%;
-  --accent: 211 32% 90%;
-  --accent-foreground: 214 40% 12%;
-  --destructive: 0 78% 47%;
+  --secondary: 210 18% 93%;
+  --secondary-foreground: 220 22% 18%;
+  --muted: 210 16% 95%;
+  --muted-foreground: 214 14% 45%;
+  --accent: 158 30% 92%;
+  --accent-foreground: 220 28% 10%;
+  --destructive: 4 78% 50%;
   --destructive-foreground: 0 0% 100%;
-  --success: 145 62% 34%;
+  --success: 158 58% 38%;
   --success-foreground: 0 0% 100%;
-  --warning: 38 92% 35%;
+  --warning: 42 88% 40%;
   --warning-foreground: 0 0% 100%;
-  --sidebar: 213 30% 94%;
-  --sidebar-foreground: 214 35% 18%;
-  --sidebar-border: 213 22% 86%;
-  --sidebar-primary: 214 72% 44%;
+  --sidebar: 210 16% 95%;
+  --sidebar-foreground: 220 22% 18%;
+  --sidebar-border: 214 18% 88%;
+  --sidebar-primary: 158 58% 38%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 211 28% 90%;
-  --sidebar-accent-foreground: 214 35% 18%;
-  --sidebar-ring: 214 72% 44%;
-  --chart-1: 214 72% 44%;
-  --chart-2: 145 62% 34%;
-  --chart-3: 38 90% 48%;
-  --chart-4: 262 60% 52%;
-  --chart-5: 340 72% 50%;
+  --sidebar-accent: 158 30% 90%;
+  --sidebar-accent-foreground: 220 22% 18%;
+  --sidebar-ring: 158 58% 38%;
+  --chart-1: 158 58% 38%;
+  --chart-2: 4 78% 50%;
+  --chart-3: 42 88% 40%;
+  --chart-4: 210 70% 50%;
+  --chart-5: 280 60% 55%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 }
 
-/* ── DARK THEME — Bloomberg Terminal ──────────────── */
+/* ── DARK THEME — Zerodha Kite Green ──────────────── */
 .dark {
-  --background: 222 24% 8%;
-  --foreground: 210 28% 90%;
-  --border: 220 18% 20%;
-  --input: 220 18% 16%;
-  --ring: 210 82% 62%;
-  --card: 220 22% 11%;
-  --card-foreground: 210 28% 90%;
-  --card-border: 220 18% 20%;
-  --popover: 220 22% 11%;
-  --popover-foreground: 210 28% 90%;
-  --popover-border: 220 18% 20%;
-  --primary: 210 82% 62%;
-  --primary-foreground: 222 24% 8%;
-  --secondary: 220 18% 16%;
-  --secondary-foreground: 210 24% 80%;
-  --muted: 220 18% 14%;
-  --muted-foreground: 213 20% 58%;
-  --accent: 220 18% 16%;
-  --accent-foreground: 210 24% 80%;
-  --destructive: 0 72% 55%;
+  --background: 220 20% 9%;
+  --foreground: 210 20% 92%;
+  --border: 220 15% 19%;
+  --input: 220 15% 15%;
+  --ring: 158 64% 42%;
+  --card: 220 18% 12%;
+  --card-foreground: 210 20% 92%;
+  --card-border: 220 15% 19%;
+  --popover: 220 18% 12%;
+  --popover-foreground: 210 20% 92%;
+  --popover-border: 220 15% 19%;
+  --primary: 158 64% 42%;
+  --primary-foreground: 220 20% 9%;
+  --secondary: 220 15% 15%;
+  --secondary-foreground: 210 16% 78%;
+  --muted: 220 15% 13%;
+  --muted-foreground: 210 14% 55%;
+  --accent: 220 15% 15%;
+  --accent-foreground: 210 16% 78%;
+  --destructive: 4 78% 56%;
   --destructive-foreground: 0 0% 100%;
-  --success: 145 60% 44%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 85% 58%;
-  --warning-foreground: 222 24% 8%;
-  --sidebar: 222 26% 6%;
-  --sidebar-foreground: 210 24% 82%;
-  --sidebar-border: 220 18% 18%;
-  --sidebar-primary: 210 82% 62%;
-  --sidebar-primary-foreground: 222 24% 8%;
-  --sidebar-accent: 220 18% 14%;
-  --sidebar-accent-foreground: 210 24% 82%;
-  --sidebar-ring: 210 82% 62%;
-  --chart-1: 210 82% 62%;
-  --chart-2: 145 60% 44%;
-  --chart-3: 38 85% 58%;
-  --chart-4: 262 65% 65%;
-  --chart-5: 340 72% 58%;
+  --success: 158 64% 42%;
+  --success-foreground: 220 20% 9%;
+  --warning: 42 88% 58%;
+  --warning-foreground: 220 20% 9%;
+  --sidebar: 220 22% 7%;
+  --sidebar-foreground: 210 16% 80%;
+  --sidebar-border: 220 15% 17%;
+  --sidebar-primary: 158 64% 42%;
+  --sidebar-primary-foreground: 220 20% 9%;
+  --sidebar-accent: 220 15% 13%;
+  --sidebar-accent-foreground: 210 16% 80%;
+  --sidebar-ring: 158 64% 42%;
+  --chart-1: 158 64% 42%;
+  --chart-2: 4 78% 56%;
+  --chart-3: 42 88% 58%;
+  --chart-4: 210 70% 60%;
+  --chart-5: 280 60% 62%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 }
 
 @layer base {
@@ -221,30 +221,27 @@
   }
 
   /* ── Order Book depth rows ── */
-  .depth-buy-row  { background: hsl(145 60% 44% / 0.08); }
-  .depth-sell-row { background: hsl(0 72% 55% / 0.08); }
-  .dark .depth-buy-row  { background: hsl(145 60% 20% / 0.25); }
-  .dark .depth-sell-row { background: hsl(0 72% 30% / 0.25); }
+  .depth-buy-row  { background: hsl(158 58% 38% / 0.07); }
+  .depth-sell-row { background: hsl(4 78% 50% / 0.07); }
+  .dark .depth-buy-row  { background: hsl(158 64% 42% / 0.15); }
+  .dark .depth-sell-row { background: hsl(4 78% 56% / 0.15); }
 
   /* ── Option Chain CE/PE row tints ── */
-  .oc-ce-row { background: hsl(145 60% 44% / 0.06); }
-  .oc-pe-row { background: hsl(0 72% 55% / 0.06); }
-  .oc-atm-row { background: hsl(38 85% 58% / 0.12); border-left: 2px solid hsl(var(--warning)); }
-  .dark .oc-ce-row { background: hsl(145 60% 20% / 0.18); }
-  .dark .oc-pe-row { background: hsl(0 72% 30% / 0.18); }
-  .dark .oc-atm-row { background: hsl(38 85% 30% / 0.20); border-left: 2px solid hsl(var(--warning)); }
+  .oc-ce-row { background: hsl(158 58% 38% / 0.06); }
+  .oc-pe-row { background: hsl(4 78% 50% / 0.06); }
+  .oc-atm-row { background: hsl(42 88% 40% / 0.1); border-left: 2px solid hsl(var(--warning)); }
+  .dark .oc-ce-row { background: hsl(158 64% 42% / 0.15); }
+  .dark .oc-pe-row { background: hsl(4 78% 56% / 0.15); }
+  .dark .oc-atm-row { background: hsl(42 88% 30% / 0.2); border-left: 2px solid hsl(var(--warning)); }
 
   /* ── Position P&L colours ── */
   .pnl-positive { color: hsl(var(--success)); font-weight: 500; }
   .pnl-negative { color: hsl(var(--destructive)); font-weight: 500; }
 
   /* ── Log level badges ── */
-  .log-info  { background: hsl(var(--primary)/0.15); color: hsl(var(--primary)); }
-  .log-warn  { background: hsl(var(--warning)/0.15); color: hsl(var(--warning)); }
-  .log-error { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
-  .dark .log-info  { background: hsl(var(--primary)/0.2); }
-  .dark .log-warn  { background: hsl(var(--warning)/0.2); }
-  .dark .log-error { background: hsl(var(--destructive)/0.2); }
+  .log-info  { background: hsl(var(--primary)/0.12); color: hsl(var(--primary)); }
+  .log-warn  { background: hsl(var(--warning)/0.12); color: hsl(var(--warning)); }
+  .log-error { background: hsl(var(--destructive)/0.12); color: hsl(var(--destructive)); }
 
   /* ── Search input with icon ── */
   .search-input {
@@ -274,20 +271,20 @@
   .search-btn:hover { opacity: 0.88; }
 
   /* ── Status order badges ── */
-  .badge-traded    { background: hsl(var(--success)/0.15);     color: hsl(var(--success)); }
-  .badge-pending   { background: hsl(var(--warning)/0.15);     color: hsl(var(--warning)); }
-  .badge-rejected  { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+  .badge-traded    { background: hsl(var(--success)/0.12);     color: hsl(var(--success)); }
+  .badge-pending   { background: hsl(var(--warning)/0.12);     color: hsl(var(--warning)); }
+  .badge-rejected  { background: hsl(var(--destructive)/0.12); color: hsl(var(--destructive)); }
   .badge-cancelled { background: hsl(var(--muted));            color: hsl(var(--muted-foreground)); }
-  .badge-part      { background: hsl(210 82% 62% / 0.15);      color: hsl(210 82% 62%); }
+  .badge-part      { background: hsl(210 70% 50% / 0.12);      color: hsl(210 70% 50%); }
 
   /* ── Strategy status ── */
-  .status-active  { background: hsl(var(--success)/0.15);  color: hsl(var(--success)); }
-  .status-paused  { background: hsl(var(--warning)/0.15);  color: hsl(var(--warning)); }
-  .status-stopped { background: hsl(var(--destructive)/0.15); color: hsl(var(--destructive)); }
+  .status-active  { background: hsl(var(--success)/0.12);      color: hsl(var(--success)); }
+  .status-paused  { background: hsl(var(--warning)/0.12);      color: hsl(var(--warning)); }
+  .status-stopped { background: hsl(var(--destructive)/0.12);  color: hsl(var(--destructive)); }
 
   /* ── Kill switch banner ── */
   .killswitch-banner {
-    background: hsl(var(--destructive)/0.12);
+    background: hsl(var(--destructive)/0.1);
     border-bottom: 1px solid hsl(var(--destructive)/0.3);
     color: hsl(var(--destructive));
   }
@@ -295,10 +292,7 @@
   /* ── Engine running indicator ── */
   .engine-dot-on  { background: hsl(var(--success)); animation: pulse 2s infinite; }
   .engine-dot-off { background: hsl(var(--muted-foreground)); }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
   /* ── Token expiry warning ── */
   .token-warn-banner {
@@ -315,9 +309,6 @@
   .table-header-cell { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
 
   /* ── Sidebar active item ── */
-  .sidebar-item-active {
-    background: hsl(var(--sidebar-accent));
-    color: hsl(var(--sidebar-accent-foreground));
-  }
+  .sidebar-item-active { background: hsl(var(--sidebar-accent)); color: hsl(var(--sidebar-accent-foreground)); }
   .sidebar-item-active svg { color: hsl(var(--sidebar-primary)); }
 }
