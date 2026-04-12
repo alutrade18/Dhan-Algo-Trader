@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Download, RefreshCw, Wallet } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
+
+/** Today's date in IST (UTC+5:30) formatted as YYYY-MM-DD */
+function getTodayIST(): string {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
+}
 
 function toYMD(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -55,13 +62,30 @@ function isClosingBalance(row: LedgerEntry): boolean {
 }
 
 export default function TradeHistory() {
+  const [today, setToday] = useState<string>(getTodayIST);
   const [fromDate, setFromDate] = useState(toYMD(daysAgo(29)));
-  const [toDate, setToDate] = useState(toYMD(new Date()));
+  const [toDate, setToDate] = useState<string>(getTodayIST);
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
   const [closingBalance, setClosingBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
+
+  // Auto-update today every minute; when the date rolls over at midnight,
+  // also advance toDate if the user hadn't changed it from yesterday's today.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const newToday = getTodayIST();
+      setToday(prev => {
+        if (prev !== newToday) {
+          setToDate(prevTo => (prevTo === prev ? newToday : prevTo));
+          return newToday;
+        }
+        return prev;
+      });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const fetchLedger = useCallback(async () => {
     setLoading(true);
@@ -140,6 +164,7 @@ export default function TradeHistory() {
           value={toDate}
           onChange={e => setToDate(e.target.value)}
           min={fromDate}
+          max={today}
           className="w-36 text-xs font-mono h-9"
         />
         <Button size="sm" className="gap-1.5 h-9" onClick={fetchLedger} disabled={loading}>
