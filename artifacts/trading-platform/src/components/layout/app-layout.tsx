@@ -22,7 +22,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/conditional": "Conditional Triggers",
   "/option-chain": "Option Chain",
   "/positions": "Positions",
-  "/trade-history": "Trade History",
+  "/trade-history": "Ledger Statement",
   "/strategies": "Strategies",
   "/backtesting": "Backtesting",
   "/paper-trading": "Paper Trading",

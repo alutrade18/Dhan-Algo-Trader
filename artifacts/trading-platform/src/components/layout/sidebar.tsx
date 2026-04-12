@@ -57,7 +57,7 @@ const NAV_SECTIONS = [
   {
     label: "REPORTS",
     items: [
-      { href: "/trade-history", label: "Trade History", icon: BookOpen },
+      { href: "/trade-history", label: "Ledger Statement", icon: BookOpen },
     ],
   },
   {

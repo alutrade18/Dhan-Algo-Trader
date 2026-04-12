@@ -114,7 +114,7 @@ export default function TradeHistory() {
   return (
     <div className="space-y-4">
       <p className="text-sm font-bold text-foreground">
-        View executed trades and ledger statements from Dhan
+        View executed trades and ledger entries from Dhan
       </p>
 
       <div className="flex items-center gap-2 flex-wrap">
