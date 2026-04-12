@@ -856,8 +856,8 @@ export default function OrdersPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="overflow-x-scroll">
-                  <table className="table-auto text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full table-auto text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
                         {[
