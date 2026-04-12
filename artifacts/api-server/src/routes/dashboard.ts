@@ -57,9 +57,29 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     if (ledgerResult.status === "fulfilled") {
       const entries = Array.isArray(ledgerResult.value) ? (ledgerResult.value as Record<string, unknown>[]) : [];
       if (entries.length > 0) {
-        const firstBal = parseFloat(String(entries[0].runbal ?? "0").replace(/,/g, ""));
-        const lastBal = parseFloat(String(entries[entries.length - 1].runbal ?? "0").replace(/,/g, ""));
-        if (!isNaN(firstBal) && !isNaN(lastBal)) totalPnl = Math.round((lastBal - firstBal) * 100) / 100;
+        let prevBal = 0;
+        let deposits = 0;
+        let withdrawals = 0;
+        let finalBal = 0;
+        for (const e of entries) {
+          const narr = String(e.narration ?? e.particulars ?? "").toUpperCase();
+          const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
+          if (isNaN(bal)) continue;
+          const delta = bal - prevBal;
+          if (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT"))) {
+            deposits += delta > 0 ? delta : 0;
+          } else if (narr.includes("WITHDRAW") || narr.includes("PAYOUT") || narr.includes("TRANSFER OUT")) {
+            withdrawals += delta < 0 ? Math.abs(delta) : 0;
+          }
+          prevBal = bal;
+          finalBal = bal;
+        }
+        totalPnl = Math.round((finalBal + withdrawals - deposits) * 100) / 100;
+        if (deposits === 0 && withdrawals === 0 && entries.length >= 2) {
+          const first = parseFloat(String(entries[0].runbal ?? "0").replace(/,/g, ""));
+          const last = parseFloat(String(entries[entries.length - 1].runbal ?? "0").replace(/,/g, ""));
+          totalPnl = Math.round((last - first) * 100) / 100;
+        }
       }
     } else {
       req.log.warn({ err: (ledgerResult as PromiseRejectedResult).reason }, "Ledger fetch failed");
@@ -98,7 +118,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       openPositions,
       totalHoldings,
       pendingOrders,
-      activeStrategies: activeStrategies[0]?.count || 0,
+      activeStrategies,
       todayTrades,
       winRate: Math.round(winRate * 100) / 100,
       killSwitchTriggered,
@@ -112,12 +132,19 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   }
 });
 
+function classifyLedgerEntry(narration: string): "DEPOSIT" | "WITHDRAWAL" | "PNL" {
+  const n = narration.toUpperCase();
+  if (n.includes("FUND") && (n.includes("RECEIV") || n.includes("CREDIT") || n.includes("ADDED") || n.includes("DEPOSIT") || n.includes("TRANSFER IN"))) return "DEPOSIT";
+  if (n.includes("WITHDRAW") || n.includes("PAYOUT") || n.includes("TRANSFER OUT") || (n.includes("FUND") && n.includes("DEBIT"))) return "WITHDRAWAL";
+  return "PNL";
+}
+
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
     const source = String(req.query.source ?? "local");
     const useDhan = source === "dhan";
     const useLedger = source === "ledger";
-    const points: Array<{ date: string; pnl: number; cumulative: number }> = [];
+    const points: Array<{ date: string; pnl: number; cumulative: number; runbal?: number; type?: string; label?: string }> = [];
 
     let startDate: Date;
     let endDate: Date;
@@ -155,7 +182,8 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
         const raw = await dhanClient.getLedger(fromStr, toStr);
         const entries = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
 
-        const dailyBalance = new Map<string, number>();
+        type DayInfo = { runbal: number; types: string[]; narration: string };
+        const dailyMap = new Map<string, DayInfo>();
 
         for (const e of entries) {
           const voucher = String(e.voucherdate ?? "");
@@ -164,29 +192,45 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
           if (isNaN(parsed.getTime())) continue;
           const dateKey = parsed.toISOString().split("T")[0];
           const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
-          if (!isNaN(bal)) {
-            dailyBalance.set(dateKey, bal);
+          if (isNaN(bal)) continue;
+          const narration = String(e.narration ?? e.particulars ?? "").trim();
+          const type = classifyLedgerEntry(narration);
+
+          if (!dailyMap.has(dateKey)) {
+            dailyMap.set(dateKey, { runbal: bal, types: [type], narration });
+          } else {
+            const existing = dailyMap.get(dateKey)!;
+            existing.runbal = bal;
+            existing.types.push(type);
+            existing.narration = narration;
           }
         }
 
-        const sortedDates = Array.from(dailyBalance.keys()).sort();
+        const sortedDates = Array.from(dailyMap.keys()).sort();
         if (sortedDates.length === 0) { res.json([]); return; }
 
-        let prevBal = dailyBalance.get(sortedDates[0])!;
-        points.push({ date: sortedDates[0], pnl: 0, cumulative: 0 });
-
-        for (let i = 1; i < sortedDates.length; i++) {
-          const d = sortedDates[i];
-          const bal = dailyBalance.get(d)!;
-          const pnl = Math.round((bal - prevBal) * 100) / 100;
-          points.push({ date: d, pnl, cumulative: 0 });
-          prevBal = bal;
+        let prevBal = 0;
+        for (const d of sortedDates) {
+          const info = dailyMap.get(d)!;
+          const pnl = Math.round((info.runbal - prevBal) * 100) / 100;
+          const types = info.types;
+          const dominantType = types.includes("DEPOSIT") ? "DEPOSIT"
+            : types.includes("WITHDRAWAL") ? "WITHDRAWAL" : "PNL";
+          points.push({
+            date: d,
+            pnl,
+            cumulative: 0,
+            runbal: info.runbal,
+            type: dominantType,
+            label: info.narration,
+          });
+          prevBal = info.runbal;
         }
 
-        let cumulative = 0;
+        let tradingCumulative = 0;
         for (const p of points) {
-          cumulative += p.pnl;
-          p.cumulative = Math.round(cumulative * 100) / 100;
+          if (p.type === "PNL") tradingCumulative += p.pnl;
+          p.cumulative = Math.round(tradingCumulative * 100) / 100;
         }
         res.json(points);
         return;

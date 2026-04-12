@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGetDashboardSummary, useGetFundLimits } from "@workspace/api-client-react";
+import { useGetFundLimits } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,26 +10,31 @@ import { IndianRupee, TrendingUp, Briefcase, Activity, ShieldAlert } from "lucid
 import { cn } from "@/lib/utils";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
 const BASE = import.meta.env.BASE_URL;
 
-const formatCurrency = (val?: number) =>
-  val !== undefined
+const formatCurrency = (val?: number | null) =>
+  val !== undefined && val !== null
     ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(val)
-    : "₹0";
+    : "—";
 
-function toYMD(d: Date) {
-  return d.toISOString().split("T")[0];
+function formatL(v: number) {
+  const abs = Math.abs(v);
+  if (abs >= 100_000) return `₹${(v / 100_000).toFixed(1)}L`;
+  if (abs >= 1_000) return `₹${(v / 1_000).toFixed(1)}K`;
+  return `₹${v}`;
 }
+
+function toYMD(d: Date) { return d.toISOString().split("T")[0]; }
 function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d;
+  const d = new Date(); d.setDate(d.getDate() - n); return d;
 }
 
 function StatCard({ title, value, inlineTag, icon: Icon, isLoading, valueClass }: {
-  title: string; value: string; inlineTag?: string; icon: React.ElementType; isLoading?: boolean; valueClass?: string;
+  title: string; value: string; inlineTag?: string; icon: React.ElementType;
+  isLoading?: boolean; valueClass?: string;
 }) {
   return (
     <Card className="bg-card">
@@ -53,9 +58,16 @@ function StatCard({ title, value, inlineTag, icon: Icon, isLoading, valueClass }
   );
 }
 
-interface EquityPoint { date: string; pnl: number; cumulative: number; }
+interface EquityPoint {
+  date: string;
+  pnl: number;
+  cumulative: number;
+  runbal?: number;
+  type?: "DEPOSIT" | "WITHDRAWAL" | "PNL";
+  label?: string;
+}
 
-interface DashboardSummaryExt {
+interface DashboardSummary {
   todayPnl?: number;
   totalPnl?: number;
   activeStrategies?: number;
@@ -63,6 +75,8 @@ interface DashboardSummaryExt {
   killSwitchTriggered?: boolean;
   dailyLossAmount?: number;
   maxDailyLoss?: number;
+  availableBalance?: number;
+  usedMargin?: number;
 }
 
 type DateMode = "7d" | "30d" | "365d" | "custom";
@@ -73,11 +87,73 @@ const PRESETS: { label: string; mode: Exclude<DateMode, "custom">; days: number 
   { label: "365D", mode: "365d", days: 364 },
 ];
 
-export default function Dashboard() {
-  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary();
-  const { data: funds, isLoading: isFundsLoading } = useGetFundLimits();
+const Y_MAX = 1_500_000;
+const Y_STEP = 150_000;
+const Y_TICKS = Array.from({ length: Y_MAX / Y_STEP + 1 }, (_, i) => i * Y_STEP);
 
-  const summaryExt = summary as DashboardSummaryExt | undefined;
+function typeColor(type?: string) {
+  if (type === "DEPOSIT")    return "#22c55e";
+  if (type === "WITHDRAWAL") return "#ef4444";
+  return "hsl(var(--primary))";
+}
+
+function CustomDot(props: Record<string, unknown>) {
+  const { cx, cy, payload } = props as { cx: number; cy: number; payload: EquityPoint };
+  const color = typeColor(payload.type);
+  if (payload.type === "DEPOSIT")    return <circle cx={cx} cy={cy} r={5} fill="#22c55e" stroke="#fff" strokeWidth={1.5} />;
+  if (payload.type === "WITHDRAWAL") return <circle cx={cx} cy={cy} r={5} fill="#ef4444" stroke="#fff" strokeWidth={1.5} />;
+  return <circle cx={cx} cy={cy} r={3.5} fill={color} stroke="none" />;
+}
+
+function CustomTooltip({ active, payload, label }: {
+  active?: boolean; payload?: { payload: EquityPoint }[]; label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const typeLabel = d.type === "DEPOSIT" ? "Deposit" : d.type === "WITHDRAWAL" ? "Withdrawal" : "Profit & Loss";
+  const typeBadgeClass =
+    d.type === "DEPOSIT"    ? "text-emerald-400 border-emerald-400/30" :
+    d.type === "WITHDRAWAL" ? "text-red-400 border-red-400/30" :
+                              "text-primary border-primary/30";
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 shadow-xl text-xs space-y-1.5 min-w-[200px]">
+      <p className="font-medium text-foreground">{label}</p>
+      <div className="flex items-center justify-between gap-3">
+        <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", typeBadgeClass)}>{typeLabel}</Badge>
+        <span className={cn("font-mono font-semibold", d.pnl >= 0 ? "text-emerald-400" : "text-red-400")}>
+          {d.pnl >= 0 ? "+" : ""}{formatCurrency(d.pnl)}
+        </span>
+      </div>
+      {d.runbal !== undefined && (
+        <div className="flex justify-between items-center text-muted-foreground">
+          <span>Balance</span>
+          <span className="font-mono">{formatCurrency(d.runbal)}</span>
+        </div>
+      )}
+      {d.label && (
+        <p className="text-[10px] text-muted-foreground truncate max-w-[200px]" title={d.label}>{d.label}</p>
+      )}
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const { data: funds, isLoading: isFundsLoading } = useGetFundLimits({
+    query: { refetchInterval: 30_000, staleTime: 15_000 },
+  });
+
+  const { data: summary, isLoading: isSummaryLoading } = useQuery<DashboardSummary>({
+    queryKey: ["dashboard-summary"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/dashboard/summary`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
   const fundsData = funds as (typeof funds & { availableBalance?: number; utilizedAmount?: number }) | undefined;
 
   const [dateMode, setDateMode] = useState<DateMode>("365d");
@@ -92,22 +168,21 @@ export default function Dashboard() {
     queryFn: async () => {
       const res = await fetch(`${BASE}api/risk/killswitch`, {
         cache: "no-store",
-        headers: { "Cache-Control": "no-cache, no-store", "Pragma": "no-cache" },
+        headers: { "Cache-Control": "no-cache, no-store", Pragma: "no-cache" },
       });
       if (!res.ok) return {};
       return res.json();
     },
-    refetchInterval: 15000,
+    refetchInterval: 15_000,
     staleTime: 0,
     gcTime: 0,
   });
 
-  const equityQueryKey = ["equity-curve", activeQuery.mode, activeQuery.from, activeQuery.to];
   const { data: equityCurve, isLoading: isEquityLoading } = useQuery<EquityPoint[]>({
-    queryKey: equityQueryKey,
+    queryKey: ["equity-curve", activeQuery.mode, activeQuery.from, activeQuery.to],
     queryFn: async () => {
       let url = `${BASE}api/dashboard/equity-curve?source=ledger`;
-      if (activeQuery.mode === "7d") url += "&days=7";
+      if (activeQuery.mode === "7d")      url += "&days=7";
       else if (activeQuery.mode === "30d") url += "&days=30";
       else if (activeQuery.mode === "365d") url += "&days=365";
       else url += `&fromDate=${activeQuery.from}&toDate=${activeQuery.to}`;
@@ -115,27 +190,18 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: 120_000,
   });
 
   const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
-  const killTriggered = dhanKillActive || summaryExt?.killSwitchTriggered;
+  const killTriggered = dhanKillActive || summary?.killSwitchTriggered;
 
-  const equityData = equityCurve
-    ?.filter(p => p.pnl !== 0)
+  const equityData = (equityCurve ?? [])
+    .filter(p => p.pnl !== 0 || p.runbal !== undefined)
     .map(p => ({
       ...p,
-      date: new Date(p.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+      date: new Date(p.date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" }),
     }));
-
-  const allCumulative = equityData?.map(p => p.cumulative) ?? [];
-  const dataMin = allCumulative.length > 0 ? Math.min(0, ...allCumulative) : 0;
-  const dataMax = allCumulative.length > 0 ? Math.max(0, ...allCumulative) : 0;
-  const padding = allCumulative.length > 0 ? Math.max(Math.abs(dataMax - dataMin) * 0.12, 200) : 500;
-  const yDomain: [number, number] = [
-    Math.floor((dataMin - padding) / 100) * 100,
-    Math.ceil((dataMax + padding) / 100) * 100,
-  ];
 
   function handlePreset(preset: typeof PRESETS[0]) {
     const from = daysAgo(preset.days);
@@ -152,6 +218,13 @@ export default function Dashboard() {
     setActiveQuery({ mode: "custom", from: fromInput, to: toInput });
   }
 
+  const todayPnl = summary?.todayPnl ?? 0;
+  const totalPnl = summary?.totalPnl ?? 0;
+  const activeStrategies = summary?.activeStrategies ?? 0;
+  const winRate = summary?.winRate ?? 0;
+  const availBal = fundsData?.availableBalance ?? summary?.availableBalance;
+  const usedMargin = fundsData?.utilizedAmount ?? summary?.usedMargin;
+
   return (
     <div className="space-y-4">
       {killTriggered && (
@@ -162,7 +235,7 @@ export default function Dashboard() {
             <p className="text-xs mt-0.5 text-destructive/80">
               {dhanKillActive
                 ? `Dhan kill switch is active. ${ksStatus?.canDeactivateToday ? "Go to Settings to deactivate (1 reset remaining today)." : "Auto-resets at 8:30 AM IST tomorrow."}`
-                : `Daily loss limit of ${formatCurrency(summaryExt?.maxDailyLoss)} reached (loss: ${formatCurrency(summaryExt?.dailyLossAmount)}). Trading blocked for today.`}
+                : `Daily loss limit of ${formatCurrency(summary?.maxDailyLoss)} reached (loss: ${formatCurrency(summary?.dailyLossAmount)}). Trading blocked for today.`}
             </p>
           </div>
           <Badge variant="destructive" className="text-xs">HALTED</Badge>
@@ -172,35 +245,31 @@ export default function Dashboard() {
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Today P&L"
-          value={formatCurrency(summaryExt?.todayPnl)}
+          value={formatCurrency(todayPnl)}
           inlineTag="Realized + Unrealized"
           icon={TrendingUp}
           isLoading={isSummaryLoading}
-          valueClass={summaryExt?.todayPnl !== undefined
-            ? summaryExt.todayPnl >= 0 ? "text-success" : "text-destructive"
-            : ""}
+          valueClass={todayPnl > 0 ? "text-success" : todayPnl < 0 ? "text-destructive" : ""}
         />
         <StatCard
           title="Total P&L"
-          value={formatCurrency(summaryExt?.totalPnl)}
+          value={formatCurrency(totalPnl)}
           inlineTag="YTD (Ledger)"
           icon={Activity}
           isLoading={isSummaryLoading}
-          valueClass={summaryExt?.totalPnl !== undefined
-            ? summaryExt.totalPnl >= 0 ? "text-success" : "text-destructive"
-            : ""}
+          valueClass={totalPnl > 0 ? "text-success" : totalPnl < 0 ? "text-destructive" : ""}
         />
         <StatCard
           title="Available Balance"
-          value={formatCurrency(fundsData?.availableBalance)}
-          inlineTag={`Used: ${formatCurrency(fundsData?.utilizedAmount)}`}
+          value={availBal !== undefined && availBal !== null ? formatCurrency(availBal) : "—"}
+          inlineTag={usedMargin !== undefined ? `Used: ${formatCurrency(usedMargin)}` : undefined}
           icon={IndianRupee}
           isLoading={isFundsLoading}
         />
         <StatCard
           title="Active Strategies"
-          value={summaryExt?.activeStrategies?.toString() ?? "0"}
-          inlineTag={`Win Rate: ${summaryExt?.winRate?.toFixed(1) ?? "0.0"}%`}
+          value={String(activeStrategies)}
+          inlineTag={`Win Rate: ${winRate.toFixed(1)}%`}
           icon={Briefcase}
           isLoading={isSummaryLoading}
         />
@@ -209,7 +278,14 @@ export default function Dashboard() {
       <Card>
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between flex-wrap">
-            <CardTitle className="text-sm shrink-0">Equity Curve — Dhan Ledger</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm shrink-0">Equity Curve</CardTitle>
+              <div className="flex items-center gap-1.5 text-[10px]">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Deposit</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Withdrawal</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary inline-block" />P&amp;L</span>
+              </div>
+            </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {PRESETS.map(p => (
                 <Button
@@ -219,33 +295,24 @@ export default function Dashboard() {
                   onClick={() => handlePreset(p)}
                 >{p.label}</Button>
               ))}
-
               <div className="flex items-center gap-1 border border-border rounded-md px-2 py-1 bg-background">
                 <span className="text-[11px] text-muted-foreground whitespace-nowrap">From</span>
                 <Input
-                  type="date"
-                  value={fromInput}
-                  max={toInput}
+                  type="date" value={fromInput} max={toInput}
                   onChange={e => { setFromInput(e.target.value); setDateMode("custom"); }}
                   className="h-6 border-0 p-0 text-xs w-[110px] bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <span className="text-[11px] text-muted-foreground">—</span>
                 <Input
-                  type="date"
-                  value={toInput}
-                  min={fromInput}
-                  max={toYMD(new Date())}
+                  type="date" value={toInput} min={fromInput} max={toYMD(new Date())}
                   onChange={e => { setToInput(e.target.value); setDateMode("custom"); }}
                   className="h-6 border-0 p-0 text-xs w-[110px] bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <Button
-                  size="sm"
-                  className="h-6 px-2 text-xs"
+                  size="sm" className="h-6 px-2 text-xs"
                   onClick={applyCustomRange}
                   disabled={!fromInput || !toInput || fromInput > toInput}
-                >
-                  Go
-                </Button>
+                >Go</Button>
               </div>
             </div>
           </div>
@@ -253,45 +320,40 @@ export default function Dashboard() {
         <CardContent className="px-4 pb-4">
           {isEquityLoading ? (
             <Skeleton className="h-80 w-full" />
-          ) : equityData && equityData.length > 0 ? (
+          ) : equityData.length > 0 ? (
             <ResponsiveContainer width="100%" height={360}>
-              <AreaChart data={equityData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <AreaChart data={equityData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                   interval="preserveStartEnd"
+                  tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                  tickFormatter={v => {
-                    const abs = Math.abs(v);
-                    if (abs >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
-                    if (abs >= 1000) return `₹${(v / 1000).toFixed(1)}k`;
-                    return `₹${v}`;
-                  }}
-                  domain={yDomain}
-                  width={60}
+                  ticks={Y_TICKS}
+                  domain={[0, Y_MAX]}
+                  tickFormatter={v => formatL(v)}
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  width={52}
                 />
-                <Tooltip
-                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                  formatter={(v: number) => [formatCurrency(v), "Cumulative P&L"]}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                />
+                <ReferenceLine y={0} stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                <Tooltip content={<CustomTooltip />} />
                 <Area
                   type="monotone"
-                  dataKey="cumulative"
+                  dataKey="runbal"
                   stroke="hsl(var(--primary))"
-                  strokeWidth={2.5}
+                  strokeWidth={2}
                   fill="url(#equityGrad)"
-                  dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={<CustomDot />}
+                  activeDot={{ r: 7, stroke: "hsl(var(--primary))", strokeWidth: 2, fill: "hsl(var(--card))" }}
                 />
               </AreaChart>
             </ResponsiveContainer>
