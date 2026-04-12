@@ -72,47 +72,47 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME — Zerodha Kite White ─────────────── */
+/* ── LIGHT THEME — Midnight Indigo ────────────────── */
 :root,
 .light {
-  --background: 210 18% 97%;
-  --foreground: 220 28% 10%;
-  --border: 214 18% 88%;
-  --input: 214 18% 88%;
-  --ring: 158 58% 38%;
+  --background: 245 22% 96%;        /* very light lavender-gray */
+  --foreground: 240 38% 10%;        /* near-black with indigo tint */
+  --border: 245 18% 87%;
+  --input: 0 0% 100%;               /* white inputs stand out */
+  --ring: 243 72% 50%;              /* indigo focus ring */
   --card: 0 0% 100%;
-  --card-foreground: 220 28% 10%;
-  --card-border: 214 18% 88%;
+  --card-foreground: 240 38% 10%;
+  --card-border: 245 18% 87%;
   --popover: 0 0% 100%;
-  --popover-foreground: 220 28% 10%;
-  --popover-border: 214 18% 88%;
-  --primary: 158 58% 38%;
+  --popover-foreground: 240 38% 10%;
+  --popover-border: 245 18% 87%;
+  --primary: 243 72% 50%;           /* deep indigo #3d3db8 */
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 18% 93%;
-  --secondary-foreground: 220 22% 18%;
-  --muted: 210 16% 95%;
-  --muted-foreground: 214 14% 45%;
-  --accent: 158 30% 92%;
-  --accent-foreground: 220 28% 10%;
-  --destructive: 4 78% 50%;
+  --secondary: 245 22% 92%;
+  --secondary-foreground: 240 30% 22%;
+  --muted: 245 18% 94%;
+  --muted-foreground: 245 14% 46%;
+  --accent: 243 50% 93%;            /* light indigo tint */
+  --accent-foreground: 243 72% 28%;
+  --destructive: 4 76% 50%;
   --destructive-foreground: 0 0% 100%;
-  --success: 158 58% 38%;
+  --success: 145 62% 34%;
   --success-foreground: 0 0% 100%;
-  --warning: 42 88% 40%;
+  --warning: 38 88% 40%;
   --warning-foreground: 0 0% 100%;
-  --sidebar: 210 16% 95%;
-  --sidebar-foreground: 220 22% 18%;
-  --sidebar-border: 214 18% 88%;
-  --sidebar-primary: 158 58% 38%;
+  --sidebar: 245 22% 94%;           /* lavender sidebar */
+  --sidebar-foreground: 240 30% 18%;
+  --sidebar-border: 245 18% 87%;
+  --sidebar-primary: 243 72% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 158 30% 90%;
-  --sidebar-accent-foreground: 220 22% 18%;
-  --sidebar-ring: 158 58% 38%;
-  --chart-1: 158 58% 38%;
-  --chart-2: 4 78% 50%;
-  --chart-3: 42 88% 40%;
-  --chart-4: 210 70% 50%;
-  --chart-5: 280 60% 55%;
+  --sidebar-accent: 243 45% 90%;    /* indigo hover tint */
+  --sidebar-accent-foreground: 243 72% 28%;
+  --sidebar-ring: 243 72% 50%;
+  --chart-1: 243 72% 50%;
+  --chart-2: 145 62% 34%;
+  --chart-3: 38 88% 40%;
+  --chart-4: 280 62% 52%;
+  --chart-5: 4 76% 50%;
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
