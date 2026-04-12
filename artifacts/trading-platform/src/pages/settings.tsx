@@ -336,11 +336,11 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4 w-full">
       {/* Row 1 — Broker Connection (full width) */}
       <Card className="border-primary/20">
         <CardHeader>
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
                 {isConnected ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-destructive" />}
@@ -350,12 +350,35 @@ export default function Settings() {
                 {isConnected ? `Connected as ${maskedClientId}` : "Enter your Dhan credentials to enable live trading"}
               </CardDescription>
             </div>
-            <Badge
-              variant="outline"
-              className={isConnected ? "text-success border-success/30 bg-success/10" : "text-destructive border-destructive/30 bg-destructive/10"}
-            >
-              {isConnected ? "Connected" : "Disconnected"}
-            </Badge>
+            {connectResult?.success ? (
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <Badge variant="outline" className="text-success border-success/30 bg-success/10 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Account Connected
+                  </Badge>
+                  <span className="font-mono text-xs text-muted-foreground flex items-center gap-1">
+                    <User className="w-3 h-3" />{connectResult.dhanClientId ?? maskedClientId}
+                  </span>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground" disabled={refreshMutation.isPending} onClick={() => refreshMutation.mutate()}>
+                    <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                </div>
+                <div className="flex gap-4 text-xs">
+                  <span className="text-muted-foreground">Balance: <span className="font-semibold text-success">₹{(connectResult.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                  <span className="text-muted-foreground">Withdrawable: <span className="font-semibold">₹{(connectResult.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                  <span className="text-muted-foreground">Used Margin: <span className="font-semibold">₹{(connectResult.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                  <span className="text-muted-foreground">SOD Limit: <span className="font-semibold">₹{(connectResult.sodLimit ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span></span>
+                </div>
+              </div>
+            ) : (
+              <Badge
+                variant="outline"
+                className={isConnected ? "text-success border-success/30 bg-success/10" : "text-destructive border-destructive/30 bg-destructive/10"}
+              >
+                {isConnected ? "Connected" : "Disconnected"}
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -394,42 +417,6 @@ export default function Settings() {
                 <div>
                   <p className="font-medium">Error: {connectResult.errorCode}</p>
                   <p className="text-xs opacity-80 mt-0.5">{connectResult.errorMessage}</p>
-                </div>
-              </div>
-            )}
-
-            {connectResult?.success && (
-              <div className="rounded-lg border border-success/30 bg-success/5 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-success/20 bg-success/10 flex-wrap gap-2">
-                  <div className="flex items-center gap-2 text-success">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span className="font-semibold text-sm">Account Connected</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <User className="w-3.5 h-3.5" />
-                      <span className="font-mono font-medium">{connectResult.dhanClientId ?? "—"}</span>
-                    </div>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground" disabled={refreshMutation.isPending} onClick={() => refreshMutation.mutate()}>
-                      <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
-                      Refresh
-                    </Button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border/50">
-                  {[
-                    { label: "Available Balance", value: connectResult.availableBalance, highlight: true },
-                    { label: "Withdrawable", value: connectResult.withdrawableBalance },
-                    { label: "Used Margin", value: connectResult.utilizedAmount },
-                    { label: "SOD Limit", value: connectResult.sodLimit },
-                  ].map(({ label, value, highlight }) => (
-                    <div key={label} className={`px-4 py-3 space-y-0.5 ${highlight ? "bg-success/5" : ""}`}>
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className={`text-sm font-semibold tabular-nums ${highlight ? "text-success" : ""}`}>
-                        ₹{(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}
@@ -659,26 +646,23 @@ export default function Settings() {
 
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Apply to</label>
-                  <div className="flex gap-4">
-                    {["INTRADAY", "DELIVERY"].map(type => (
-                      <label key={type} className="flex items-center gap-2 cursor-pointer text-sm">
-                        <Checkbox
-                          checked={pnlProductTypes.includes(type)}
-                          onCheckedChange={() => toggleProductType(type)}
-                        />
-                        {type}
-                      </label>
-                    ))}
+                  <div className="flex items-center gap-6 flex-wrap">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={pnlProductTypes.includes("INTRADAY")}
+                        onCheckedChange={() => toggleProductType("INTRADAY")}
+                      />
+                      INTRADAY
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                      <Checkbox
+                        checked={pnlForm.watch("enableKillSwitch")}
+                        onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)}
+                      />
+                      <span>Also activate kill switch when triggered</span>
+                    </label>
                   </div>
                 </div>
-
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
-                  <Checkbox
-                    checked={pnlForm.watch("enableKillSwitch")}
-                    onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)}
-                  />
-                  <span>Also activate kill switch when triggered</span>
-                </label>
 
                 <div className="flex gap-2 flex-wrap">
                   <Button
