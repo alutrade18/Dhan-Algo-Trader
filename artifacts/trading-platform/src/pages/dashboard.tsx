@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useGetFundLimits } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,18 @@ function formatL(v: number) {
 function toYMD(d: Date) { return d.toISOString().split("T")[0]; }
 function daysAgo(n: number) {
   const d = new Date(); d.setDate(d.getDate() - n); return d;
+}
+
+/** Returns ms until the next 9:00 AM IST (UTC+5:30 = 3:30 AM UTC). */
+function msUntilNext9amIST(): number {
+  const now = new Date();
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const targetUTCMinutes = 3 * 60 + 30; // 9am IST = 3:30am UTC
+  const minutesUntil =
+    utcMinutes < targetUTCMinutes
+      ? targetUTCMinutes - utcMinutes
+      : 24 * 60 - utcMinutes + targetUTCMinutes;
+  return minutesUntil * 60 * 1000;
 }
 
 function StatCard({ title, value, inlineTag, icon: Icon, isLoading, valueClass }: {
@@ -91,18 +103,11 @@ const Y_MAX = 1_500_000;
 const Y_STEP = 150_000;
 const Y_TICKS = Array.from({ length: Y_MAX / Y_STEP + 1 }, (_, i) => i * Y_STEP);
 
-function typeColor(type?: string) {
-  if (type === "DEPOSIT")    return "#22c55e";
-  if (type === "WITHDRAWAL") return "#ef4444";
-  return "hsl(var(--primary))";
-}
-
 function CustomDot(props: Record<string, unknown>) {
   const { cx, cy, payload } = props as { cx: number; cy: number; payload: EquityPoint };
-  const color = typeColor(payload.type);
   if (payload.type === "DEPOSIT")    return <circle cx={cx} cy={cy} r={5} fill="#22c55e" stroke="#fff" strokeWidth={1.5} />;
   if (payload.type === "WITHDRAWAL") return <circle cx={cx} cy={cy} r={5} fill="#ef4444" stroke="#fff" strokeWidth={1.5} />;
-  return <circle cx={cx} cy={cy} r={3.5} fill={color} stroke="none" />;
+  return <circle cx={cx} cy={cy} r={3.5} fill="hsl(var(--primary))" stroke="none" />;
 }
 
 function CustomTooltip({ active, payload, label }: {
@@ -115,7 +120,6 @@ function CustomTooltip({ active, payload, label }: {
     d.type === "DEPOSIT"    ? "text-emerald-400 border-emerald-400/30" :
     d.type === "WITHDRAWAL" ? "text-red-400 border-red-400/30" :
                               "text-primary border-primary/30";
-
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-xl text-xs space-y-1.5 min-w-[200px]">
       <p className="font-medium text-foreground">{label}</p>
@@ -140,7 +144,7 @@ function CustomTooltip({ active, payload, label }: {
 
 export default function Dashboard() {
   const { data: funds, isLoading: isFundsLoading } = useGetFundLimits({
-    query: { refetchInterval: 30_000, staleTime: 15_000 },
+    query: { refetchInterval: msUntilNext9amIST, staleTime: msUntilNext9amIST() },
   });
 
   const { data: summary, isLoading: isSummaryLoading } = useQuery<DashboardSummary>({
@@ -150,13 +154,12 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: msUntilNext9amIST,
+    staleTime: msUntilNext9amIST(),
   });
 
   const fundsData = funds as (typeof funds & { availableBalance?: number; utilizedAmount?: number }) | undefined;
 
-  const [dateMode, setDateMode] = useState<DateMode>("365d");
   const [fromInput, setFromInput] = useState(toYMD(daysAgo(364)));
   const [toInput, setToInput] = useState(toYMD(new Date()));
   const [activeQuery, setActiveQuery] = useState<{ mode: DateMode; from: string; to: string }>({
@@ -182,19 +185,40 @@ export default function Dashboard() {
     queryKey: ["equity-curve", activeQuery.mode, activeQuery.from, activeQuery.to],
     queryFn: async () => {
       let url = `${BASE}api/dashboard/equity-curve?source=ledger`;
-      if (activeQuery.mode === "7d")      url += "&days=7";
-      else if (activeQuery.mode === "30d") url += "&days=30";
+      if (activeQuery.mode === "7d")       url += "&days=7";
+      else if (activeQuery.mode === "30d")  url += "&days=30";
       else if (activeQuery.mode === "365d") url += "&days=365";
       else url += `&fromDate=${activeQuery.from}&toDate=${activeQuery.to}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    refetchInterval: 120_000,
+    refetchInterval: msUntilNext9amIST,
+    staleTime: msUntilNext9amIST(),
   });
 
   const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
   const killTriggered = dhanKillActive || summary?.killSwitchTriggered;
+
+  // Period P&L: computed live from equity curve API data — never stored in DB.
+  // This is the net trading P&L for the selected period (excludes deposits & withdrawals).
+  // Uses the last `cumulative` value which accumulates only PNL-type entries.
+  const periodPnl = useMemo<number | null>(() => {
+    if (!equityCurve || equityCurve.length === 0) return null;
+    // Sum only PNL-type daily deltas (excludes DEPOSIT/WITHDRAWAL days)
+    return Math.round(
+      equityCurve.filter(p => p.type === "PNL").reduce((sum, p) => sum + p.pnl, 0) * 100
+    ) / 100;
+  }, [equityCurve]);
+
+  // Total P&L card: show period-specific value when a preset is active,
+  // otherwise show all-time value from the summary API.
+  const isPreset = activeQuery.mode !== "custom";
+  const displayPnl   = isPreset && periodPnl !== null ? periodPnl : (summary?.totalPnl ?? 0);
+  const displayLabel = activeQuery.mode === "7d"   ? "7D Net"  :
+                       activeQuery.mode === "30d"  ? "30D Net" :
+                       activeQuery.mode === "365d" ? "365D Net" : "All-Time Net";
+  const isPnlLoading = isPreset ? isEquityLoading : isSummaryLoading;
 
   const equityData = (equityCurve ?? [])
     .filter(p => p.pnl !== 0 || p.runbal !== undefined)
@@ -205,8 +229,7 @@ export default function Dashboard() {
 
   function handlePreset(preset: typeof PRESETS[0]) {
     const from = daysAgo(preset.days);
-    const to = new Date();
-    setDateMode(preset.mode);
+    const to   = new Date();
     setFromInput(toYMD(from));
     setToInput(toYMD(to));
     setActiveQuery({ mode: preset.mode, from: toYMD(from), to: toYMD(to) });
@@ -214,16 +237,14 @@ export default function Dashboard() {
 
   function applyCustomRange() {
     if (!fromInput || !toInput || fromInput > toInput) return;
-    setDateMode("custom");
     setActiveQuery({ mode: "custom", from: fromInput, to: toInput });
   }
 
-  const todayPnl = summary?.todayPnl ?? 0;
-  const totalPnl = summary?.totalPnl ?? 0;
-  const activeStrategies = summary?.activeStrategies ?? 0;
-  const winRate = summary?.winRate ?? 0;
-  const availBal = fundsData?.availableBalance ?? summary?.availableBalance;
-  const usedMargin = fundsData?.utilizedAmount ?? summary?.usedMargin;
+  const todayPnl        = summary?.todayPnl        ?? 0;
+  const activeStrategies= summary?.activeStrategies ?? 0;
+  const winRate         = summary?.winRate          ?? 0;
+  const availBal        = fundsData?.availableBalance ?? summary?.availableBalance;
+  const usedMargin      = fundsData?.utilizedAmount   ?? summary?.usedMargin;
 
   return (
     <div className="space-y-4">
@@ -253,11 +274,11 @@ export default function Dashboard() {
         />
         <StatCard
           title="Total P&L"
-          value={formatCurrency(totalPnl)}
-          inlineTag="All-Time Net"
+          value={formatCurrency(displayPnl)}
+          inlineTag={displayLabel}
           icon={Activity}
-          isLoading={isSummaryLoading}
-          valueClass={totalPnl > 0 ? "text-success" : totalPnl < 0 ? "text-destructive" : ""}
+          isLoading={isPnlLoading}
+          valueClass={displayPnl > 0 ? "text-success" : displayPnl < 0 ? "text-destructive" : ""}
         />
         <StatCard
           title="Available Balance"
@@ -299,13 +320,13 @@ export default function Dashboard() {
                 <span className="text-[11px] text-muted-foreground whitespace-nowrap">From</span>
                 <Input
                   type="date" value={fromInput} max={toInput}
-                  onChange={e => { setFromInput(e.target.value); setDateMode("custom"); }}
+                  onChange={e => { setFromInput(e.target.value); }}
                   className="h-6 border-0 p-0 text-xs w-[110px] bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <span className="text-[11px] text-muted-foreground">—</span>
                 <Input
                   type="date" value={toInput} min={fromInput} max={toYMD(new Date())}
-                  onChange={e => { setToInput(e.target.value); setDateMode("custom"); }}
+                  onChange={e => { setToInput(e.target.value); }}
                   className="h-6 border-0 p-0 text-xs w-[110px] bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <Button
