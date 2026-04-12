@@ -198,6 +198,37 @@ export const dhanClient = {
     return dhanRequest("GET", `/ledger?from-date=${fromDate}&to-date=${toDate}`);
   },
 
+  /** Fetch ledger for any date range, chunking in 365-day blocks fired in parallel. */
+  async getAllLedger(fromDate: string, toDate: string): Promise<Record<string, unknown>[]> {
+    const start = new Date(fromDate + "T00:00:00Z");
+    const end = new Date(toDate + "T00:00:00Z");
+    const CHUNK_DAYS = 365;
+
+    // Build chunk date pairs
+    const chunks: { from: string; to: string }[] = [];
+    let cur = new Date(start);
+    while (cur <= end) {
+      const chunkEnd = new Date(cur);
+      chunkEnd.setDate(chunkEnd.getDate() + CHUNK_DAYS - 1);
+      if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+      chunks.push({ from: cur.toISOString().split("T")[0], to: chunkEnd.toISOString().split("T")[0] });
+      cur.setDate(cur.getDate() + CHUNK_DAYS);
+    }
+
+    // Fire all chunks in parallel
+    const results = await Promise.allSettled(
+      chunks.map(c => dhanRequest("GET", `/ledger?from-date=${c.from}&to-date=${c.to}`))
+    );
+
+    const allEntries: Record<string, unknown>[] = [];
+    for (const r of results) {
+      if (r.status === "fulfilled" && Array.isArray(r.value)) {
+        allEntries.push(...(r.value as Record<string, unknown>[]));
+      }
+    }
+    return allEntries;
+  },
+
   async getFundLimits(overrideCredentials?: { clientId: string; accessToken: string }) {
     return dhanRequest("GET", "/fundlimit", undefined, overrideCredentials);
   },

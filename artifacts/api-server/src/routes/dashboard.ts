@@ -8,8 +8,11 @@ const router: IRouter = Router();
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   try {
     const now = new Date();
-    const ytdStart = `${now.getFullYear()}-01-01`;
-    const ytdEnd = now.toISOString().split("T")[0];
+    // Fetch 3 years of ledger history to capture all deposits/withdrawals since account opening
+    const allTimeStart = new Date(now);
+    allTimeStart.setFullYear(allTimeStart.getFullYear() - 3);
+    const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
+    const todayStr = now.toISOString().split("T")[0];
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
     // Fire all Dhan + DB calls in parallel
@@ -20,7 +23,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       dhanClient.getFundLimits(),
       dhanClient.getPositions(),
       dhanClient.getHoldings(),
-      dhanClient.getLedger(ytdStart, ytdEnd),
+      dhanClient.getAllLedger(allTimeStartStr, todayStr),
       dhanClient.getOrders(),
       dhanClient.getTradeBook(),
       db.select({ count: sql<number>`count(*)::int` }).from(strategiesTable).where(eq(strategiesTable.status, "active")),
@@ -57,33 +60,51 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     if (ledgerResult.status === "fulfilled") {
       const entries = Array.isArray(ledgerResult.value) ? (ledgerResult.value as Record<string, unknown>[]) : [];
       if (entries.length > 0) {
-        let prevBal = 0;
-        let deposits = 0;
-        let withdrawals = 0;
+        // Classify each raw ledger entry individually.
+        // Formula: Net P&L = currentBalance + totalWithdrawn - totalDeposited
+        // (Excludes deposits & withdrawals — only actual trading P&L)
+        let totalDeposits = 0;
+        let totalWithdrawals = 0;
+
         for (const e of entries) {
-          const narr = String(e.narration ?? e.particulars ?? "").toUpperCase();
-          const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
-          if (isNaN(bal)) continue;
-          const delta = bal - prevBal;
-          // Use amount field if available (more accurate than runbal diff)
-          const amt = parseFloat(String(e.amount ?? "0").replace(/,/g, ""));
-          const txnAmt = !isNaN(amt) && amt !== 0 ? Math.abs(amt) : Math.abs(delta);
-          if (
-            narr.includes("FUNDS DEPOSIT") || narr.includes("FUNDS RECEIV") ||
-            (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT") || narr.includes("TRANSFER IN")))
-          ) {
-            if (delta > 0) deposits += txnAmt;
-          } else if (
-            narr.includes("FUNDS WITHDRAW") || narr.includes("PAYOUT") || narr.includes("TRANSFER OUT") ||
-            (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"))
-          ) {
-            if (delta < 0) withdrawals += txnAmt;
+          const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+          // Skip synthetic entries added by Dhan API (not real transactions)
+          if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
+
+          // Dhan ledger uses separate `credit` and `debit` fields (not `amount`/`drcr`)
+          const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
+          const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
+          const isCredit = !isNaN(credit) && credit > 0;
+          const isDebit  = !isNaN(debit)  && debit  > 0;
+          if (!isCredit && !isDebit) continue; // skip zero/empty entries
+
+          // Identify fund transfers (deposits into account) by narration
+          const isDeposit =
+            narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
+            narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
+            narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
+            narr.includes("FUNDS ADDED") ||
+            (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
+
+          // Identify fund withdrawals (money taken out of account) by narration
+          const isWithdrawal =
+            narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
+            narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
+            narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
+            (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
+
+          if (isDeposit && isCredit) {
+            totalDeposits += credit;
+          } else if (isWithdrawal && isDebit) {
+            totalWithdrawals += debit;
           }
-          prevBal = bal;
+          // All other entries (trades, brokerage, STT, margin interest, etc.) are trading P&L
+          // — they are captured automatically via the formula: balance + withdrawn - deposited
         }
-        // Use live availableBalance (from fund limits) as the ground-truth current balance.
-        // This prevents the ledger's stale "closing balance" entry from corrupting the calc.
-        totalPnl = Math.round((availableBalance + withdrawals - deposits) * 100) / 100;
+
+        // Net P&L = currentBalance + totalWithdrawn - totalDeposited
+        // This gives pure trading performance regardless of how much was deposited/withdrawn.
+        totalPnl = Math.round((availableBalance + totalWithdrawals - totalDeposits) * 100) / 100;
       }
     } else {
       req.log.warn({ err: (ledgerResult as PromiseRejectedResult).reason }, "Ledger fetch failed");
