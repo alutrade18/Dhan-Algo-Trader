@@ -40,6 +40,31 @@ router.post("/market/quote", async (req, res): Promise<void> => {
   }
 });
 
+// GET /market/ltp?exchSeg=NSE_EQ&secId=1333
+// Fast single-instrument LTP — used by Super Orders entry price auto-fill
+router.get("/market/ltp", async (req, res): Promise<void> => {
+  const exchSeg = String(req.query.exchSeg ?? "");
+  const secId   = String(req.query.secId   ?? "");
+
+  if (!exchSeg || !secId || isNaN(parseInt(secId, 10))) {
+    res.status(400).json({ error: "exchSeg and secId are required" });
+    return;
+  }
+
+  if (!dhanClient.isConfigured()) {
+    res.status(401).json({ error: "Broker not connected" });
+    return;
+  }
+
+  try {
+    const ltp = await dhanClient.getLtp(exchSeg, secId);
+    res.json({ ltp, exchSeg, secId });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch LTP");
+    res.status(500).json({ error: "Failed to fetch LTP" });
+  }
+});
+
 router.post("/market/historical", async (req, res): Promise<void> => {
   const parsed = GetHistoricalDataBody.safeParse(req.body);
   if (!parsed.success) {

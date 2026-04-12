@@ -236,9 +236,22 @@ export const dhanClient = {
       full: "/marketfeed/quote",
     };
     const endpoint = endpoints[quoteType] || "/marketfeed/ltp";
-    return dhanRequest("POST", endpoint, {
-      [Object.keys(securities)[0]]: Object.values(securities)[0],
-    });
+    // Dhan API requires integer security IDs — convert all string IDs to numbers
+    const body: Record<string, number[]> = {};
+    for (const [seg, ids] of Object.entries(securities)) {
+      body[seg] = ids.map(id => parseInt(id, 10)).filter(n => !isNaN(n));
+    }
+    return dhanRequest("POST", endpoint, body);
+  },
+
+  async getLtp(exchangeSegment: string, securityId: string): Promise<number> {
+    const body: Record<string, number[]> = {
+      [exchangeSegment]: [parseInt(securityId, 10)],
+    };
+    const raw = await dhanRequest("POST", "/marketfeed/ltp", body) as Record<string, Record<string, { last_price?: number }>>;
+    const segData = raw[exchangeSegment] ?? raw[Object.keys(raw)[0]];
+    const entry   = segData?.[securityId] ?? segData?.[Object.keys(segData ?? {})[0]];
+    return entry?.last_price ?? 0;
   },
 
   async getHistoricalData(data: {

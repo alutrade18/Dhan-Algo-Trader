@@ -73,6 +73,7 @@ export default function SuperOrders() {
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
   const [form, setForm] = useState<FormState>(BLANK_FORM);
   const [ltpLoading, setLtpLoading] = useState(false);
+  const [ltpUnavailable, setLtpUnavailable] = useState(false);
 
   const { data: fundsData } = useQuery<{ availableBalance?: number; availabelBalance?: number }>({
     queryKey: ["funds-limit"],
@@ -113,22 +114,22 @@ export default function SuperOrders() {
   const fetchLtp = useCallback(async (exchSeg: string, secId: string) => {
     if (!secId) return;
     setLtpLoading(true);
+    setLtpUnavailable(false);
     try {
-      const exchKey = exchSeg.replace("_", "_");
-      const res = await fetch(`${BASE}api/market/quote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ securities: { [exchKey]: [secId] }, quoteType: "ltp" }),
-      });
-      if (!res.ok) return;
-      const data = await res.json() as Record<string, Record<string, { last_price?: number }>>;
-      const segData = data[exchKey] ?? data[Object.keys(data)[0]];
-      const entry = segData?.[secId] ?? segData?.[Object.keys(segData ?? {})[0]];
-      const ltp = entry?.last_price;
-      if (ltp && ltp > 0) {
-        applyDefaults(parseFloat(ltp.toFixed(2)));
+      const res = await fetch(`${BASE}api/market/ltp?exchSeg=${encodeURIComponent(exchSeg)}&secId=${encodeURIComponent(secId)}`);
+      if (!res.ok) {
+        setLtpUnavailable(true);
+        return;
+      }
+      const data = await res.json() as { ltp?: number };
+      if (data.ltp && data.ltp > 0) {
+        applyDefaults(parseFloat(data.ltp.toFixed(2)));
+        setLtpUnavailable(false);
+      } else {
+        setLtpUnavailable(true);
       }
     } catch {
+      setLtpUnavailable(true);
     } finally {
       setLtpLoading(false);
     }
@@ -146,6 +147,7 @@ export default function SuperOrders() {
       };
       const exchSeg = segMap[inst.segment] ?? `${inst.exchId}_${inst.segment}`;
       const defaultQty = inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : String(DEFAULT_QTY);
+      setLtpUnavailable(false);
       setForm(p => ({
         ...p,
         security_id: String(inst.securityId),
@@ -157,6 +159,7 @@ export default function SuperOrders() {
       }));
       void fetchLtp(exchSeg, String(inst.securityId));
     } else {
+      setLtpUnavailable(false);
       setForm(BLANK_FORM);
     }
   }
@@ -320,12 +323,17 @@ export default function SuperOrders() {
               </div>
 
               <div className="space-y-1.5 relative">
-                <label className="text-xs font-medium">Entry Price ₹</label>
+                <label className="text-xs font-medium">
+                  Entry Price ₹
+                  {ltpLoading && <span className="text-muted-foreground font-normal ml-1">(fetching...)</span>}
+                  {!ltpLoading && ltpUnavailable && <span className="text-amber-400 font-normal ml-1">(enter manually)</span>}
+                  {!ltpLoading && !ltpUnavailable && form.price && <span className="text-emerald-400 font-normal ml-1">(live)</span>}
+                </label>
                 <div className="relative">
                   <Input
                     type="number"
                     step="0.05"
-                    placeholder="0.00"
+                    placeholder={ltpLoading ? "Fetching live price..." : "Enter price manually"}
                     value={form.price}
                     onChange={e => handlePriceChange(e.target.value)}
                     className="font-mono text-xs pr-8"
@@ -334,8 +342,10 @@ export default function SuperOrders() {
                     <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />
                   )}
                 </div>
-                {selectedInstrument && !ltpLoading && !form.price && (
-                  <p className="text-[10px] text-muted-foreground">Fetching live price...</p>
+                {ltpUnavailable && (
+                  <p className="text-[10px] text-amber-400/80">
+                    Live price unavailable — Dhan Market Data subscription required. Enter price manually.
+                  </p>
                 )}
               </div>
 
