@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Trash2, History, X } from "lucide-react";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -179,33 +179,18 @@ export default function Logs() {
   const [category, setCategory] = useState("all");
   const [page, setPage] = useState(0);
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
-  const [showDeleted, setShowDeleted] = useState(false);
-
-  const isDeleted = resetTs !== null;
-
-  // When in audit mode: show last 7 days. When deleted: show only after resetTs. Otherwise: show all.
-  function getFromTimestamp(): string | null {
-    if (showDeleted) {
-      const d = new Date();
-      d.setDate(d.getDate() - 7);
-      return d.toISOString();
-    }
-    return resetTs;
-  }
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
-  const fromTs = getFromTimestamp();
-
   const { data, isLoading } = useQuery<LogsResponse>({
-    queryKey: ["app-logs", level, category, page, fromTs],
+    queryKey: ["app-logs", level, category, page, resetTs],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (level !== "all") p.set("level", level);
       if (category !== "all") p.set("category", category);
-      if (fromTs) p.set("fromTimestamp", fromTs);
+      if (resetTs) p.set("fromTimestamp", resetTs);
       const res = await fetch(`${BASE}api/logs?${p}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
@@ -231,22 +216,9 @@ export default function Logs() {
     const now = new Date().toISOString();
     setResetTs(now);
     setResetTsState(now);
-    setShowDeleted(false);
     setPage(0);
     queryClient.invalidateQueries({ queryKey: ["app-logs"] });
     toast({ title: "Logs deleted from view", description: "All logs remain permanently stored in the database." });
-  }
-
-  function handleShowDeleted() {
-    setShowDeleted(true);
-    setPage(0);
-    queryClient.invalidateQueries({ queryKey: ["app-logs"] });
-  }
-
-  function handleHideAudit() {
-    setShowDeleted(false);
-    setPage(0);
-    queryClient.invalidateQueries({ queryKey: ["app-logs"] });
   }
 
   const logs = data?.logs ?? [];
@@ -286,49 +258,17 @@ export default function Logs() {
                     </span>
                   )}
 
-                  {/* Show Deleted / Hide Audit — only after delete */}
-                  {isDeleted && !showDeleted && (
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-8 gap-1.5 text-xs text-amber-400 border-amber-400/30 hover:bg-amber-400/10"
-                      onClick={handleShowDeleted}
-                    >
-                      <History className="h-3.5 w-3.5" />
-                      Show Deleted (7 Days)
-                    </Button>
-                  )}
-                  {showDeleted && (
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-8 gap-1.5 text-xs"
-                      onClick={handleHideAudit}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      Hide Audit View
-                    </Button>
-                  )}
-
-                  {!showDeleted && (
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                      onClick={handleClearView}
-                      title="Clears UI view only — all logs remain permanently in the database"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline" size="sm"
+                    className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={handleClearView}
+                    title="Clears UI view only — all logs remain permanently in the database"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
                 </div>
               </div>
-
-              {/* Audit mode banner */}
-              {showDeleted && (
-                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded px-2.5 py-1.5">
-                  <History className="h-3 w-3 shrink-0" />
-                  Audit View — showing last 7 days of logs from the database · Click &ldquo;Hide Audit View&rdquo; to return to normal.
-                </div>
-              )}
             </CardHeader>
 
             <CardContent className="px-4 pb-4 space-y-3">
