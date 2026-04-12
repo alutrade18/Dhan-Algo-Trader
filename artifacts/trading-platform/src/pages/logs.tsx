@@ -250,6 +250,7 @@ function setResetTs(ts: string) {
 export default function Logs() {
   const [page, setPage] = useState(0);
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
+  const [activeTab, setActiveTab] = useState("app");
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -305,7 +306,7 @@ export default function Logs() {
 
   return (
     <div className="space-y-3">
-      <Tabs defaultValue="app">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* ── Tab bar row ── */}
         <div className="flex items-center gap-2 mb-3">
           <TabsList className="h-8">
@@ -313,6 +314,11 @@ export default function Logs() {
             <TabsTrigger value="trade" className="text-xs px-3">Strategy Trade Logs</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2 ml-auto">
+            <span className="text-xs text-muted-foreground">
+              {activeTab === "app"
+                ? `${total.toLocaleString()} ${total === 1 ? "entry" : "entries"}`
+                : `${tradeLogs.length.toLocaleString()} ${tradeLogs.length === 1 ? "entry" : "entries"}`}
+            </span>
             {errorCount > 0 && (
               <span className="text-[10px] font-mono rounded border border-destructive/30 bg-destructive/10 text-destructive px-2 py-0.5">
                 {errorCount} error{errorCount > 1 ? "s" : ""}
@@ -338,12 +344,7 @@ export default function Logs() {
         {/* ── APPLICATION LOGS ── */}
         <TabsContent value="app" className="mt-0">
           <Card>
-            <CardContent className="px-3 pb-3 pt-3 space-y-2">
-              <div className="flex items-center justify-end">
-                <span className="text-xs text-muted-foreground">
-                  {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
-                </span>
-              </div>
+            <CardContent className="px-3 pb-3 pt-3">
               <div
                 ref={tableScrollRef}
                 className="overflow-auto rounded-md border border-border"
