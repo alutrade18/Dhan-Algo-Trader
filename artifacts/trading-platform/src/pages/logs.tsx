@@ -6,9 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
   ChevronDown,
@@ -21,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL;
-const LS_KEY       = "log_view_reset_at";
+const LS_KEY = "log_view_reset_at";
 const LS_TRADE_KEY = "trade_log_view_reset_at";
 const LIMIT = 200;
 
@@ -248,19 +253,29 @@ function getResetTs(): string | null {
   }
 }
 function setResetTs(ts: string) {
-  try { localStorage.setItem(LS_KEY, ts); } catch {}
+  try {
+    localStorage.setItem(LS_KEY, ts);
+  } catch {}
 }
 function getTradeResetTs(): string | null {
-  try { return localStorage.getItem(LS_TRADE_KEY); } catch { return null; }
+  try {
+    return localStorage.getItem(LS_TRADE_KEY);
+  } catch {
+    return null;
+  }
 }
 function setTradeResetTs(ts: string) {
-  try { localStorage.setItem(LS_TRADE_KEY, ts); } catch {}
+  try {
+    localStorage.setItem(LS_TRADE_KEY, ts);
+  } catch {}
 }
 
 export default function Logs() {
   const [page, setPage] = useState(0);
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
-  const [resetTradeTs, setResetTradeTsState] = useState<string | null>(getTradeResetTs);
+  const [resetTradeTs, setResetTradeTsState] = useState<string | null>(
+    getTradeResetTs,
+  );
   const [activeTab, setActiveTab] = useState("app");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -271,7 +286,10 @@ export default function Logs() {
   const { data, isLoading } = useQuery<LogsResponse>({
     queryKey: ["app-logs", page, resetTs],
     queryFn: async () => {
-      const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
+      const p = new URLSearchParams({
+        page: String(page),
+        limit: String(LIMIT),
+      });
       if (resetTs) p.set("fromTimestamp", resetTs);
       const res = await fetch(`${BASE}api/logs?${p}`);
       if (!res.ok) throw new Error("Failed");
@@ -280,7 +298,9 @@ export default function Logs() {
     refetchInterval: 10_000,
   });
 
-  const { data: tradeLogs = [], isLoading: tradeLogsLoading } = useQuery<TradeLog[]>({
+  const { data: tradeLogs = [], isLoading: tradeLogsLoading } = useQuery<
+    TradeLog[]
+  >({
     queryKey: ["trade-logs", resetTradeTs],
     queryFn: async () => {
       const p = new URLSearchParams();
@@ -308,7 +328,10 @@ export default function Logs() {
       setResetTradeTsState(now);
       queryClient.invalidateQueries({ queryKey: ["trade-logs"] });
     }
-    toast({ title: "Logs deleted from view", description: "All logs remain permanently stored in the database." });
+    toast({
+      title: "Logs deleted",
+      description: "All logs permanently stored in the database.",
+    });
   }
 
   const logs = data?.logs ?? [];
@@ -325,8 +348,12 @@ export default function Logs() {
         {/* ── Tab bar row ── */}
         <div className="flex items-center gap-2 mb-3">
           <TabsList className="h-8">
-            <TabsTrigger value="app" className="text-xs px-3">Application Logs</TabsTrigger>
-            <TabsTrigger value="trade" className="text-xs px-3">Strategy Trade Logs</TabsTrigger>
+            <TabsTrigger value="app" className="text-xs px-3">
+              Application Logs
+            </TabsTrigger>
+            <TabsTrigger value="trade" className="text-xs px-3">
+              Strategy Trade Logs
+            </TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs text-muted-foreground">
@@ -345,7 +372,8 @@ export default function Logs() {
               </span>
             )}
             <Button
-              variant="outline" size="sm"
+              variant="outline"
+              size="sm"
               className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
               onClick={() => setConfirmOpen(true)}
             >
@@ -367,8 +395,19 @@ export default function Logs() {
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
-                      {["Time", "Level", "Category", "Action", "Status", "Code", ""].map((h) => (
-                        <th key={h} className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+                      {[
+                        "Time",
+                        "Level",
+                        "Category",
+                        "Action",
+                        "Status",
+                        "Code",
+                        "",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap"
+                        >
                           {h}
                         </th>
                       ))}
@@ -378,12 +417,17 @@ export default function Logs() {
                     {isLoading ? (
                       Array.from({ length: 12 }).map((_, i) => (
                         <tr key={i} className="border-b border-border/40">
-                          <td colSpan={7} className="px-3 py-2"><Skeleton className="h-4 w-full" /></td>
+                          <td colSpan={7} className="px-3 py-2">
+                            <Skeleton className="h-4 w-full" />
+                          </td>
                         </tr>
                       ))
                     ) : logs.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                        <td
+                          colSpan={7}
+                          className="px-4 py-16 text-center text-sm text-muted-foreground"
+                        >
                           No logs found.
                         </td>
                       </tr>
@@ -395,15 +439,25 @@ export default function Logs() {
               </div>
               {total > LIMIT && (
                 <div className="flex items-center justify-between pt-1">
-                  <Button variant="outline" size="sm" className="text-xs h-7"
-                    disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  >
                     Previous
                   </Button>
                   <span className="text-xs text-muted-foreground">
                     Page {page + 1} of {Math.ceil(total / LIMIT)}
                   </span>
-                  <Button variant="outline" size="sm" className="text-xs h-7"
-                    disabled={(page + 1) * LIMIT >= total} onClick={() => setPage((p) => p + 1)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    disabled={(page + 1) * LIMIT >= total}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
                     Next
                   </Button>
                 </div>
@@ -416,15 +470,31 @@ export default function Logs() {
         <TabsContent value="trade" className="mt-0">
           <Card>
             <CardContent className="px-3 pb-3 pt-3">
-              <div className="overflow-auto rounded-md border border-border" style={{ height: TABLE_H }}>
+              <div
+                className="overflow-auto rounded-md border border-border"
+                style={{ height: TABLE_H }}
+              >
                 <table className="w-full table-auto text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
-                      {["Time", "Symbol", "Side", "Qty", "Price", "Status", "P&L", "Strategy", "Order ID"].map((h) => (
-                        <th key={h} className={cn(
-                          "px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap",
-                          ["Qty", "Price", "P&L"].includes(h) && "text-right"
-                        )}>
+                      {[
+                        "Time",
+                        "Symbol",
+                        "Side",
+                        "Qty",
+                        "Price",
+                        "Status",
+                        "P&L",
+                        "Strategy",
+                        "Order ID",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className={cn(
+                            "px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap",
+                            ["Qty", "Price", "P&L"].includes(h) && "text-right",
+                          )}
+                        >
                           {h}
                         </th>
                       ))}
@@ -434,17 +504,24 @@ export default function Logs() {
                     {tradeLogsLoading ? (
                       Array.from({ length: 12 }).map((_, i) => (
                         <tr key={i} className="border-b border-border/40">
-                          <td colSpan={9} className="px-3 py-2"><Skeleton className="h-4 w-full" /></td>
+                          <td colSpan={9} className="px-3 py-2">
+                            <Skeleton className="h-4 w-full" />
+                          </td>
                         </tr>
                       ))
                     ) : tradeLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                        <td
+                          colSpan={9}
+                          className="px-4 py-16 text-center text-sm text-muted-foreground"
+                        >
                           No logs found.
                         </td>
                       </tr>
                     ) : (
-                      tradeLogs.map((log) => <TradeLogRow key={log.id} log={log} />)
+                      tradeLogs.map((log) => (
+                        <TradeLogRow key={log.id} log={log} />
+                      ))
                     )}
                   </tbody>
                 </table>
@@ -458,10 +535,14 @@ export default function Logs() {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete logs from view?</AlertDialogTitle>
+            <AlertDialogTitle>Delete logs?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes <strong>{activeTab === "app" ? "Application" : "Strategy Trade"} Logs</strong> from
-              your screen. All logs remain permanently saved in the database — nothing is deleted from storage.
+              Removes{" "}
+              <strong>
+                {activeTab === "app" ? "Application" : "Strategy Trade"} Logs
+              </strong>{" "}
+              from your screen.<div> </div> All logs permanently saved in the
+              database.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
