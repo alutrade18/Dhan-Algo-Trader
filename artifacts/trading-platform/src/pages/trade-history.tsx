@@ -113,12 +113,9 @@ export default function TradeHistory() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Trade History</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">View executed trades and ledger statements from Dhan</p>
-        </div>
-      </div>
+      <p className="text-sm font-bold text-foreground">
+        View executed trades and ledger statements from Dhan
+      </p>
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">From</div>
