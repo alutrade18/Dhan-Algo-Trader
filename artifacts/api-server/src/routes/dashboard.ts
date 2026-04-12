@@ -7,107 +7,91 @@ const router: IRouter = Router();
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   try {
-    let availableBalance = 0;
-    let usedMargin = 0;
-    let openPositions = 0;
-    let totalHoldings = 0;
-    let pendingOrders = 0;
-    let todayPnl = 0;
-    let totalPnl = 0;
-    let todayTrades = 0;
+    const now = new Date();
+    const ytdStart = `${now.getFullYear()}-01-01`;
+    const ytdEnd = now.toISOString().split("T")[0];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    try {
-      const funds = (await dhanClient.getFundLimits()) as Record<string, unknown>;
-      availableBalance = Number(funds.availabelBalance || funds.availableBalance || 0);
-      usedMargin = Number(funds.utilizedAmount || 0);
-    } catch (e) {
-      req.log.warn({ err: e }, "Failed to fetch fund limits");
-    }
-
-    try {
-      const positions = (await dhanClient.getPositions()) as unknown[];
-      if (Array.isArray(positions)) {
-        openPositions = positions.length;
-        todayPnl = positions.reduce(
-          (sum: number, p: Record<string, unknown>) =>
-            sum + Number(p.realizedProfit || 0) + Number(p.unrealizedProfit || 0),
-          0,
-        );
-      }
-    } catch (e) {
-      req.log.warn({ err: e }, "Failed to fetch positions");
-    }
-
-    try {
-      const holdings = (await dhanClient.getHoldings()) as unknown[];
-      if (Array.isArray(holdings)) {
-        totalHoldings = holdings.length;
-        totalPnl = holdings.reduce(
-          (sum: number, h: Record<string, unknown>) => sum + Number(h.pnl || 0),
-          0,
-        );
-      }
-    } catch (e) {
-      req.log.warn({ err: e }, "Failed to fetch holdings");
-    }
-
-    try {
-      const orders = (await dhanClient.getOrders()) as unknown[];
-      if (Array.isArray(orders)) {
-        pendingOrders = orders.filter(
-          (o: Record<string, unknown>) => o.orderStatus === "PENDING",
-        ).length;
-      }
-    } catch (e) {
-      req.log.warn({ err: e }, "Failed to fetch orders");
-    }
-
-    try {
-      const trades = (await dhanClient.getTradeBook()) as unknown[];
-      if (Array.isArray(trades)) {
-        todayTrades = trades.length;
-      }
-    } catch (e) {
-      req.log.warn({ err: e }, "Failed to fetch trades");
-    }
-
-    const activeStrategies = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(strategiesTable)
-      .where(eq(strategiesTable.status, "active"));
-
-    const tradeLogs = await db
-      .select({
+    // Fire all Dhan + DB calls in parallel
+    const [
+      fundsResult, positionsResult, holdingsResult, ledgerResult, ordersResult, tradesResult,
+      activeStrategiesResult, tradeLogsResult, settingsResult, lossResult,
+    ] = await Promise.allSettled([
+      dhanClient.getFundLimits(),
+      dhanClient.getPositions(),
+      dhanClient.getHoldings(),
+      dhanClient.getLedger(ytdStart, ytdEnd),
+      dhanClient.getOrders(),
+      dhanClient.getTradeBook(),
+      db.select({ count: sql<number>`count(*)::int` }).from(strategiesTable).where(eq(strategiesTable.status, "active")),
+      db.select({
         total: sql<number>`count(*)::int`,
         wins: sql<number>`count(*) filter (where ${tradeLogsTable.status} = 'success' and ${tradeLogsTable.pnl}::numeric > 0)::int`,
-      })
-      .from(tradeLogsTable);
+      }).from(tradeLogsTable),
+      db.select().from(settingsTable),
+      db.select({
+        totalLoss: sql<number>`coalesce(abs(sum(case when ${tradeLogsTable.pnl}::numeric < 0 then ${tradeLogsTable.pnl}::numeric else 0 end)), 0)::float`,
+      }).from(tradeLogsTable).where(sql`${tradeLogsTable.executedAt} >= ${today.toISOString()}`),
+    ]);
 
-    const totalTradesFromLogs = tradeLogs[0]?.total || 0;
-    const wins = tradeLogs[0]?.wins || 0;
+    let availableBalance = 0, usedMargin = 0;
+    if (fundsResult.status === "fulfilled") {
+      const funds = fundsResult.value as Record<string, unknown>;
+      availableBalance = Number(funds.availabelBalance || funds.availableBalance || 0);
+      usedMargin = Number(funds.utilizedAmount || 0);
+    }
+
+    let openPositions = 0, todayPnl = 0;
+    if (positionsResult.status === "fulfilled") {
+      const positions = positionsResult.value as Record<string, unknown>[];
+      if (Array.isArray(positions)) {
+        openPositions = positions.length;
+        todayPnl = positions.reduce((s, p) => s + Number(p.realizedProfit || 0) + Number(p.unrealizedProfit || 0), 0);
+      }
+    }
+
+    const totalHoldings = holdingsResult.status === "fulfilled" && Array.isArray(holdingsResult.value)
+      ? (holdingsResult.value as unknown[]).length : 0;
+
+    let totalPnl = 0;
+    if (ledgerResult.status === "fulfilled") {
+      const entries = Array.isArray(ledgerResult.value) ? (ledgerResult.value as Record<string, unknown>[]) : [];
+      if (entries.length > 0) {
+        const firstBal = parseFloat(String(entries[0].runbal ?? "0").replace(/,/g, ""));
+        const lastBal = parseFloat(String(entries[entries.length - 1].runbal ?? "0").replace(/,/g, ""));
+        if (!isNaN(firstBal) && !isNaN(lastBal)) totalPnl = Math.round((lastBal - firstBal) * 100) / 100;
+      }
+    } else {
+      req.log.warn({ err: (ledgerResult as PromiseRejectedResult).reason }, "Ledger fetch failed");
+    }
+
+    let pendingOrders = 0;
+    if (ordersResult.status === "fulfilled" && Array.isArray(ordersResult.value)) {
+      pendingOrders = (ordersResult.value as Record<string, unknown>[]).filter(o => o.orderStatus === "PENDING").length;
+    }
+
+    const todayTrades = tradesResult.status === "fulfilled" && Array.isArray(tradesResult.value)
+      ? (tradesResult.value as unknown[]).length : 0;
+
+    const activeStrategies = activeStrategiesResult.status === "fulfilled"
+      ? (activeStrategiesResult.value as { count: number }[])[0]?.count ?? 0 : 0;
+
+    const tradeLogsRow = tradeLogsResult.status === "fulfilled"
+      ? (tradeLogsResult.value as { total: number; wins: number }[])[0] : null;
+    const totalTradesFromLogs = tradeLogsRow?.total || 0;
+    const wins = tradeLogsRow?.wins || 0;
     const winRate = totalTradesFromLogs > 0 ? (wins / totalTradesFromLogs) * 100 : 0;
 
-    const [settings] = await db.select().from(settingsTable);
+    const settings = settingsResult.status === "fulfilled" ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null }[])[0] : null;
     const killSwitchEnabled = settings?.killSwitchEnabled ?? false;
     const maxDailyLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
 
-    let dailyLossAmount = 0;
-    let killSwitchTriggered = false;
-    if (maxDailyLoss !== null) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const [lossRow] = await db
-        .select({
-          totalLoss: sql<number>`coalesce(abs(sum(case when ${tradeLogsTable.pnl}::numeric < 0 then ${tradeLogsTable.pnl}::numeric else 0 end)), 0)::float`,
-        })
-        .from(tradeLogsTable)
-        .where(sql`${tradeLogsTable.executedAt} >= ${today.toISOString()}`);
-      dailyLossAmount = lossRow?.totalLoss ?? 0;
-      killSwitchTriggered = killSwitchEnabled || dailyLossAmount >= maxDailyLoss;
-    }
+    const dailyLossAmount = lossResult.status === "fulfilled"
+      ? ((lossResult.value as { totalLoss: number }[])[0]?.totalLoss ?? 0) : 0;
+    const killSwitchTriggered = killSwitchEnabled || (maxDailyLoss !== null && dailyLossAmount >= maxDailyLoss);
 
     res.json({
-      totalPnl: totalPnl + todayPnl,
+      totalPnl,
       todayPnl,
       availableBalance,
       usedMargin,

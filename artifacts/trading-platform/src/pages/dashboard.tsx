@@ -196,7 +196,7 @@ export default function Dashboard() {
         <StatCard
           title="Total P&L"
           value={formatCurrency(summaryExt?.totalPnl)}
-          inlineTag="All Time"
+          inlineTag="YTD (Ledger)"
           icon={Activity}
           isLoading={isSummaryLoading}
           valueClass={summaryExt?.totalPnl !== undefined
