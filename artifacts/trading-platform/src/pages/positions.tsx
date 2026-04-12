@@ -10,8 +10,10 @@ const formatCurrency = (val?: number) => val !== undefined ? new Intl.NumberForm
 export default function Positions() {
   const { data: positions, isLoading } = useGetPositions();
 
-  const totalUnrealized = positions?.reduce((acc, pos) => acc + (pos.unrealizedProfit || 0), 0) || 0;
-  const totalRealized = positions?.reduce((acc, pos) => acc + (pos.realizedProfit || 0), 0) || 0;
+  const intradayPositions = positions?.filter(p => p.productType !== "CNC") ?? [];
+
+  const totalUnrealized = intradayPositions.reduce((acc, pos) => acc + (pos.unrealizedProfit || 0), 0);
+  const totalRealized = intradayPositions.reduce((acc, pos) => acc + (pos.realizedProfit || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -58,8 +60,8 @@ export default function Positions() {
                   <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                 </TableRow>
               ))
-            ) : positions && positions.length > 0 ? (
-              positions.map((pos: Position) => (
+            ) : intradayPositions.length > 0 ? (
+              intradayPositions.map((pos: Position) => (
                 <TableRow key={`${pos.securityId}-${pos.productType}`}>
                   <TableCell className="font-mono font-medium">{pos.tradingSymbol}</TableCell>
                   <TableCell>

@@ -23,7 +23,6 @@ export * from "./getTradeLogsParams";
 export * from "./healthStatus";
 export * from "./historicalDataRequest";
 export * from "./historicalDataResponse";
-export * from "./holding";
 export * from "./intradayDataRequest";
 export * from "./intradayDataResponse";
 export * from "./marketQuoteRequest";
