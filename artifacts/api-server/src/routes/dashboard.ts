@@ -165,13 +165,32 @@ function classifyLedgerEntry(narration: string): "DEPOSIT" | "WITHDRAWAL" | "PNL
 }
 
 /**
- * Period P&L endpoint — same formula as all-time but for a specific window:
- *   periodPnl = currentBalance − openingBalance + periodWithdrawals − periodDeposits
- *
- * openingBalance comes from the "OPENING BALANCE" ledger entry's runbal.
- * Deposits and withdrawals are identified by narration (same logic as all-time).
+ * Period P&L endpoint.
+ * Uses direct sum of trade/settlement entries — deposits and withdrawals are
+ * excluded so fund flows never inflate the P&L figure.
  * This value is NEVER stored in DB — always computed live from Dhan API.
  */
+function isFundFlow(narr: string): boolean {
+  // Deposits — any "FUNDS DEPOSITED", "FUNDS RECEIVED", "ONLINE TRANSFER", etc.
+  const isDeposit =
+    narr.includes("DEPOSITED") ||
+    narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
+    narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
+    narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
+    narr.includes("FUNDS ADDED") || narr.includes("ONLINE TRANSFER") ||
+    narr.includes("NEFT") || narr.includes("IMPS") || narr.includes("UPI") ||
+    (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
+
+  // Withdrawals — any "FUNDS WITHDRAW", "PAYOUT", etc.
+  const isWithdrawal =
+    narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
+    narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
+    narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
+    (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
+
+  return isDeposit || isWithdrawal;
+}
+
 router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
   try {
     const days = parseInt(String(req.query.days || "365"), 10);
@@ -181,98 +200,66 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
     from.setDate(from.getDate() - (days - 1));
     const fromStr = from.toISOString().split("T")[0];
 
-    const [fundsResult, ledgerResult] = await Promise.allSettled([
-      dhanClient.getFundLimits(),
-      dhanClient.getLedger(fromStr, toStr),
-    ]);
+    const ledgerResult = await dhanClient.getLedger(fromStr, toStr)
+      .catch(() => null);
 
-    let currentBalance = 0;
-    if (fundsResult.status === "fulfilled") {
-      const f = fundsResult.value as Record<string, unknown>;
-      currentBalance = Number(f.availabelBalance || f.availableBalance || 0);
-    }
-
-    if (ledgerResult.status !== "fulfilled") {
+    if (!ledgerResult) {
       res.status(500).json({ error: "Ledger fetch failed" });
       return;
     }
 
-    const entries = Array.isArray(ledgerResult.value)
-      ? (ledgerResult.value as Record<string, unknown>[])
+    const entries = Array.isArray(ledgerResult)
+      ? (ledgerResult as Record<string, unknown>[])
       : [];
 
-    // Extract opening balance from the first OPENING BALANCE entry's runbal field
-    let openingBalance = 0;
-    const openEntry = entries.find(e => {
-      const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
-      return narr === "OPENING BALANCE";
-    });
-    if (openEntry) {
-      openingBalance = parseFloat(String(openEntry.runbal ?? "0").replace(/,/g, "")) || 0;
-    }
+    // Direct P&L sum: add up only trade/settlement entries, exclude all fund flows.
+    // This avoids the "opening balance = 0" and "unsettled deposit" pitfalls
+    // that plagued the currentBalance-based formula.
+    //
+    //   periodPnl = Σ credit(trade entries) − Σ debit(trade entries)
+    //
+    // "Trade entries" = everything that is NOT:
+    //   • OPENING BALANCE / CLOSING BALANCE
+    //   • A deposit (FUNDS DEPOSITED, NEFT, UPI, ONLINE TRANSFER, etc.)
+    //   • A withdrawal (FUNDS WITHDRAW, PAYOUT, etc.)
 
-    let periodDeposits = 0;
-    let periodWithdrawals = 0;
+    let periodPnl = 0;
+    const debug = req.query.debug === "true";
+    const tradeEntries: unknown[] = [];
+    const skippedEntries: unknown[] = [];
 
     for (const e of entries) {
       const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+
+      // Always skip opening/closing balance rows
       if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
 
       const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
       const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
-      const isCredit = !isNaN(credit) && credit > 0;
-      const isDebit  = !isNaN(debit)  && debit  > 0;
-      if (!isCredit && !isDebit) continue;
+      const safeCredit = isNaN(credit) ? 0 : credit;
+      const safeDebit  = isNaN(debit)  ? 0 : debit;
 
-      const isDeposit =
-        narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
-        narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
-        narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
-        narr.includes("FUNDS ADDED") ||
-        (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
+      if (safeCredit === 0 && safeDebit === 0) continue;
 
-      const isWithdrawal =
-        narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
-        narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
-        narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
-        (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
+      // Skip fund flows — they are NOT profit or loss
+      if (isFundFlow(narr)) {
+        if (debug) skippedEntries.push({ narr: e.narration, credit: safeCredit, debit: safeDebit, date: e.voucherdate, reason: "fund_flow" });
+        continue;
+      }
 
-      if (isDeposit && isCredit)      periodDeposits    += credit;
-      else if (isWithdrawal && isDebit) periodWithdrawals += debit;
+      // This is a genuine trading / settlement / charge entry
+      periodPnl += safeCredit - safeDebit;
+      if (debug) tradeEntries.push({ narr: e.narration, credit: safeCredit, debit: safeDebit, net: safeCredit - safeDebit, date: e.voucherdate });
     }
 
-    const periodPnl = Math.round(
-      (currentBalance - openingBalance + periodWithdrawals - periodDeposits) * 100
-    ) / 100;
+    periodPnl = Math.round(periodPnl * 100) / 100;
 
-    const debug = req.query.debug === "true";
     if (debug) {
-      const depositEntries: unknown[] = [];
-      const withdrawalEntries: unknown[] = [];
-      for (const e of entries) {
-        const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
-        if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
-        const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
-        const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
-        const isCredit = !isNaN(credit) && credit > 0;
-        const isDebit  = !isNaN(debit)  && debit  > 0;
-        const isDeposit = narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
-          narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
-          narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
-          narr.includes("FUNDS ADDED") ||
-          (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
-        const isWithdrawal = narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
-          narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
-          narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
-          (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
-        if (isDeposit && isCredit) depositEntries.push({ narr: e.narration, credit, date: e.voucherdate });
-        else if (isWithdrawal && isDebit) withdrawalEntries.push({ narr: e.narration, debit, date: e.voucherdate });
-      }
-      res.json({ periodPnl, currentBalance, openingBalance, periodDeposits, periodWithdrawals, days, depositEntries, withdrawalEntries });
+      res.json({ periodPnl, days, fromStr, toStr, tradeEntries, skippedEntries });
       return;
     }
 
-    res.json({ periodPnl, currentBalance, openingBalance, periodDeposits, periodWithdrawals, days });
+    res.json({ periodPnl, days });
   } catch (e) {
     req.log.error({ err: e }, "Period P&L error");
     res.status(500).json({ error: "Failed to compute period P&L" });

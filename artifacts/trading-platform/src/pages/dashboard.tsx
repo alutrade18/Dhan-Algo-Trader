@@ -211,9 +211,9 @@ export default function Dashboard() {
     staleTime: msUntilNext9amIST(),
   });
 
-  // Period P&L — fetched live from backend using the correct formula:
-  //   periodPnl = currentBalance − openingBalance + periodWithdrawals − periodDeposits
-  // This mirrors the all-time formula but for a specific window.
+  // Period P&L — fetched live from backend.
+  // Sums only trade/settlement entries in the ledger; deposits and withdrawals
+  // are excluded so fund flows never appear as profit/loss.
   // Never stored in DB — always computed from Dhan API on demand.
   const presetDays = activeQuery.mode === "7d" ? 7 : activeQuery.mode === "30d" ? 30 : activeQuery.mode === "365d" ? 365 : null;
   const { data: periodPnlData, isLoading: isPeriodPnlLoading } = useQuery<{ periodPnl: number }>({
