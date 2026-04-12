@@ -6,6 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ChevronDown,
   ChevronRight,
   TrendingUp,
@@ -16,7 +21,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL;
-const LS_KEY = "log_view_reset_at";
+const LS_KEY       = "log_view_reset_at";
+const LS_TRADE_KEY = "trade_log_view_reset_at";
 const LIMIT = 200;
 
 interface AppLog {
@@ -242,15 +248,21 @@ function getResetTs(): string | null {
   }
 }
 function setResetTs(ts: string) {
-  try {
-    localStorage.setItem(LS_KEY, ts);
-  } catch {}
+  try { localStorage.setItem(LS_KEY, ts); } catch {}
+}
+function getTradeResetTs(): string | null {
+  try { return localStorage.getItem(LS_TRADE_KEY); } catch { return null; }
+}
+function setTradeResetTs(ts: string) {
+  try { localStorage.setItem(LS_TRADE_KEY, ts); } catch {}
 }
 
 export default function Logs() {
   const [page, setPage] = useState(0);
   const [resetTs, setResetTsState] = useState<string | null>(getResetTs);
+  const [resetTradeTs, setResetTradeTsState] = useState<string | null>(getTradeResetTs);
   const [activeTab, setActiveTab] = useState("app");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -268,12 +280,12 @@ export default function Logs() {
     refetchInterval: 10_000,
   });
 
-  const { data: tradeLogs = [], isLoading: tradeLogsLoading } = useQuery<
-    TradeLog[]
-  >({
-    queryKey: ["trade-logs"],
+  const { data: tradeLogs = [], isLoading: tradeLogsLoading } = useQuery<TradeLog[]>({
+    queryKey: ["trade-logs", resetTradeTs],
     queryFn: async () => {
-      const res = await fetch(`${BASE}api/strategies/trade-logs`);
+      const p = new URLSearchParams();
+      if (resetTradeTs) p.set("fromTimestamp", resetTradeTs);
+      const res = await fetch(`${BASE}api/strategies/trade-logs?${p}`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -286,14 +298,17 @@ export default function Logs() {
 
   function handleClearView() {
     const now = new Date().toISOString();
-    setResetTs(now);
-    setResetTsState(now);
-    setPage(0);
-    queryClient.invalidateQueries({ queryKey: ["app-logs"] });
-    toast({
-      title: "Logs deleted from view",
-      description: "All logs remain permanently stored in the database.",
-    });
+    if (activeTab === "app") {
+      setResetTs(now);
+      setResetTsState(now);
+      setPage(0);
+      queryClient.invalidateQueries({ queryKey: ["app-logs"] });
+    } else {
+      setTradeResetTs(now);
+      setResetTradeTsState(now);
+      queryClient.invalidateQueries({ queryKey: ["trade-logs"] });
+    }
+    toast({ title: "Logs deleted from view", description: "All logs remain permanently stored in the database." });
   }
 
   const logs = data?.logs ?? [];
@@ -332,8 +347,7 @@ export default function Logs() {
             <Button
               variant="outline" size="sm"
               className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-              onClick={handleClearView}
-              title="Clears UI view only — all logs remain permanently in the database"
+              onClick={() => setConfirmOpen(true)}
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
@@ -439,6 +453,28 @@ export default function Logs() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ── Confirmation dialog ── */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete logs from view?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes <strong>{activeTab === "app" ? "Application" : "Strategy Trade"} Logs</strong> from
+              your screen. All logs remain permanently saved in the database — nothing is deleted from storage.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleClearView}
+            >
+              OK, Delete from View
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, gte, and } from "drizzle-orm";
 import { db, strategiesTable, tradeLogsTable, settingsTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
@@ -84,11 +84,16 @@ router.post("/strategies/engine/stop", (_req, res): void => {
   res.json({ success: true, message: "Engine stopped" });
 });
 
-router.get("/strategies/trade-logs", async (_req, res): Promise<void> => {
+router.get("/strategies/trade-logs", async (req, res): Promise<void> => {
   try {
+    const { fromTimestamp } = req.query as Record<string, string>;
+    const conditions = fromTimestamp
+      ? [gte(tradeLogsTable.executedAt, new Date(fromTimestamp))]
+      : [];
     const logs = await db
       .select()
       .from(tradeLogsTable)
+      .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(tradeLogsTable.executedAt))
       .limit(500);
     res.json(logs);
