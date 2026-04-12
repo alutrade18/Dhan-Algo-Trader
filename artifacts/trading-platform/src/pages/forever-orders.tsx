@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw, Plus, X, Clock, TrendingUp, TrendingDown, WifiOff } from "lucide-react";
+import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -41,11 +42,24 @@ export default function ForeverOrders() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
   const [form, setForm] = useState({
     security_id: "", exchange_segment: "NSE_EQ", transaction_type: "BUY",
     order_type: "SINGLE", quantity: "", price: "", trigger_price: "",
     price1: "", trigger_price1: "",
   });
+
+  function handleInstrumentSelect(inst: InstrumentResult | null) {
+    setSelectedInstrument(inst);
+    if (inst) {
+      setForm(p => ({
+        ...p,
+        security_id: String(inst.securityId),
+        exchange_segment: `${inst.exchId}_${inst.segment === "E" ? "EQ" : inst.segment === "F" ? "FNO" : inst.segment}`,
+        quantity: inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : p.quantity,
+      }));
+    }
+  }
 
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery<ForeverOrder[]>({
     queryKey: ["forever-orders"],
@@ -91,6 +105,7 @@ export default function ForeverOrders() {
     onSuccess: () => {
       toast({ title: "Forever Order Placed" });
       setShowForm(false);
+      setSelectedInstrument(null);
       void queryClient.invalidateQueries({ queryKey: ["forever-orders"] });
     },
     onError: (e: Error) => toast({ title: "Order Failed", description: e.message, variant: "destructive" }),
@@ -148,6 +163,10 @@ export default function ForeverOrders() {
             <CardDescription className="text-xs">GTT order — fires once trigger is hit · SINGLE or OCO</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Symbol</label>
+              <SymbolSearch value={selectedInstrument} onChange={handleInstrumentSelect} placeholder="Search by name or security ID..." />
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Security ID</label>

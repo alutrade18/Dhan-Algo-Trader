@@ -18,6 +18,12 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **Build**: esbuild
 - **Broker API**: Dhan (https://dhanhq.co)
 
+## Instrument Master Database
+- **223,285 instruments** seeded from Dhan Excel files (EQUITY, FUTIDX, FUTSTK, INDEX, OPTFUT, OPTIDX, OPTSTK)
+- Seed script: `lib/db/seed-instruments.cjs` — run with `cd lib/db && NODE_PATH=./node_modules:../../node_modules node seed-instruments.cjs`
+- Re-run anytime new master files are uploaded to `attached_assets/`
+- Table: `instruments` — columns: securityId, exchId, segment, instrument, symbolName, displayName, isin, lotSize, tickSize, expiryDate, strikePrice, optionType
+
 ## Architecture
 
 ### Frontend (artifacts/trading-platform)
@@ -31,6 +37,7 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 ### Backend (artifacts/api-server)
 - Express 5 API server proxying requests to Dhan broker API
 - Dhan API client (`src/lib/dhan-client.ts`) handles all broker communication
+- **Instruments API**: `/api/instruments/search?q=NIFTY&limit=20` — full-text search across 223k instruments
 - Rate limiting (sliding-window per category): Order 10/sec, Quote 1/sec, Data 5/sec, Non-Trading 20/sec
 - All Dhan error codes mapped (DH-901–DH-911) with retryable flags
 - Telegram alerts via `src/lib/telegram.ts` (uses fetch, no external dependency)

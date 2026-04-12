@@ -17,6 +17,7 @@ import foreverOrdersRouter from "./forever-orders";
 import conditionalRouter from "./conditional";
 import { createPostbackRouter } from "./postback";
 import { getIO } from "../lib/io";
+import instrumentsRouter from "./instruments";
 import {
   orderRateLimit,
   dataRateLimit,
@@ -63,6 +64,7 @@ router.use(paperTradesRouter);
 router.use(riskRouter);
 router.use(tradesRouter);
 router.use(logsRouter);
+router.use(instrumentsRouter);
 router.use(superOrdersRouter);
 router.use(foreverOrdersRouter);
 router.use(conditionalRouter);

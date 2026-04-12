@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw, Plus, X, Layers, TrendingUp, TrendingDown, WifiOff } from "lucide-react";
+import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -39,10 +40,25 @@ export default function SuperOrders() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
   const [form, setForm] = useState({
     security_id: "", exchange_segment: "NSE_EQ", transaction_type: "BUY",
     order_type: "LIMIT", quantity: "", price: "", target_price: "", stop_loss_price: "",
   });
+
+  function handleInstrumentSelect(inst: InstrumentResult | null) {
+    setSelectedInstrument(inst);
+    if (inst) {
+      const segMap: Record<string, string> = { E: "NSE_EQ", F: "NSE_FNO", I: "IDX_I", D: "NSE_CURR", C: "NSE_COMM" };
+      const exchSeg = `${inst.exchId}_${inst.segment === "E" ? "EQ" : inst.segment === "F" ? "FNO" : inst.segment}`;
+      setForm(p => ({
+        ...p,
+        security_id: String(inst.securityId),
+        exchange_segment: segMap[inst.segment] ?? exchSeg,
+        quantity: inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : p.quantity,
+      }));
+    }
+  }
 
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery<SuperOrder[]>({
     queryKey: ["super-orders"],
@@ -84,6 +100,7 @@ export default function SuperOrders() {
     onSuccess: () => {
       toast({ title: "Super Order Placed" });
       setShowForm(false);
+      setSelectedInstrument(null);
       setForm({ security_id: "", exchange_segment: "NSE_EQ", transaction_type: "BUY", order_type: "LIMIT", quantity: "", price: "", target_price: "", stop_loss_price: "" });
       void queryClient.invalidateQueries({ queryKey: ["super-orders"] });
     },
@@ -143,6 +160,14 @@ export default function SuperOrders() {
             <CardDescription className="text-xs">Bracket order with automatic target and stop-loss</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Symbol</label>
+              <SymbolSearch
+                value={selectedInstrument}
+                onChange={handleInstrumentSelect}
+                placeholder="Search by name or security ID..."
+              />
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Security ID</label>
