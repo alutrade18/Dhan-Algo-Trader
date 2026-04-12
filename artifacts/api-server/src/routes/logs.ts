@@ -72,14 +72,10 @@ router.get("/logs", async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/logs", async (req, res): Promise<void> => {
-  try {
-    await db.delete(appLogsTable);
-    res.json({ success: true });
-  } catch (e) {
-    req.log.error({ err: e }, "Logs clear error");
-    res.status(500).json({ error: "Failed to clear logs" });
-  }
+// View-reset endpoint — does NOT delete from DB (logs are kept permanently for audit purposes).
+// The frontend uses a localStorage timestamp to "hide" older entries from the UI view.
+router.delete("/logs", async (_req, res): Promise<void> => {
+  res.json({ success: true });
 });
 
 export default router;

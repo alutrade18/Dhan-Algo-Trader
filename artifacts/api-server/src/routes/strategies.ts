@@ -84,6 +84,19 @@ router.post("/strategies/engine/stop", (_req, res): void => {
   res.json({ success: true, message: "Engine stopped" });
 });
 
+router.get("/strategies/trade-logs", async (_req, res): Promise<void> => {
+  try {
+    const logs = await db
+      .select()
+      .from(tradeLogsTable)
+      .orderBy(desc(tradeLogsTable.executedAt))
+      .limit(500);
+    res.json(logs);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch trade logs" });
+  }
+});
+
 router.get("/strategies/:id", async (req, res): Promise<void> => {
   const params = GetStrategyParams.safeParse(req.params);
   if (!params.success) {

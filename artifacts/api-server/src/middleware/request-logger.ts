@@ -4,6 +4,9 @@ import { logEvent, type LogCategory } from "../lib/app-logger";
 const CATEGORY_MAP: Record<string, LogCategory> = {
   broker: "broker",
   orders: "order",
+  "super-orders": "order",
+  "forever-orders": "order",
+  conditional: "order",
   strategies: "strategy",
   settings: "settings",
   risk: "risk",
@@ -14,7 +17,9 @@ const CATEGORY_MAP: Record<string, LogCategory> = {
   health: "system",
   "paper-trades": "api",
   market: "api",
+  instruments: "api",
   logs: "system",
+  postback: "order",
 };
 
 function getCategory(url: string): LogCategory {
@@ -32,6 +37,14 @@ function getAction(method: string, url: string): string {
     [/^\/broker\/refresh/, "Broker balance refresh"],
     [/^\/orders\/cancel/, "Cancel order"],
     [/^\/orders$/, method === "POST" ? "Place order" : "Orders"],
+    [/^\/super-orders\/[^/]+$/, method === "PUT" ? "Update super order" : method === "DELETE" ? "Delete super order" : "Super order"],
+    [/^\/super-orders$/, method === "POST" ? "Create super order" : "Super orders"],
+    [/^\/forever-orders\/[^/]+\/cancel/, "Cancel forever order"],
+    [/^\/forever-orders\/[^/]+$/, method === "PUT" ? "Update forever order" : method === "DELETE" ? "Delete forever order" : "Forever order"],
+    [/^\/forever-orders$/, method === "POST" ? "Create forever order" : "Forever orders"],
+    [/^\/conditional\/[^/]+\/toggle/, "Toggle conditional trigger"],
+    [/^\/conditional\/[^/]+$/, method === "PUT" ? "Update conditional trigger" : method === "DELETE" ? "Delete conditional trigger" : "Conditional trigger"],
+    [/^\/conditional$/, method === "POST" ? "Create conditional trigger" : "Conditional triggers"],
     [/^\/strategies\/pause-all/, "Pause all strategies"],
     [/^\/strategies\/[^/]+\/start/, "Start strategy"],
     [/^\/strategies\/[^/]+\/stop/, "Stop strategy"],
@@ -40,10 +53,12 @@ function getAction(method: string, url: string): string {
     [/^\/strategies$/, method === "POST" ? "Create strategy" : "Strategies"],
     [/^\/strategies\/[^/]+$/, method === "PUT" ? "Update strategy" : method === "DELETE" ? "Delete strategy" : "Strategy"],
     [/^\/settings$/, "Save settings"],
-    [/^\/risk\/killswitch/, "Kill switch update"],
-    [/^\/risk\/pnlExit/, "P&L Exit update"],
+    [/^\/risk\/killswitch/, "Kill switch toggle"],
+    [/^\/risk\/pnlExit/, "P&L exit limit update"],
     [/^\/risk\/dailyLoss/, "Daily loss limit update"],
-    [/^\/paper-trades/, method === "POST" ? "Place paper trade" : "Paper trades"],
+    [/^\/paper-trades\/[^/]+$/, method === "DELETE" ? "Close paper trade" : "Paper trade"],
+    [/^\/paper-trades$/, method === "POST" ? "Place paper trade" : "Paper trades"],
+    [/^\/postback/, "Dhan order postback"],
   ];
 
   const cleanPath = path.replace(/^\/api/, "");
