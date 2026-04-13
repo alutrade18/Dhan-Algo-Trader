@@ -1,4 +1,6 @@
 import { logger } from "./logger";
+import { db, rateLimitLogTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 
 export type ApiCategory = "order" | "data" | "quote" | "nontrading";
 
@@ -35,7 +37,16 @@ const CATEGORY_LABELS: Record<ApiCategory, string> = {
   nontrading: "Non-Trading API",
 };
 
-class SlidingWindowCounter {
+// ── Shared counter interface ──────────────────────────────────────────────────
+interface Counter {
+  check(now: number): boolean;
+  record(now: number): void;
+  remaining(now: number): number;
+  resetAt(now: number): number;
+}
+
+// ── In-memory sliding window (per-second, per-minute, per-hour) ───────────────
+class SlidingWindowCounter implements Counter {
   private timestamps: number[] = [];
   private readonly windowMs: number;
   private readonly limit: number;
@@ -71,11 +82,104 @@ class SlidingWindowCounter {
   }
 }
 
+// ── DB-backed IST calendar-day counter (per-day only) ─────────────────────────
+// Survives server restarts. Resets at IST midnight, not on a rolling 24h window.
+class DailyCounter implements Counter {
+  private count = 0;
+  private currentDate = "";
+  private readonly limit: number;
+  private readonly category: string;
+
+  constructor(limit: number, category: string) {
+    this.limit = limit;
+    this.category = category;
+  }
+
+  private todayIST(): string {
+    const now = new Date();
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    return ist.toISOString().slice(0, 10);
+  }
+
+  /** Roll over count to zero if the IST calendar date has changed. */
+  private maybeRollover() {
+    const today = this.todayIST();
+    if (this.currentDate !== today) {
+      this.count = 0;
+      this.currentDate = today;
+    }
+  }
+
+  check(_now: number): boolean {
+    this.maybeRollover();
+    return this.count < this.limit;
+  }
+
+  record(_now: number) {
+    this.maybeRollover();
+    this.count++;
+    void this.upsertToDb(this.currentDate, this.count);
+  }
+
+  remaining(_now: number): number {
+    this.maybeRollover();
+    return Math.max(0, this.limit - this.count);
+  }
+
+  resetAt(_now: number): number {
+    // Next IST midnight in UTC ms
+    const today = this.todayIST();
+    const [y, m, d] = today.split("-").map(Number);
+    // UTC time of IST midnight (IST = UTC+5:30, so IST midnight = UTC 18:30 prev day)
+    return Date.UTC(y, m - 1, d + 1) - (5.5 * 60 * 60 * 1000);
+  }
+
+  /** Called once on startup — loads today's count from the DB. */
+  async loadFromDb(): Promise<void> {
+    try {
+      const today = this.todayIST();
+      this.currentDate = today;
+      const [row] = await db
+        .select()
+        .from(rateLimitLogTable)
+        .where(
+          and(
+            eq(rateLimitLogTable.category, this.category),
+            eq(rateLimitLogTable.date, today),
+          ),
+        );
+      this.count = row?.count ?? 0;
+      logger.info(
+        { category: this.category, date: today, count: this.count, limit: this.limit },
+        "[RateLimit] Loaded daily count from DB",
+      );
+    } catch (e) {
+      logger.warn({ err: e, category: this.category }, "[RateLimit] Failed to load daily count from DB — starting at 0");
+      this.count = 0;
+    }
+  }
+
+  private async upsertToDb(date: string, count: number): Promise<void> {
+    try {
+      await db
+        .insert(rateLimitLogTable)
+        .values({ category: this.category, date, count })
+        .onConflictDoUpdate({
+          target: [rateLimitLogTable.category, rateLimitLogTable.date],
+          set: { count },
+        });
+    } catch (e) {
+      logger.warn({ err: e, category: this.category }, "[RateLimit] Failed to persist daily count to DB");
+    }
+  }
+}
+
+// ── Counter registry ──────────────────────────────────────────────────────────
 interface CategoryCounters {
-  perSecond?: SlidingWindowCounter;
-  perMinute?: SlidingWindowCounter;
-  perHour?: SlidingWindowCounter;
-  perDay?: SlidingWindowCounter;
+  perSecond?: Counter;
+  perMinute?: Counter;
+  perHour?: Counter;
+  perDay?: DailyCounter; // typed specifically so we can call loadFromDb()
 }
 
 const counters: Record<ApiCategory, CategoryCounters> = {
@@ -85,6 +189,7 @@ const counters: Record<ApiCategory, CategoryCounters> = {
   nontrading: {},
 };
 
+/** Creates all in-memory counters synchronously. Call once at module load. */
 function initCounters() {
   for (const [cat, limits] of Object.entries(RATE_LIMITS) as [ApiCategory, WindowLimits][]) {
     if (limits.perSecond !== undefined)
@@ -94,12 +199,26 @@ function initCounters() {
     if (limits.perHour !== undefined)
       counters[cat].perHour = new SlidingWindowCounter(3_600_000, limits.perHour);
     if (limits.perDay !== undefined)
-      counters[cat].perDay = new SlidingWindowCounter(86_400_000, limits.perDay);
+      counters[cat].perDay = new DailyCounter(limits.perDay, cat);
   }
 }
 
 initCounters();
 
+/**
+ * Load today's IST day counts from the DB into all DailyCounters.
+ * Call this from index.ts after the server starts listening.
+ */
+export async function loadDailyCountersFromDb(): Promise<void> {
+  const categories = Object.keys(counters) as ApiCategory[];
+  await Promise.all(
+    categories
+      .filter((cat) => counters[cat].perDay !== undefined)
+      .map((cat) => counters[cat].perDay!.loadFromDb()),
+  );
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
 export interface RateLimitResult {
   allowed: boolean;
   category: ApiCategory;
@@ -114,11 +233,11 @@ export function checkRateLimit(category: ApiCategory): RateLimitResult {
   const c = counters[category];
   const limits = RATE_LIMITS[category];
 
-  const windows: Array<{ key: "second" | "minute" | "hour" | "day"; counter?: SlidingWindowCounter; limit?: number }> = [
+  const windows: Array<{ key: "second" | "minute" | "hour" | "day"; counter?: Counter; limit?: number }> = [
     { key: "second", counter: c.perSecond, limit: limits.perSecond },
     { key: "minute", counter: c.perMinute, limit: limits.perMinute },
-    { key: "hour", counter: c.perHour, limit: limits.perHour },
-    { key: "day", counter: c.perDay, limit: limits.perDay },
+    { key: "hour",   counter: c.perHour,   limit: limits.perHour   },
+    { key: "day",    counter: c.perDay,    limit: limits.perDay    },
   ];
 
   const remaining: Record<string, number> = {};
@@ -131,7 +250,7 @@ export function checkRateLimit(category: ApiCategory): RateLimitResult {
       const retryAfterMs = Math.max(0, w.counter.resetAt(now) - now);
       logger.warn(
         { category, window: w.key, limit: w.limit },
-        `[RateLimit] ${CATEGORY_LABELS[category]} ${w.key} limit reached (${w.limit}/${w.key})`
+        `[RateLimit] ${CATEGORY_LABELS[category]} ${w.key} limit reached (${w.limit}/${w.key})`,
       );
       return {
         allowed: false,
@@ -158,8 +277,8 @@ export function getRateLimitStats(): Record<ApiCategory, Record<string, number>>
     stats[cat] = {};
     if (c.perSecond) stats[cat].perSecond_remaining = c.perSecond.remaining(now);
     if (c.perMinute) stats[cat].perMinute_remaining = c.perMinute.remaining(now);
-    if (c.perHour) stats[cat].perHour_remaining = c.perHour.remaining(now);
-    if (c.perDay) stats[cat].perDay_remaining = c.perDay.remaining(now);
+    if (c.perHour)   stats[cat].perHour_remaining   = c.perHour.remaining(now);
+    if (c.perDay)    stats[cat].perDay_remaining     = c.perDay.remaining(now);
   }
   return stats as Record<ApiCategory, Record<string, number>>;
 }
@@ -181,7 +300,7 @@ export function recordOrderModification(orderId: string): { allowed: boolean; co
 const ORDER_MOD_CAP = 25;
 const orderModCounts: Record<string, number> = {};
 
-// ── Option Chain special: 1 request per 3 seconds per underlying+expiry ──
+// ── Option Chain special: 1 request per 3 seconds per underlying+expiry ──────
 const optionChainLastCall: Record<string, number> = {};
 
 export function checkOptionChainRateLimit(key: string): { allowed: boolean; waitMs: number } {

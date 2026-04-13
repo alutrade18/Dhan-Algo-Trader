@@ -11,6 +11,7 @@ import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
 import { startSuperOrderMonitor } from "./lib/super-order-monitor";
 import { startKillSwitchScheduler } from "./routes/risk";
 import { decryptToken } from "./lib/crypto-utils";
+import { loadDailyCountersFromDb } from "./lib/rate-limiter";
 
 const rawPort = process.env["PORT"];
 
@@ -73,7 +74,8 @@ async function loadSavedCredentials() {
   }
 }
 
-loadSavedCredentials().then(() => {
+loadSavedCredentials().then(async () => {
+  await loadDailyCountersFromDb();
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
     startAutoSquareOffScheduler();
