@@ -186,6 +186,61 @@ router.get("/broker/server-ip", async (_req, res): Promise<void> => {
   }
 });
 
+// POST /broker/set-ip — Whitelist the server's own IP via Dhan API
+router.post("/broker/set-ip", async (req, res): Promise<void> => {
+  if (!dhanClient.isConfigured()) {
+    res.status(401).json({ success: false, error: "Broker not connected. Save your credentials first." });
+    return;
+  }
+
+  const ipFlag = String((req.body as Record<string, unknown>).ipFlag ?? "PRIMARY");
+  if (ipFlag !== "PRIMARY" && ipFlag !== "SECONDARY") {
+    res.status(400).json({ success: false, error: "ipFlag must be PRIMARY or SECONDARY" });
+    return;
+  }
+
+  try {
+    // Resolve current server IP
+    if (!cachedServerIp || Date.now() - ipCachedAt > 5 * 60_000) {
+      const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(4_000) });
+      const { ip } = (await r.json()) as { ip: string };
+      cachedServerIp = ip;
+      ipCachedAt = Date.now();
+    }
+    const ip = cachedServerIp;
+    if (!ip) {
+      res.status(500).json({ success: false, error: "Could not determine server IP" });
+      return;
+    }
+
+    const creds = dhanClient.getCredentials();
+    const response = await fetch("https://api.dhan.co/v2/ip/setIP", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "access-token": creds.accessToken,
+      },
+      body: JSON.stringify({ dhanClientId: creds.clientId, ip, ipFlag }),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (!response.ok || String(data.status).toUpperCase() !== "SUCCESS") {
+      res.status(response.ok ? 400 : response.status).json({
+        success: false,
+        error: String(data.message ?? data.errorMessage ?? "Dhan API rejected the request"),
+        raw: data,
+      });
+      return;
+    }
+
+    res.json({ success: true, ip, ipFlag, message: String(data.message ?? "IP saved successfully") });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "Failed to contact Dhan API", detail: String(e) });
+  }
+});
+
 router.get("/broker/status", async (_req, res): Promise<void> => {
   if (!dhanClient.isConfigured()) {
     res.json({

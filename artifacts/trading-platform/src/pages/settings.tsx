@@ -111,10 +111,35 @@ function TokenExpiryBanner({ onReconnect }: { onReconnect: () => void }) {
 function ServerIpInfo() {
   const { ip, loading, reload } = useServerIp();
   const { toast } = useToast();
+  const [setting, setSetting] = useState<"PRIMARY" | "SECONDARY" | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const copy = () => {
     if (!ip) return;
     void navigator.clipboard.writeText(ip).then(() => toast({ title: "IP copied to clipboard" }));
+  };
+
+  const setIp = async (flag: "PRIMARY" | "SECONDARY") => {
+    setSetting(flag);
+    setResult(null);
+    try {
+      const res = await fetch(`${BASE}api/broker/set-ip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ipFlag: flag }),
+      });
+      const d = (await res.json()) as { success: boolean; message?: string; error?: string };
+      if (d.success) {
+        setResult({ ok: true, msg: d.message ?? "IP whitelisted successfully" });
+        toast({ title: `${flag} IP set — orders should work now` });
+      } else {
+        setResult({ ok: false, msg: d.error ?? "Dhan rejected the request" });
+      }
+    } catch {
+      setResult({ ok: false, msg: "Network error — could not reach API" });
+    } finally {
+      setSetting(null);
+    }
   };
 
   return (
@@ -129,50 +154,91 @@ function ServerIpInfo() {
             <p className="text-[10px] text-muted-foreground">Required for order APIs to work on VPS</p>
           </div>
         </div>
-        <button onClick={reload} className="text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={reload} className="text-muted-foreground hover:text-foreground transition-colors" title="Refresh IP">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div className="px-5 py-4 flex items-start gap-6 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Your Server's Public IP</p>
-          <div className="flex items-center gap-2">
-            {loading ? (
-              <div className="h-9 w-40 rounded-lg bg-muted/30 animate-pulse" />
-            ) : ip ? (
-              <>
-                <code className="font-mono text-base font-bold text-foreground bg-muted/20 border border-border/40 px-3 py-1.5 rounded-lg select-all">{ip}</code>
-                <button onClick={copy} className="text-muted-foreground hover:text-primary transition-colors" title="Copy IP">
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </>
-            ) : (
-              <span className="text-xs text-muted-foreground">Unable to detect — check network</span>
-            )}
+
+      <div className="px-5 py-4 space-y-4">
+        {/* IP display + whitelist buttons */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Your Server's Public IP</p>
+            <div className="flex items-center gap-2">
+              {loading ? (
+                <div className="h-9 w-44 rounded-lg bg-muted/30 animate-pulse" />
+              ) : ip ? (
+                <>
+                  <code className="font-mono text-base font-bold text-foreground bg-muted/20 border border-border/40 px-3 py-1.5 rounded-lg select-all">{ip}</code>
+                  <button onClick={copy} className="text-muted-foreground hover:text-primary transition-colors" title="Copy IP">
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">Unable to detect — check network</span>
+              )}
+            </div>
           </div>
+
+          {/* One-click whitelist buttons */}
+          {ip && (
+            <div className="flex items-center gap-2 shrink-0">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Whitelist via API</p>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5 text-xs"
+                disabled={!!setting}
+                onClick={() => void setIp("PRIMARY")}
+              >
+                {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Set as Primary IP</>}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5 text-xs"
+                disabled={!!setting}
+                onClick={() => void setIp("SECONDARY")}
+              >
+                {setting === "SECONDARY" ? <><span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />Setting…</> : <>Set as Secondary</>}
+              </Button>
+            </div>
+          )}
         </div>
-        <div className="flex-1 min-w-[220px] space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">How to whitelist (do this once per server)</p>
-          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-            <li>Go to <span className="text-foreground font-medium">Dhan Web → My Profile → Manage App</span></li>
-            <li>Select your app and click <span className="text-foreground font-medium">Whitelist IP</span></li>
-            <li>Add the IP shown above and save</li>
-            <li>Reconnect your broker in the form below</li>
-          </ol>
-          <a
-            href="https://developer.dhan.co"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
-          >
-            Open Dhan Developer Portal <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-        <div className="w-full rounded-xl border border-warning/25 bg-warning/8 px-4 py-2.5 flex items-start gap-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-          <p className="text-xs text-warning">
-            <span className="font-semibold">DH-905 on order APIs</span> = your IP is not whitelisted. Fund/market data APIs work from any IP but order placement, modification and cancellation require IP whitelisting.
-          </p>
+
+        {/* Result banner */}
+        {result && (
+          <div className={`flex items-start gap-2 rounded-xl border px-4 py-2.5 text-xs ${result.ok ? "border-success/30 bg-success/8 text-success" : "border-destructive/30 bg-destructive/8 text-destructive"}`}>
+            {result.ok
+              ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              : <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+            <span>{result.msg}</span>
+          </div>
+        )}
+
+        {/* Caveat */}
+        <div className="flex items-start gap-3 flex-wrap">
+          <div className="flex-1 min-w-[220px] space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Important notes</p>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+              <li>Once set, the same IP <span className="text-foreground font-medium">cannot be changed for 7 days</span></li>
+              <li>You can have one Primary and one Secondary IP</li>
+              <li>Broker must be connected before whitelisting</li>
+              <li>DH-905 on order APIs = IP not whitelisted yet</li>
+            </ul>
+          </div>
+          <div className="flex-1 min-w-[200px] space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Manual fallback</p>
+            <p className="text-xs text-muted-foreground">If the button fails, whitelist manually:</p>
+            <ol className="text-xs text-muted-foreground space-y-0.5 list-decimal list-inside">
+              <li>Dhan Web → My Profile → Manage App</li>
+              <li>Select your app → Whitelist IP</li>
+              <li>Paste <span className="font-mono font-semibold text-foreground">{ip ?? "…"}</span></li>
+            </ol>
+            <a href="https://developer.dhan.co" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5">
+              Dhan Developer Portal <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       </div>
     </div>
