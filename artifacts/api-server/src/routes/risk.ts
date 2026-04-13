@@ -185,21 +185,20 @@ router.get("/risk/pnl-exit", async (_req, res): Promise<void> => {
 router.post("/risk/pnl-exit", async (req, res): Promise<void> => {
   noCache(res);
   if (!requireBroker(res)) return;
-  const { profitValue, lossValue, productType, enableKillSwitch } = req.body as {
+  const { profitValue, lossValue, enableKillSwitch } = req.body as {
     profitValue?: number;
     lossValue?: number;
-    productType?: string[];
     enableKillSwitch?: boolean;
   };
-  if (!profitValue || !lossValue || !productType?.length) {
-    res.status(400).json({ error: "profitValue, lossValue and productType are required" });
+  if (!profitValue || !lossValue) {
+    res.status(400).json({ error: "profitValue and lossValue are required" });
     return;
   }
   try {
     const data = await dhanClient.setPnlExit({
       profitValue: Number(profitValue),
       lossValue: Number(lossValue),
-      productType,
+      productType: ["INTRADAY"],
       enableKillSwitch: enableKillSwitch ?? false,
     });
     res.json(data);
