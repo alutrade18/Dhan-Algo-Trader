@@ -5,16 +5,18 @@ import { useHealthCheck, useGetFundLimits, getHealthCheckQueryKey, getGetFundLim
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
+import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, PlayCircle, ShieldAlert, LogOut } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useClerk, useUser } from "@clerk/react";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 const PAGE_TITLES: Record<string, string> = {
+  "/dashboard": "Dashboard",
   "/": "Dashboard",
   "/orders": "Order Book",
   "/super-orders": "Super Orders",
@@ -79,6 +81,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const rateLimitDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { signOut } = useClerk();
+  const { user } = useUser();
 
   useEffect(() => {
     const handler = () => setStaticIpError(true);
@@ -348,6 +352,21 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Moon className="w-4 h-4" />
               )}
             </Button>
+
+            {user && (
+              <>
+                <div className="hidden md:block h-4 w-[1px] bg-border" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  title={`Sign out (${user.primaryEmailAddress?.emailAddress ?? user.username ?? ""})`}
+                  onClick={() => void signOut()}
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </>
+            )}
           </div>
         </header>
 

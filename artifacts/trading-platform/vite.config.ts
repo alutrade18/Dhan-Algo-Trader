@@ -26,6 +26,15 @@ if (!basePath) {
   );
 }
 
+const reactPath = path.resolve(
+  import.meta.dirname,
+  "node_modules/react",
+);
+const reactDomPath = path.resolve(
+  import.meta.dirname,
+  "node_modules/react-dom",
+);
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -50,8 +59,15 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+      react: reactPath,
+      "react-dom": reactDomPath,
+      "react/jsx-runtime": path.resolve(reactPath, "jsx-runtime"),
+      "react/jsx-dev-runtime": path.resolve(reactPath, "jsx-dev-runtime"),
     },
     dedupe: ["react", "react-dom"],
+  },
+  optimizeDeps: {
+    include: ["react", "react-dom", "@clerk/react"],
   },
   root: path.resolve(import.meta.dirname),
   build: {

@@ -21,7 +21,7 @@ const NAV_SECTIONS = [
   {
     label: "TRADING",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/positions", label: "Positions", icon: Briefcase },
       { href: "/orders", label: "Order Book", icon: List },
       { href: "/option-chain", label: "Option Chain", icon: LineChart },
