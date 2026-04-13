@@ -11,6 +11,7 @@ import riskRouter from "./risk";
 import tradesRouter from "./trades";
 import logsRouter from "./logs";
 import superOrdersRouter from "./super-orders";
+import strategiesRouter from "./strategies";
 import { createPostbackRouter } from "./postback";
 import { getIO } from "../lib/io";
 import instrumentsRouter from "./instruments";
@@ -27,6 +28,7 @@ const router: IRouter = Router();
 // ── ORDER APIs: 10/sec | 250/min | 1000/hr | 7000/day ────────────────────────
 router.use("/orders", orderRateLimit);
 router.use("/super-orders", orderRateLimit);
+router.use("/strategy", orderRateLimit);               // webhook trigger = order placement
 router.use("/positions/exit-single", orderRateLimit); // exit = order placement
 
 // ── QUOTE APIs: 1/sec (LTP, OHLC, snapshots) ─────────────────────────────────
@@ -59,6 +61,7 @@ router.use([
   "/logs",
   "/instruments",   // symbol search
   "/postback",
+  "/strategies",    // CRUD management
 ], nonTradingRateLimit);
 
 // ── ROUTE REGISTRATIONS ───────────────────────────────────────────────────────
@@ -75,6 +78,7 @@ router.use(tradesRouter);
 router.use(logsRouter);
 router.use(instrumentsRouter);
 router.use(superOrdersRouter);
+router.use(strategiesRouter);
 router.use((req, res, next) => {
   const io = getIO();
   if (io) {
