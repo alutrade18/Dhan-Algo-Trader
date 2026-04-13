@@ -376,7 +376,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* ── Row 1 — Broker Connection ── */}
+      {/* ── Row 1 — Broker Connection (full width hero) ── */}
       <Card className="border-primary/20">
         <CardHeader>
           <div className="flex items-start justify-between flex-wrap gap-3">
@@ -451,13 +451,14 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* ── Row 2 — Telegram ── */}
-      <Card>
+      {/* ── Row 2 — Telegram Alerts + Emergency Kill Switch ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Bell className="w-4 h-4 text-primary" />Telegram Alerts</CardTitle>
             <CardDescription className="text-xs">Receive trade alerts on Telegram</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1">
             <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Bot Token</label>
@@ -475,7 +476,9 @@ export default function Settings() {
                 {telegramForm.formState.errors.telegramChatId && <p className="text-xs text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <Button type="submit" size="sm" className="gap-2" disabled={telegramMutation.isPending}><Bell className="w-3.5 h-3.5" />{telegramMutation.isPending ? "Saving..." : "Save Credentials"}</Button>
+                <Button type="submit" size="sm" className="gap-2" disabled={telegramMutation.isPending}>
+                  <Bell className="w-3.5 h-3.5" />{telegramMutation.isPending ? "Saving..." : "Save Credentials"}
+                </Button>
                 {(settingsData?.telegramBotToken || settingsData?.telegramChatId) && (
                   <Button type="button" variant="outline" size="sm" className="gap-2 text-destructive border-destructive/30" disabled={telegramResetMutation.isPending} onClick={() => { if (confirm("Remove saved Telegram credentials?")) telegramResetMutation.mutate(); }}>
                     <XCircle className="w-3.5 h-3.5" />{telegramResetMutation.isPending ? "Removing..." : "Reset"}
@@ -487,8 +490,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-      {/* ── Row 3 — Kill Switch ── */}
-        <Card className={killSwitchActive ? "border-destructive/50 bg-destructive/5" : ""}>
+        <Card className={`flex flex-col ${killSwitchActive ? "border-destructive/50 bg-destructive/5" : ""}`}>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Power className={`w-4 h-4 ${killSwitchActive ? "text-destructive" : "text-muted-foreground"}`} />
@@ -498,7 +500,7 @@ export default function Settings() {
             </CardTitle>
             <CardDescription className="text-xs">Instantly block all order placement · 1 reset/day · Auto-resets 8:30 AM IST</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="flex-1 space-y-3">
             {!isConnected ? (
               <div className="rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground flex items-start gap-2">
                 <WifiOff className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span>Connect broker first.</span>
@@ -529,48 +531,16 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
-
-      {/* ── Row 4 — Notification Preferences ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><Bell className="w-4 h-4 text-primary" />Notification Preferences</CardTitle>
-            <CardDescription className="text-xs">Choose which events fire Telegram alerts</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { key: "orderFilled", label: "Order Filled", desc: "When an order is fully executed" },
-              { key: "targetHit", label: "Target Hit", desc: "When profit target is reached" },
-              { key: "stopLossHit", label: "Stop Loss Hit", desc: "When stop loss is triggered" },
-              { key: "killSwitchTriggered", label: "Kill Switch Triggered", desc: "Emergency halt events" },
-              { key: "tokenExpiry", label: "Token About to Expire", desc: "4 hours before expiry" },
-              { key: "strategyPausedActivated", label: "Strategy Paused / Activated", desc: "Strategy state changes" },
-              { key: "autoSquareOff", label: "Auto Square-Off Executed", desc: "When positions auto-squared off" },
-              { key: "dailyPnlSummary", label: "Daily P&L Summary", desc: "End-of-day summary (if implemented)" },
-            ].map(item => (
-              <div key={item.key} className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
-                <Switch checked={notifPrefs[item.key] ?? false} onCheckedChange={val => setNotifPrefs(prev => ({ ...prev, [item.key]: val }))} />
-              </div>
-            ))}
-            <Button size="sm" className="gap-2 w-full mt-2" onClick={() => { void genericSaveMutation.mutateAsync({ notificationPreferences: notifPrefs }).then(() => toast({ title: "Notification preferences saved" })); }}>
-              <Save className="w-3.5 h-3.5" />Save Preferences
-            </Button>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* ── Row 6 — Trading Defaults + Browser Push ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
+      {/* ── Row 3 — Trading Defaults + Kill Switch PIN ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2"><Settings2 className="w-4 h-4 text-primary" />Trading Defaults</CardTitle>
             <CardDescription className="text-xs">Pre-fill values across Super Orders, Forever Orders, and Conditional Triggers</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex-1 space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Default Product Type</label>
               <Select value={defaultProductType} onValueChange={setDefaultProductType}>
@@ -606,116 +576,41 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><Smartphone className="w-4 h-4 text-primary" />Browser Push Notifications</CardTitle>
-            <CardDescription className="text-xs">Receive alerts even when the browser tab is in the background or minimised</CardDescription>
+            <CardTitle className="text-base flex items-center gap-2"><Lock className="w-4 h-4 text-warning" />Kill Switch PIN</CardTitle>
+            <CardDescription className="text-xs">Require a 4-digit PIN to activate or deactivate the kill switch</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className={`rounded-md border px-3 py-2.5 text-sm flex items-center gap-2 ${pushEnabled && "Notification" in window && Notification.permission === "granted" ? "border-success/30 bg-success/10 text-success" : "border-muted bg-muted/20 text-muted-foreground"}`}>
-              {pushEnabled && "Notification" in window && Notification.permission === "granted" ? "✅ Browser push notifications are enabled" : "🔕 Browser push notifications are disabled"}
+          <CardContent className="flex-1 space-y-3">
+            {settingsData?.hasKillSwitchPin && (
+              <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
+                <Lock className="w-3.5 h-3.5" />PIN is currently set. Enter a new PIN to change it.
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">New PIN (4 digits)</label>
+              <div className="relative">
+                <Input type={showPin ? "text" : "password"} placeholder="••••" maxLength={4} className="text-center tracking-widest font-mono pr-10" value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPin(!showPin)}>{showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">Click the button below and accept the browser permission prompt. Notifications appear even when the app is not in focus.</p>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Confirm PIN</label>
+              <Input type="password" placeholder="••••" maxLength={4} className="text-center tracking-widest font-mono" value={pinConfirm} onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+              {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-xs text-destructive">PINs do not match</p>}
+            </div>
             <div className="flex gap-2">
-              <Button size="sm" className="gap-2 flex-1" onClick={() => void requestPushPermission()} disabled={pushEnabled && "Notification" in window && Notification.permission === "granted"}>
-                <Bell className="w-3.5 h-3.5" />Enable Push Alerts
+              <Button size="sm" className="gap-2 flex-1" disabled={pinInput.length !== 4 || pinInput !== pinConfirm} onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: "Kill Switch PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}>
+                <Lock className="w-3.5 h-3.5" />Set PIN
               </Button>
-              {pushEnabled && (
-                <Button size="sm" variant="outline" className="gap-2" onClick={sendTestPushNotification}>
-                  Test Notification
+              {settingsData?.hasKillSwitchPin && (
+                <Button size="sm" variant="outline" className="gap-2 text-destructive border-destructive/30" onClick={() => { if (confirm("Remove kill switch PIN protection?")) void genericSaveMutation.mutateAsync({ clearKillSwitchPin: true }).then(() => { toast({ title: "PIN removed" }); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}>
+                  <Trash2 className="w-3.5 h-3.5" />Remove PIN
                 </Button>
               )}
             </div>
-            {!("Notification" in window) && <p className="text-xs text-destructive">Your browser does not support push notifications.</p>}
           </CardContent>
         </Card>
-      </div>
-
-      {/* ── Row 7 — Dashboard Widgets + Kill Switch PIN ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><LayoutDashboard className="w-4 h-4 text-primary" />Dashboard Widgets</CardTitle>
-            <CardDescription className="text-xs">Show or hide cards on the Dashboard page</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { key: "todayPnl", label: "Today's P&L" },
-              { key: "totalPnl", label: "Total P&L (30D Net)" },
-              { key: "availableBalance", label: "Available Balance" },
-              { key: "activeStrategies", label: "Active Strategies & Win Rate" },
-              { key: "equityCurve", label: "Equity Curve Chart" },
-            ].map(item => (
-              <div key={item.key} className="flex items-center justify-between">
-                <span className="text-sm">{item.label}</span>
-                <Switch checked={dashWidgets[item.key] ?? true} onCheckedChange={val => setDashWidgets(prev => ({ ...prev, [item.key]: val }))} />
-              </div>
-            ))}
-            <Button size="sm" className="gap-2 w-full mt-2" onClick={() => { void genericSaveMutation.mutateAsync({ dashboardWidgets: dashWidgets }).then(() => { toast({ title: "Dashboard widgets saved" }); queryClient.invalidateQueries({ queryKey: ["dashboard-widgets"] }); }); }}>
-              <Save className="w-3.5 h-3.5" />Save Widget Visibility
-            </Button>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><RefreshCw className="w-4 h-4 text-primary" />Refresh Interval</CardTitle>
-              <CardDescription className="text-xs">How often positions and balance auto-refresh in the background</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Select value={String(refreshInterval)} onValueChange={v => setRefreshInterval(Number(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">Every 5 seconds</SelectItem>
-                  <SelectItem value="10">Every 10 seconds</SelectItem>
-                  <SelectItem value="15">Every 15 seconds (default)</SelectItem>
-                  <SelectItem value="30">Every 30 seconds</SelectItem>
-                  <SelectItem value="60">Every 60 seconds</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button size="sm" className="gap-2 w-full" onClick={() => { void genericSaveMutation.mutateAsync({ refreshIntervalSeconds: refreshInterval }).then(() => toast({ title: `Refresh interval set to ${refreshInterval}s` })); }}>
-                <Save className="w-3.5 h-3.5" />Save Interval
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><Lock className="w-4 h-4 text-warning" />Kill Switch PIN</CardTitle>
-              <CardDescription className="text-xs">Require a 4-digit PIN to activate or deactivate the kill switch</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {settingsData?.hasKillSwitchPin && (
-                <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5" />PIN is currently set. Enter a new PIN to change it.
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">New PIN (4 digits)</label>
-                <div className="relative">
-                  <Input type={showPin ? "text" : "password"} placeholder="••••" maxLength={4} className="text-center tracking-widest font-mono pr-10" value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPin(!showPin)}>{showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Confirm PIN</label>
-                <Input type="password" placeholder="••••" maxLength={4} className="text-center tracking-widest font-mono" value={pinConfirm} onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-                {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-xs text-destructive">PINs do not match</p>}
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" className="gap-2 flex-1" disabled={pinInput.length !== 4 || pinInput !== pinConfirm} onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: "Kill Switch PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}>
-                  <Lock className="w-3.5 h-3.5" />Set PIN
-                </Button>
-                {settingsData?.hasKillSwitchPin && (
-                  <Button size="sm" variant="outline" className="gap-2 text-destructive border-destructive/30" onClick={() => { if (confirm("Remove kill switch PIN protection?")) void genericSaveMutation.mutateAsync({ clearKillSwitchPin: true }).then(() => { toast({ title: "PIN removed" }); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}>
-                    <Trash2 className="w-3.5 h-3.5" />Remove PIN
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
     </div>
