@@ -28,7 +28,30 @@ app.use(
   }),
 );
 
-app.use(cors({ credentials: true, origin: true }));
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+  : [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:8081",
+      process.env.FRONTEND_URL,
+    ].filter(Boolean) as string[];
+
+app.use(
+  cors({
+    credentials: true,
+    origin: (origin, callback) => {
+      // Allow server-to-server / curl / Postman (no Origin header)
+      if (!origin) return callback(null, true);
+      // Allow Replit preview domains (*.replit.dev, *.riker.replit.dev)
+      if (/\.replit\.dev$/.test(origin) || /\.riker\.replit\.dev$/.test(origin)) {
+        return callback(null, true);
+      }
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error("Not allowed by CORS"));
+    },
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
