@@ -18,15 +18,11 @@ import {
 import {
   ChevronDown,
   ChevronRight,
-  TrendingUp,
-  TrendingDown,
   Trash2,
   History,
   XCircle,
   CheckCircle2,
-  Activity,
   AlertTriangle,
-  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -82,21 +78,11 @@ interface AppLog {
   details?: string | null; status?: string | null; statusCode?: number | null; createdAt: string;
 }
 interface LogsResponse { logs: AppLog[]; total: number; page: number; limit: number; }
-interface TradeLog {
-  id: number; strategyId: number; strategyName: string; orderId?: string | null;
-  tradingSymbol: string; transactionType: string; quantity: number; price: string;
-  status: string; pnl?: string | null; message?: string | null; executedAt: string;
-}
 interface AuditEntry {
   id: number; action: string; field: string | null; oldValue: string | null;
   newValue: string | null; description: string | null; changedAt: string;
 }
 interface LogCounts { failed: number; success: number; }
-
-// Unified entry type for the Failed Logs table (merges app + trade logs)
-type FailedEntry =
-  | { _src: "app";   ts: string; app: AppLog }
-  | { _src: "trade"; ts: string; trade: TradeLog };
 
 // ── Style maps ───────────────────────────────────────────────────────────────
 const LEVEL_STYLES: Record<string, string> = {
@@ -106,7 +92,7 @@ const LEVEL_STYLES: Record<string, string> = {
 };
 const CATEGORY_STYLES: Record<string, string> = {
   broker: "bg-purple-500/10 text-purple-400", order: "bg-emerald-500/10 text-emerald-400",
-  strategy: "bg-cyan-500/10 text-cyan-400", settings: "bg-orange-500/10 text-orange-400",
+  settings: "bg-orange-500/10 text-orange-400",
   risk: "bg-red-500/10 text-red-400", api: "bg-muted text-muted-foreground",
   system: "bg-muted/60 text-muted-foreground",
 };
@@ -188,70 +174,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
   );
 }
 
-// ── Failed Trade Log Row (in Failed Logs tab) ────────────────────────────────
-function FailedTradeRow({ log }: { log: TradeLog }) {
-  const [expanded, setExpanded] = useState(false);
-  const isBuy = log.transactionType === "BUY";
-  return (
-    <>
-      <tr
-        className={cn("border-b border-border/40 hover:bg-destructive/5 transition-colors text-xs cursor-pointer select-none", expanded && "bg-destructive/5")}
-        onClick={() => setExpanded((e) => !e)}
-      >
-        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap font-mono text-[10px]">{fmtIST(log.executedAt)}</td>
-        <td className="px-2 py-2">
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-destructive/10 text-destructive border-destructive/30">ERROR</Badge>
-        </td>
-        <td className="px-2 py-2">
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-cyan-500/10 text-cyan-400">strategy</Badge>
-        </td>
-        <td className="px-2 py-2 font-medium max-w-[180px] truncate">
-          <span className="flex items-center gap-1.5">
-            <span className={cn("font-mono font-semibold", isBuy ? "text-emerald-400" : "text-red-400")}>
-              {log.transactionType}
-            </span>
-            <span>{log.tradingSymbol}</span>
-            <span className="text-muted-foreground">×{log.quantity}</span>
-          </span>
-        </td>
-        <td className="px-2 py-2 min-w-[200px]">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5">
-              <Badge variant="destructive" className="text-[9px] px-1.5 py-0">failed</Badge>
-              <span className="text-[10px] text-red-400 font-semibold">Strategy Trade Failed</span>
-            </div>
-            <p className="text-[10px] text-muted-foreground leading-snug max-w-[300px] truncate">
-              {log.message ?? `Order ID: ${log.orderId ?? "N/A"} · ${log.strategyName}`}
-            </p>
-          </div>
-        </td>
-        <td className="px-2 py-1.5 w-5 text-muted-foreground">{expanded ? <ChevronDown className="h-3 w-3 text-destructive" /> : <ChevronRight className="h-3 w-3" />}</td>
-      </tr>
-      {expanded && (
-        <tr className="border-b border-border/40 bg-destructive/5">
-          <td colSpan={6} className="px-4 py-3 space-y-2">
-            <div className="rounded border border-destructive/30 bg-destructive/8 p-2.5">
-              <div className="flex items-center gap-2 mb-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
-                <span className="text-xs font-semibold text-destructive">Strategy Trade Failure</span>
-              </div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11px]">
-                <div><span className="text-muted-foreground">Strategy:</span> <span className="font-medium">{log.strategyName}</span></div>
-                <div><span className="text-muted-foreground">Symbol:</span> <span className="font-mono font-semibold">{log.tradingSymbol}</span></div>
-                <div><span className="text-muted-foreground">Side:</span> <span className={cn("font-medium", isBuy ? "text-emerald-400" : "text-red-400")}>{log.transactionType}</span></div>
-                <div><span className="text-muted-foreground">Qty:</span> <span className="font-mono">{log.quantity}</span></div>
-                <div><span className="text-muted-foreground">Price:</span> <span className="font-mono">₹{Number(log.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
-                <div><span className="text-muted-foreground">Order ID:</span> <span className="font-mono">{log.orderId ?? "—"}</span></div>
-              </div>
-              {log.message && <p className="mt-2 text-xs text-red-400 border-t border-destructive/20 pt-2">{log.message}</p>}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
 // ── Success Log Row ──────────────────────────────────────────────────────────
 function SuccessLogRow({ log }: { log: AppLog }) {
   const [expanded, setExpanded] = useState(false);
@@ -291,58 +213,6 @@ function SuccessLogRow({ log }: { log: AppLog }) {
             <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all font-mono leading-relaxed">
               {parsed ? JSON.stringify(parsed, null, 2) : log.details}
             </pre>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-// ── Strategy Trade Row (all trades) ─────────────────────────────────────────
-function StrategyTradeRow({ log }: { log: TradeLog }) {
-  const [expanded, setExpanded] = useState(false);
-  const isBuy = log.transactionType === "BUY";
-  const pnl = log.pnl != null ? Number(log.pnl) : null;
-  const isFailed = log.status === "failed";
-  return (
-    <>
-      <tr
-        className={cn("border-b border-border/40 hover:bg-muted/20 text-xs", log.message && "cursor-pointer select-none")}
-        onClick={() => log.message && setExpanded((e) => !e)}
-      >
-        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap font-mono text-[10px]">{fmtIST(log.executedAt)}</td>
-        <td className="px-2 py-2 font-mono font-semibold">{log.tradingSymbol}</td>
-        <td className="px-2 py-2">
-          <span className={cn("flex items-center gap-1 font-medium", isBuy ? "text-emerald-400" : "text-red-400")}>
-            {isBuy ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {log.transactionType}
-          </span>
-        </td>
-        <td className="px-2 py-2 text-right font-mono">{log.quantity}</td>
-        <td className="px-2 py-2 text-right font-mono">₹{Number(log.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-        <td className="px-2 py-2">
-          <Badge variant={log.status === "executed" ? "default" : isFailed ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
-            {log.status}
-          </Badge>
-        </td>
-        <td className="px-2 py-2 text-right font-mono">
-          {pnl !== null
-            ? <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>{pnl >= 0 ? "+" : ""}₹{pnl.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-            : <span className="text-muted-foreground">—</span>}
-        </td>
-        <td className="px-2 py-2 text-muted-foreground max-w-[130px] truncate">{log.strategyName}</td>
-        <td className="px-2 py-2 font-mono text-[10px] text-muted-foreground">{log.orderId ?? "—"}</td>
-        <td className="px-2 py-1.5 w-5 text-muted-foreground">
-          {log.message && (expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)}
-        </td>
-      </tr>
-      {expanded && log.message && (
-        <tr className={cn("border-b border-border/40", isFailed ? "bg-destructive/5" : "bg-muted/10")}>
-          <td colSpan={10} className="px-4 py-2">
-            <div className={cn("flex items-start gap-2 text-xs rounded p-2 border", isFailed ? "border-destructive/30 bg-destructive/8 text-destructive" : "border-emerald-500/20 bg-emerald-500/5 text-emerald-400")}>
-              {isFailed ? <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
-              <span>{log.message}</span>
-            </div>
           </td>
         </tr>
       )}
@@ -433,19 +303,6 @@ export default function Logs() {
     enabled: activeTab === "failed",
   });
 
-  // ── Failed: trade_logs (failed) — refreshes every 3s ────────────────────
-  const { data: failedTrades = [], isLoading: failedTradesLoading } = useQuery<TradeLog[]>({
-    queryKey: ["failed-trade-logs"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE}api/strategies/trade-logs?status=failed`);
-      if (!r.ok) return [];
-      return r.json();
-    },
-    refetchInterval: 3_000,
-    staleTime: 2_000,
-    enabled: activeTab === "failed",
-  });
-
   // ── Success: app_logs (success) — refreshes every 3s ────────────────────
   const { data: successData, isLoading: successLoading } = useQuery<LogsResponse>({
     queryKey: ["logs-success", successPage, successResetTs],
@@ -461,19 +318,6 @@ export default function Logs() {
     enabled: activeTab === "success",
   });
 
-  // ── Strategy: ALL trade_logs — refreshes every 3s ───────────────────────
-  const { data: tradeLogs = [], isLoading: tradeLoading } = useQuery<TradeLog[]>({
-    queryKey: ["trade-logs"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE}api/strategies/trade-logs`);
-      if (!r.ok) return [];
-      return r.json();
-    },
-    refetchInterval: 3_000,
-    staleTime: 2_000,
-    enabled: activeTab === "strategy",
-  });
-
   // ── Audit logs — refreshes every 30s ────────────────────────────────────
   const { data: auditLogs = [], isLoading: auditLoading } = useQuery<AuditEntry[]>({
     queryKey: ["audit-log"],
@@ -486,17 +330,10 @@ export default function Logs() {
     enabled: activeTab === "audit",
   });
 
-  // ── Merge & sort failed entries ──────────────────────────────────────────
-  const failedAppLogs = failedData?.logs ?? [];
-  const failedTotal   = failedData?.total ?? 0;
-
-  const allFailed: FailedEntry[] = [
-    ...failedAppLogs.map((a): FailedEntry => ({ _src: "app",   ts: a.createdAt,  app: a })),
-    ...failedTrades.map((t): FailedEntry  => ({ _src: "trade", ts: t.executedAt, trade: t })),
-  ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-
-  const failedIsLoading = failedLoading || failedTradesLoading;
-  const combinedFailedTotal = failedTotal + failedTrades.length;
+  const failedLogs  = failedData?.logs ?? [];
+  const failedTotal = failedData?.total ?? 0;
+  const successLogs  = successData?.logs ?? [];
+  const successTotal = successData?.total ?? 0;
 
   // ── Clear Success logs view ──────────────────────────────────────────────
   function handleClearSuccess() {
@@ -508,9 +345,6 @@ export default function Logs() {
     queryClient.invalidateQueries({ queryKey: ["log-counts"] });
     toast({ title: "View cleared", description: "All logs permanently stored in the database." });
   }
-
-  const successLogs  = successData?.logs ?? [];
-  const successTotal = successData?.total ?? 0;
 
   return (
     <div className="w-full space-y-3">
@@ -542,12 +376,6 @@ export default function Logs() {
               )}
             </TabsTrigger>
 
-            {/* Strategy Logs */}
-            <TabsTrigger value="strategy" className="text-xs px-3 gap-1.5">
-              <Activity className="w-3 h-3" />
-              Strategy Logs
-            </TabsTrigger>
-
             {/* Audit Logs */}
             <TabsTrigger value="audit" className="text-xs px-3 gap-1.5">
               <History className="w-3 h-3" />
@@ -574,25 +402,20 @@ export default function Logs() {
               <div className="flex items-center gap-2 mb-2.5 text-xs text-muted-foreground">
                 <XCircle className="w-3.5 h-3.5 text-destructive" />
                 <span>
-                  <span className="font-semibold text-destructive">{combinedFailedTotal.toLocaleString()}</span>
-                  {" "}failed / error {combinedFailedTotal === 1 ? "entry" : "entries"}{" "}
-                  <span className="text-[10px]">(API + strategy combined)</span>
+                  <span className="font-semibold text-destructive">{failedTotal.toLocaleString()}</span>
+                  {" "}failed / error {failedTotal === 1 ? "entry" : "entries"}
                 </span>
                 <span className="ml-auto text-[10px]">Live · auto-refreshes every 3s</span>
               </div>
               <LogTable
                 headers={["Time (IST)", "Level", "Category", "Action / Symbol", "Dhan Error Reason / Details", ""]}
-                isLoading={failedIsLoading}
-                isEmpty={allFailed.length === 0}
-                emptyText="No failures yet — all API calls and strategy trades are succeeding."
+                isLoading={failedLoading}
+                isEmpty={failedLogs.length === 0}
+                emptyText="No failures yet — all API calls are succeeding."
                 colSpan={6}
                 tableH={TABLE_H}
               >
-                {allFailed.map((entry) =>
-                  entry._src === "app"
-                    ? <FailedAppLogRow key={`app-${entry.app.id}`} log={entry.app} />
-                    : <FailedTradeRow  key={`trade-${entry.trade.id}`} log={entry.trade} />
-                )}
+                {failedLogs.map((log) => <FailedAppLogRow key={log.id} log={log} />)}
               </LogTable>
               <Pager
                 page={failedPage} total={failedTotal}
@@ -630,33 +453,6 @@ export default function Logs() {
                 onPrev={() => setSuccessPage((p) => Math.max(0, p - 1))}
                 onNext={() => setSuccessPage((p) => p + 1)}
               />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── STRATEGY LOGS ── */}
-        <TabsContent value="strategy" className="mt-0">
-          <Card>
-            <CardContent className="px-3 pb-3 pt-3">
-              <div className="flex items-center gap-2 mb-2.5 text-xs text-muted-foreground">
-                <Activity className="w-3.5 h-3.5" />
-                <span>
-                  <span className="font-semibold text-foreground">{tradeLogs.length.toLocaleString()}</span>
-                  {" "}strategy trade {tradeLogs.length === 1 ? "entry" : "entries"}{" "}
-                  <span className="text-[10px]">(failed trades also appear in Failed Logs)</span>
-                </span>
-                <span className="ml-auto text-[10px]">Live · auto-refreshes every 3s</span>
-              </div>
-              <LogTable
-                headers={["Time (IST)", "Symbol", "Side", "Qty", "Price", "Status", "P&L", "Strategy", "Order ID", ""]}
-                isLoading={tradeLoading}
-                isEmpty={tradeLogs.length === 0}
-                emptyText="No strategy trade logs yet. Execute a trade via a strategy to see logs here."
-                colSpan={10}
-                tableH={TABLE_H}
-              >
-                {tradeLogs.map((log) => <StrategyTradeRow key={log.id} log={log} />)}
-              </LogTable>
             </CardContent>
           </Card>
         </TabsContent>

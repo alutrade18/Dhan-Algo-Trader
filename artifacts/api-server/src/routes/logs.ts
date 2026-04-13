@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { appLogsTable, tradeLogsTable } from "@workspace/db/schema";
+import { appLogsTable } from "@workspace/db/schema";
 import { desc, and, gte, lte, eq, ilike, or, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -70,29 +70,23 @@ router.get("/logs", async (req, res): Promise<void> => {
 });
 
 // GET /logs/counts — badge counts for tab headers
-// Failed = app_logs (failed/error) + trade_logs (failed) combined
 router.get("/logs/counts", async (_req, res): Promise<void> => {
   try {
-    const [failedAppRow, failedTradeRow, successRow] = await Promise.all([
+    const [failedRow, successRow] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(appLogsTable)
         .where(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!),
       db
         .select({ count: sql<number>`count(*)::int` })
-        .from(tradeLogsTable)
-        .where(eq(tradeLogsTable.status, "failed")),
-      db
-        .select({ count: sql<number>`count(*)::int` })
         .from(appLogsTable)
         .where(eq(appLogsTable.status, "success")),
     ]);
     res.json({
-      failed: (failedAppRow[0]?.count ?? 0) + (failedTradeRow[0]?.count ?? 0),
+      failed: failedRow[0]?.count ?? 0,
       success: successRow[0]?.count ?? 0,
     });
   } catch (e) {
-    req.log.error({ err: e }, "Logs counts error");
     res.status(500).json({ error: "Failed" });
   }
 });

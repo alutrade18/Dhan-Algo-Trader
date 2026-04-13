@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
-import { db, strategiesTable, tradeLogsTable, settingsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { db, settingsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -13,12 +13,11 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     allTimeStart.setFullYear(allTimeStart.getFullYear() - 3);
     const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
     const todayStr = now.toISOString().split("T")[0];
-    const today = new Date(); today.setHours(0, 0, 0, 0);
 
     // Fire all Dhan + DB calls in parallel
     const [
       fundsResult, positionsResult, holdingsResult, ledgerResult, ordersResult, tradesResult,
-      activeStrategiesResult, tradeLogsResult, settingsResult, lossResult, killSwitchResult,
+      settingsResult, killSwitchResult,
     ] = await Promise.allSettled([
       dhanClient.getFundLimits(),
       dhanClient.getPositions(),
@@ -26,15 +25,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       dhanClient.getAllLedger(allTimeStartStr, todayStr),
       dhanClient.getOrders(),
       dhanClient.getTradeBook(),
-      db.select({ count: sql<number>`count(*)::int` }).from(strategiesTable).where(eq(strategiesTable.status, "active")),
-      db.select({
-        total: sql<number>`count(*)::int`,
-        wins: sql<number>`count(*) filter (where ${tradeLogsTable.status} = 'success' and ${tradeLogsTable.pnl}::numeric > 0)::int`,
-      }).from(tradeLogsTable),
       db.select().from(settingsTable),
-      db.select({
-        totalLoss: sql<number>`coalesce(abs(sum(case when ${tradeLogsTable.pnl}::numeric < 0 then ${tradeLogsTable.pnl}::numeric else 0 end)), 0)::float`,
-      }).from(tradeLogsTable).where(sql`${tradeLogsTable.executedAt} >= ${today.toISOString()}`),
       // Fetch REAL-TIME kill switch status from Dhan API — not from DB
       dhanClient.getKillSwitchStatus(),
     ]);
@@ -120,15 +111,6 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const todayTrades = tradesResult.status === "fulfilled" && Array.isArray(tradesResult.value)
       ? (tradesResult.value as unknown[]).length : 0;
 
-    const activeStrategies = activeStrategiesResult.status === "fulfilled"
-      ? (activeStrategiesResult.value as { count: number }[])[0]?.count ?? 0 : 0;
-
-    const tradeLogsRow = tradeLogsResult.status === "fulfilled"
-      ? (tradeLogsResult.value as { total: number; wins: number }[])[0] : null;
-    const totalTradesFromLogs = tradeLogsRow?.total || 0;
-    const wins = tradeLogsRow?.wins || 0;
-    const winRate = totalTradesFromLogs > 0 ? (wins / totalTradesFromLogs) * 100 : 0;
-
     const settings = settingsResult.status === "fulfilled" ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null; id?: number }[])[0] : null;
     // maxDailyLoss = 0 means "not configured" — treat as null so it never false-triggers
     const rawMaxDailyLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
@@ -152,8 +134,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     }
 
     const killSwitchEnabled = dhanKsActive;
-    const dailyLossAmount = lossResult.status === "fulfilled"
-      ? ((lossResult.value as { totalLoss: number }[])[0]?.totalLoss ?? 0) : 0;
+    // Daily loss = abs of negative today P&L from live positions (real-time)
+    const dailyLossAmount = Math.abs(Math.min(0, todayPnl));
     const killSwitchTriggered = killSwitchEnabled || (maxDailyLoss !== null && dailyLossAmount >= maxDailyLoss);
 
     res.json({
@@ -164,9 +146,9 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       openPositions,
       totalHoldings,
       pendingOrders,
-      activeStrategies,
+      activeStrategies: 0,
       todayTrades,
-      winRate: Math.round(winRate * 100) / 100,
+      winRate: 0,
       killSwitchTriggered,
       killSwitchEnabled,
       dailyLossAmount,
@@ -365,13 +347,10 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
           return;
         }
       }
-      const [firstRow] = await db
-        .select({ minDate: sql<string>`min(${tradeLogsTable.executedAt})::date::text` })
-        .from(tradeLogsTable)
-        .where(sql`${tradeLogsTable.status} = 'success'`);
-      const minDate = firstRow?.minDate;
-      if (!minDate && !useDhan) { res.json([]); return; }
-      startDate = minDate ? new Date(minDate + "T00:00:00Z") : new Date();
+      // No local trade log source — use ledger or dhan for all-time equity
+      if (!useDhan) { res.json([]); return; }
+      startDate = new Date();
+      startDate.setFullYear(startDate.getFullYear() - 1);
       endDate = new Date();
       endDate.setHours(0, 0, 0, 0);
     } else {
@@ -472,23 +451,9 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
         return;
       }
     } else {
-      const cur = new Date(startDate);
-      while (cur <= endDate) {
-        const nextDay = new Date(cur);
-        nextDay.setDate(nextDay.getDate() + 1);
-
-        const [row] = await db
-          .select({
-            dailyPnl: sql<number>`coalesce(sum(${tradeLogsTable.pnl}::numeric), 0)::float`,
-          })
-          .from(tradeLogsTable)
-          .where(
-            sql`${tradeLogsTable.executedAt} >= ${cur.toISOString()} AND ${tradeLogsTable.executedAt} < ${nextDay.toISOString()} AND ${tradeLogsTable.status} = 'success'`
-          );
-
-        points.push({ date: cur.toISOString().split("T")[0], pnl: row?.dailyPnl ?? 0, cumulative: 0 });
-        cur.setDate(cur.getDate() + 1);
-      }
+      // No local trade log source — return empty; use source=ledger or source=dhan
+      res.json([]);
+      return;
     }
 
     let cumulative = 0;
@@ -538,26 +503,6 @@ router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
       }
     } catch (e) {
       req.log.warn({ err: e }, "Failed to fetch orders for activity");
-    }
-
-    const logs = await db
-      .select()
-      .from(tradeLogsTable)
-      .orderBy(sql`${tradeLogsTable.executedAt} DESC`)
-      .limit(limit);
-
-    for (const log of logs) {
-      activities.push({
-        id: String(log.id),
-        type: "strategy_execution",
-        action: log.transactionType,
-        symbol: log.tradingSymbol,
-        quantity: log.quantity,
-        price: Number(log.price),
-        status: log.status,
-        timestamp: log.executedAt.toISOString(),
-        details: `Strategy: ${log.strategyName}`,
-      });
     }
 
     activities.sort(

@@ -7,7 +7,6 @@ const CATEGORY_MAP: Record<string, LogCategory> = {
   "super-orders": "order",
   "forever-orders": "order",
   conditional: "order",
-  strategies: "strategy",
   settings: "settings",
   risk: "risk",
   funds: "api",
