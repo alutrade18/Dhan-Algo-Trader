@@ -73,42 +73,42 @@
 }
 
 /* ═══════════════════════════════════════════════════════
-   LIGHT THEME — Forest Green + Warm Ivory
+   LIGHT THEME — Royal Purple + Gold  ✦ Eye-Catching
    ═══════════════════════════════════════════════════════ */
 :root,
 .light {
   /* Core */
-  --background:          38 30% 97%;     /* #FAF8F4 warm ivory */
-  --foreground:          220 18% 13%;    /* #1A1E2B deep charcoal */
-  --border:              38 16% 86%;     /* #DDD8CE warm border */
-  --input:               0 0% 100%;      /* #FFFFFF */
-  --ring:                142 62% 34%;    /* #1D8C40 forest green */
+  --background:          258 45% 98%;    /* #F8F7FF soft lavender white */
+  --foreground:          268 55% 10%;    /* #160822 deep purple-black */
+  --border:              258 28% 86%;    /* #D4CFED */
+  --input:               0 0% 100%;
+  --ring:                262 83% 58%;    /* #7C3AED vivid purple */
 
   /* Cards / Surfaces */
-  --card:                0 0% 100%;      /* #FFFFFF */
-  --card-foreground:     220 18% 13%;
-  --card-border:         38 16% 88%;
+  --card:                0 0% 100%;
+  --card-foreground:     268 55% 10%;
+  --card-border:         258 28% 88%;
 
   /* Popovers */
   --popover:             0 0% 100%;
-  --popover-foreground:  220 18% 13%;
-  --popover-border:      38 16% 86%;
+  --popover-foreground:  268 55% 10%;
+  --popover-border:      258 28% 86%;
 
-  /* Primary — Forest Green #1D8C40 */
-  --primary:             142 62% 34%;
+  /* Primary — Vivid Purple #7C3AED */
+  --primary:             262 83% 58%;
   --primary-foreground:  0 0% 100%;
 
-  /* Secondary — Amber #D97706 */
-  --secondary:           34 90% 45%;
+  /* Secondary — Gold #D97706 */
+  --secondary:           38 92% 48%;
   --secondary-foreground: 0 0% 100%;
 
   /* Muted */
-  --muted:               38 18% 92%;     /* #EDEAE3 warm muted */
-  --muted-foreground:    220 10% 40%;    /* #5E6472 */
+  --muted:               258 28% 93%;    /* #EAE7F8 */
+  --muted-foreground:    260 18% 42%;    /* #5C547A */
 
   /* Accent */
-  --accent:              142 38% 91%;    /* soft green tint */
-  --accent-foreground:   142 62% 22%;
+  --accent:              262 60% 93%;    /* #EDE5FD light purple tint */
+  --accent-foreground:   262 83% 38%;
 
   /* Semantic */
   --destructive:         0 72% 51%;      /* #DC2626 */
@@ -118,21 +118,21 @@
   --warning:             34 97% 44%;     /* #D97706 */
   --warning-foreground:  0 0% 100%;
 
-  /* Sidebar — Deep Forest Green */
-  --sidebar:             142 38% 16%;    /* #163D24 dark green */
-  --sidebar-foreground:  142 15% 84%;    /* #CEDED5 sage white */
-  --sidebar-border:      142 28% 22%;    /* #244E30 */
-  --sidebar-primary:     142 55% 58%;    /* #4DC472 bright green */
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent:      142 30% 22%;    /* #264E2E */
-  --sidebar-accent-foreground: 142 12% 88%; /* #D8E5DC */
-  --sidebar-ring:        142 55% 58%;
+  /* Sidebar — Deep Royal Purple */
+  --sidebar:             268 70% 14%;    /* #1A0540 deep royal purple */
+  --sidebar-foreground:  260 28% 84%;    /* #CCC4E6 light lavender */
+  --sidebar-border:      268 55% 20%;    /* #270A55 */
+  --sidebar-primary:     38 92% 54%;     /* #F5A623 bright gold */
+  --sidebar-primary-foreground: 268 70% 10%;
+  --sidebar-accent:      268 60% 20%;    /* #2E0A5C */
+  --sidebar-accent-foreground: 260 25% 88%; /* #DDD8F2 */
+  --sidebar-ring:        38 92% 54%;
 
   /* Charts */
-  --chart-1:             142 62% 34%;
-  --chart-2:             34 90% 45%;
+  --chart-1:             262 83% 58%;
+  --chart-2:             38 92% 48%;
   --chart-3:             0 72% 51%;
-  --chart-4:             262 80% 57%;
+  --chart-4:             142 76% 36%;
   --chart-5:             200 80% 48%;
 
   /* Typography */
@@ -241,7 +241,7 @@
   }
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    filter: invert(35%) sepia(60%) saturate(500%) hue-rotate(90deg) brightness(85%);
+    filter: invert(28%) sepia(90%) saturate(800%) hue-rotate(245deg) brightness(90%);
     cursor: pointer;
     opacity: 0.85;
   }
