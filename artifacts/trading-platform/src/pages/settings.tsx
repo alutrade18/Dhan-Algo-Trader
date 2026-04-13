@@ -96,7 +96,7 @@ export default function Settings() {
       telegramBotToken: settingsData.telegramBotToken ?? "",
       telegramChatId: settingsData.telegramChatId ?? "",
     });
-  }, [settingsData?.id]);
+  }, [settingsData?.id, settingsData?.telegramBotToken, settingsData?.telegramChatId]);
 
   const connectMutation = useMutation({
     mutationFn: async (data: z.infer<typeof brokerSchema>) => {
@@ -130,7 +130,11 @@ export default function Settings() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    onSuccess: () => { toast({ title: "Telegram settings saved" }); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); },
+    onSuccess: (data: { telegramBotToken?: string; telegramChatId?: string }) => {
+      telegramForm.reset({ telegramBotToken: data.telegramBotToken ?? "", telegramChatId: data.telegramChatId ?? "" });
+      toast({ title: "Telegram settings saved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    },
     onError: (e: Error) => {
       if (e.message === "NO_CHANGE") { toast({ title: "No changes — enter a new token to update" }); return; }
       toast({ title: "Failed to save", variant: "destructive" });
