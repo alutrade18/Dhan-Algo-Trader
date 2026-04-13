@@ -91,7 +91,7 @@ export default function RiskManager() {
   }, [settingsData?.id]);
 
   const { data: pnlStatus, refetch: refetchPnl } = useQuery<PnlExitStatus>({
-    queryKey: ["pnl-exit-status"], enabled: isConnected, staleTime: 0, gcTime: 0,
+    queryKey: ["pnl-exit-status"], enabled: isConnected, staleTime: 0, gcTime: 0, refetchInterval: 15_000,
     queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/pnl-exit`, { cache: "no-store" }); if (!r.ok) return {}; return r.json(); },
   });
 
@@ -195,11 +195,17 @@ export default function RiskManager() {
                     {pnlForm.formState.errors.lossValue && <p className="text-[10px] text-destructive mt-0.5">Required</p>}
                   </div>
                 } />
-                <FR label="Product Type" hint="Apply exit to INTRADAY positions" ctrl={
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox checked={pnlProductTypes.includes("INTRADAY")} onCheckedChange={() => setPnlProductTypes(prev => prev.includes("INTRADAY") ? prev.filter(t => t !== "INTRADAY") : [...prev, "INTRADAY"])} />
-                    INTRADAY
-                  </label>
+                <FR label="Product Types" hint="Apply exit to selected product types" ctrl={
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={pnlProductTypes.includes("INTRADAY")} onCheckedChange={() => setPnlProductTypes(prev => prev.includes("INTRADAY") ? prev.filter(t => t !== "INTRADAY") : [...prev, "INTRADAY"])} />
+                      INTRADAY
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox checked={pnlProductTypes.includes("DELIVERY")} onCheckedChange={() => setPnlProductTypes(prev => prev.includes("DELIVERY") ? prev.filter(t => t !== "DELIVERY") : [...prev, "DELIVERY"])} />
+                      DELIVERY (CNC)
+                    </label>
+                  </div>
                 } />
                 <FR label="Also activate kill switch" hint="Trigger KS when threshold is hit" last ctrl={
                   <Checkbox checked={pnlForm.watch("enableKillSwitch")} onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)} />

@@ -18,7 +18,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     // Fire all Dhan + DB calls in parallel
     const [
       fundsResult, positionsResult, holdingsResult, ledgerResult, ordersResult, tradesResult,
-      activeStrategiesResult, tradeLogsResult, settingsResult, lossResult,
+      activeStrategiesResult, tradeLogsResult, settingsResult, lossResult, killSwitchResult,
     ] = await Promise.allSettled([
       dhanClient.getFundLimits(),
       dhanClient.getPositions(),
@@ -35,6 +35,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       db.select({
         totalLoss: sql<number>`coalesce(abs(sum(case when ${tradeLogsTable.pnl}::numeric < 0 then ${tradeLogsTable.pnl}::numeric else 0 end)), 0)::float`,
       }).from(tradeLogsTable).where(sql`${tradeLogsTable.executedAt} >= ${today.toISOString()}`),
+      // Fetch REAL-TIME kill switch status from Dhan API — not from DB
+      dhanClient.getKillSwitchStatus(),
     ]);
 
     let availableBalance = 0, usedMargin = 0;
@@ -127,10 +129,27 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const wins = tradeLogsRow?.wins || 0;
     const winRate = totalTradesFromLogs > 0 ? (wins / totalTradesFromLogs) * 100 : 0;
 
-    const settings = settingsResult.status === "fulfilled" ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null }[])[0] : null;
-    const killSwitchEnabled = settings?.killSwitchEnabled ?? false;
+    const settings = settingsResult.status === "fulfilled" ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null; id?: number }[])[0] : null;
     const maxDailyLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
 
+    // Use REAL-TIME kill switch status from Dhan API
+    const ksData = killSwitchResult.status === "fulfilled"
+      ? (killSwitchResult.value as Record<string, unknown>)
+      : null;
+    const dhanKsActive =
+      ksData?.killSwitchStatus === "ACTIVATE" ||
+      ksData?.killSwitchStatus === "ACTIVE";
+
+    // If Dhan says KS is off but our DB still shows it on, sync the DB silently
+    const dbKsEnabled = settings?.killSwitchEnabled ?? false;
+    if (dbKsEnabled && !dhanKsActive && settings?.id !== undefined) {
+      db.update(settingsTable)
+        .set({ killSwitchEnabled: false, updatedAt: new Date() })
+        .where(eq(settingsTable.id, settings.id))
+        .catch(() => {/* silent sync */});
+    }
+
+    const killSwitchEnabled = dhanKsActive;
     const dailyLossAmount = lossResult.status === "fulfilled"
       ? ((lossResult.value as { totalLoss: number }[])[0]?.totalLoss ?? 0) : 0;
     const killSwitchTriggered = killSwitchEnabled || (maxDailyLoss !== null && dailyLossAmount >= maxDailyLoss);

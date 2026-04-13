@@ -386,9 +386,15 @@ export default function Dashboard() {
     staleTime: 240_000,
   });
 
+  // Kill switch: ONLY trust real-time Dhan API (from dedicated /risk/killswitch endpoint)
   const dhanKillActive =
-    ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
-  const killTriggered = dhanKillActive || summary?.killSwitchTriggered;
+    ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE";
+  // Daily loss trigger: compute directly from raw figures — never from stale DB flag
+  const dailyLossTriggered =
+    summary?.maxDailyLoss != null &&
+    summary?.dailyLossAmount != null &&
+    summary.dailyLossAmount >= summary.maxDailyLoss;
+  const killTriggered = dhanKillActive || dailyLossTriggered;
 
   // Total P&L card:
   //  • alltime / custom → show all-time P&L from summary API
@@ -465,7 +471,7 @@ export default function Dashboard() {
             </p>
             <p className="text-xs mt-0.5 text-destructive/80">
               {dhanKillActive
-                ? `Dhan kill switch is active. ${ksStatus?.canDeactivateToday ? "Go to Settings to deactivate (1 reset remaining today)." : "Auto-resets at 8:30 AM IST tomorrow."}`
+                ? `Dhan kill switch is active. ${ksStatus?.canDeactivateToday ? "Go to Settings to deactivate (1 reset remaining today)." : "Auto-resets at midnight IST — fresh trading resumes next day."}`
                 : `Daily loss limit of ${formatCurrency(summary?.maxDailyLoss)} reached (loss: ${formatCurrency(summary?.dailyLossAmount)}). Trading blocked for today.`}
             </p>
           </div>

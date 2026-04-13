@@ -183,7 +183,7 @@ export default function Settings() {
       toast({ title: status === "ACTIVATE" ? "Kill Switch Activated" : "Kill Switch Deactivated", variant: status === "ACTIVATE" ? "destructive" : "default", description: status === "ACTIVATE" ? `All order placement blocked. ${data.canDeactivateToday ? "1 reset available today." : ""}` : "Trading resumed." });
     },
     onError: (err: { message?: string; code?: string }) => {
-      if (err.code === "DAILY_LIMIT_REACHED") toast({ title: "Daily Limit Reached", description: "Auto-resets at 8:30 AM IST tomorrow.", variant: "destructive" });
+      if (err.code === "DAILY_LIMIT_REACHED") toast({ title: "Daily Limit Reached", description: "Auto-resets at midnight IST — fresh trading resumes next day.", variant: "destructive" });
       else toast({ title: "Kill switch error", description: err.message ?? "Failed", variant: "destructive" });
     },
   });
@@ -332,7 +332,7 @@ export default function Settings() {
                 </div>
                 {ksStatus?.deactivationsUsed !== undefined && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
-                    <Calendar className="w-3.5 h-3.5" />{ksStatus.deactivationsUsed === 0 ? "1 manual reset available today" : "Daily reset used — auto-resets 8:30 AM IST"}
+                    <Calendar className="w-3.5 h-3.5" />{ksStatus.deactivationsUsed === 0 ? "1 manual reset available today" : "Daily reset used — auto-resets midnight IST (next trading day)"}
                   </div>
                 )}
                 <div className="flex gap-2">

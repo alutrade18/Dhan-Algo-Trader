@@ -65,7 +65,7 @@ async function autoDeactivateKillSwitch() {
     }
     deactivationTracker.date = getISTDateString();
     deactivationTracker.count = 0;
-    void sendTelegramAlert("🟢 *8:30 AM Reset* — Kill switch automatically deactivated. Market is open.");
+    void sendTelegramAlert("🟢 *Midnight Reset* — Kill switch automatically deactivated. Fresh trading allowed for the new day.");
   } catch {
     // silent
   }
@@ -74,10 +74,12 @@ async function autoDeactivateKillSwitch() {
 function startKillSwitchScheduler() {
   setInterval(() => {
     const now = new Date();
+    // Convert to IST (UTC+5:30) and check for midnight (00:00 IST)
     const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
     const h = istNow.getUTCHours();
     const m = istNow.getUTCMinutes();
-    if (h === 8 && m === 30) {
+    // Auto-deactivate kill switch at midnight IST (00:00) so fresh trading resumes
+    if (h === 0 && m === 0) {
       void autoDeactivateKillSwitch();
     }
   }, 60 * 1000);
@@ -116,13 +118,16 @@ router.post("/risk/killswitch", async (req, res): Promise<void> => {
   }
 
   if (status === "DEACTIVATE" && !canDeactivateToday()) {
+    // Reset time = next midnight IST = next day 00:00 IST = next day 18:30 UTC (previous day)
     const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
     const resetTime = new Date(istNow);
     resetTime.setUTCDate(resetTime.getUTCDate() + 1);
-    resetTime.setUTCHours(3, 0, 0, 0);
+    resetTime.setUTCHours(0, 0, 0, 0); // midnight IST = 00:00 IST time
+    // Convert back to UTC for ISO string: subtract 5.5 hours
+    const resetUTC = new Date(resetTime.getTime() - 5.5 * 60 * 60 * 1000);
     res.status(403).json({
-      error: "Daily deactivation limit reached. Kill switch will auto-reset at 8:30 AM IST tomorrow.",
-      resetAt: new Date(resetTime.getTime() - 5.5 * 60 * 60 * 1000).toISOString(),
+      error: "Daily deactivation limit reached. Kill switch will auto-reset at midnight IST (start of next trading day).",
+      resetAt: resetUTC.toISOString(),
       code: "DAILY_LIMIT_REACHED",
     });
     return;
