@@ -322,9 +322,10 @@ export default function OptionChain() {
   // Market hours gate
   const marketStatus = useMarketStatus(activeExchange);
 
-  // Expiry list via Dhan API
+  // Expiry list — fetched once from Dhan API and cached for 24 h.
+  // Does NOT auto-refetch, so no repeated calls when market is closed.
   const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
-    queryKey: ["expiry-list-dhan", activeDhanSecId, activeSegment],
+    queryKey: ["expiry-list", activeDhanSecId, activeSegment],
     queryFn: async () => {
       if (!activeDhanSecId) return [];
       const res = await fetch(`${BASE}api/market/expiry-list`, {
@@ -340,8 +341,10 @@ export default function OptionChain() {
       return json.data ?? [];
     },
     enabled: !!activeDhanSecId,
-    staleTime: 300_000,
+    staleTime: 24 * 60 * 60 * 1_000,   // 24 h — never re-fetches mid-session
+    gcTime: 24 * 60 * 60 * 1_000,
     refetchOnWindowFocus: false,
+    refetchInterval: false,
     retry: 1,
   });
 
@@ -372,7 +375,7 @@ export default function OptionChain() {
       }
       return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
-    enabled: !!expiry && !!activeDhanSecId && marketStatus.isOpen,
+    enabled: !!expiry && !!activeDhanSecId,
     refetchInterval: marketStatus.isOpen ? 3_000 : false,
     staleTime: 2_500,
     refetchOnWindowFocus: false,
@@ -499,16 +502,11 @@ export default function OptionChain() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         {/* Left: market closed notice */}
         {!marketStatus.isOpen && expiry && !chainError ? (
-          <div className="flex items-start gap-2 min-w-0">
-            <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-amber-400 leading-snug">
-                Market is closed — live refresh paused
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                Auto-refresh resumes at 8:50 AM IST on next trading day.
-              </p>
-            </div>
+          <div className="flex items-center gap-2 min-w-0 px-3 py-1.5 rounded-lg border border-warning/25 bg-warning/8">
+            <Clock className="w-3.5 h-3.5 text-warning shrink-0" />
+            <p className="text-xs font-medium text-warning leading-snug">
+              Market closed — showing last snapshot · Live refresh resumes at 8:50 AM IST
+            </p>
           </div>
         ) : (
           <div />
