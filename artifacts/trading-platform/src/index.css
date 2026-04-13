@@ -73,42 +73,42 @@
 }
 
 /* ═══════════════════════════════════════════════════════
-   LIGHT THEME — Corporate Trading (#F8FAFC / #2563EB)
+   LIGHT THEME — Forest Green + Warm Ivory
    ═══════════════════════════════════════════════════════ */
 :root,
 .light {
   /* Core */
-  --background:          210 40% 98%;    /* #F8FAFC */
-  --foreground:          222 47% 11%;    /* #0F172A */
-  --border:              214 32% 91%;    /* #E2E8F0 */
+  --background:          38 30% 97%;     /* #FAF8F4 warm ivory */
+  --foreground:          220 18% 13%;    /* #1A1E2B deep charcoal */
+  --border:              38 16% 86%;     /* #DDD8CE warm border */
   --input:               0 0% 100%;      /* #FFFFFF */
-  --ring:                219 82% 55%;    /* #2563EB */
+  --ring:                142 62% 34%;    /* #1D8C40 forest green */
 
   /* Cards / Surfaces */
   --card:                0 0% 100%;      /* #FFFFFF */
-  --card-foreground:     222 47% 11%;
-  --card-border:         214 32% 91%;
+  --card-foreground:     220 18% 13%;
+  --card-border:         38 16% 88%;
 
   /* Popovers */
   --popover:             0 0% 100%;
-  --popover-foreground:  222 47% 11%;
-  --popover-border:      214 32% 91%;
+  --popover-foreground:  220 18% 13%;
+  --popover-border:      38 16% 86%;
 
-  /* Primary — Blue #2563EB */
-  --primary:             219 82% 55%;
+  /* Primary — Forest Green #1D8C40 */
+  --primary:             142 62% 34%;
   --primary-foreground:  0 0% 100%;
 
-  /* Secondary — Violet #7C3AED */
-  --secondary:           262 80% 57%;
+  /* Secondary — Amber #D97706 */
+  --secondary:           34 90% 45%;
   --secondary-foreground: 0 0% 100%;
 
   /* Muted */
-  --muted:               214 28% 94%;
-  --muted-foreground:    215 20% 35%;    /* #475569 */
+  --muted:               38 18% 92%;     /* #EDEAE3 warm muted */
+  --muted-foreground:    220 10% 40%;    /* #5E6472 */
 
   /* Accent */
-  --accent:              219 60% 93%;
-  --accent-foreground:   219 82% 30%;
+  --accent:              142 38% 91%;    /* soft green tint */
+  --accent-foreground:   142 62% 22%;
 
   /* Semantic */
   --destructive:         0 72% 51%;      /* #DC2626 */
@@ -118,22 +118,22 @@
   --warning:             34 97% 44%;     /* #D97706 */
   --warning-foreground:  0 0% 100%;
 
-  /* Sidebar */
-  --sidebar:             210 35% 96%;
-  --sidebar-foreground:  222 40% 18%;
-  --sidebar-border:      214 32% 89%;
-  --sidebar-primary:     219 82% 55%;
+  /* Sidebar — Deep Forest Green */
+  --sidebar:             142 38% 16%;    /* #163D24 dark green */
+  --sidebar-foreground:  142 15% 84%;    /* #CEDED5 sage white */
+  --sidebar-border:      142 28% 22%;    /* #244E30 */
+  --sidebar-primary:     142 55% 58%;    /* #4DC472 bright green */
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent:      219 55% 90%;
-  --sidebar-accent-foreground: 219 82% 25%;
-  --sidebar-ring:        219 82% 55%;
+  --sidebar-accent:      142 30% 22%;    /* #264E2E */
+  --sidebar-accent-foreground: 142 12% 88%; /* #D8E5DC */
+  --sidebar-ring:        142 55% 58%;
 
   /* Charts */
-  --chart-1:             219 82% 55%;
-  --chart-2:             142 76% 36%;
+  --chart-1:             142 62% 34%;
+  --chart-2:             34 90% 45%;
   --chart-3:             0 72% 51%;
   --chart-4:             262 80% 57%;
-  --chart-5:             34 97% 44%;
+  --chart-5:             200 80% 48%;
 
   /* Typography */
   --app-font-sans:  'Inter', sans-serif;
@@ -241,7 +241,7 @@
   }
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    filter: invert(34%) sepia(88%) saturate(493%) hue-rotate(191deg) brightness(90%);
+    filter: invert(35%) sepia(60%) saturate(500%) hue-rotate(90deg) brightness(85%);
     cursor: pointer;
     opacity: 0.85;
   }
