@@ -80,10 +80,12 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     dhanClientId: s.brokerClientId ? "****" + s.brokerClientId.slice(-4) : "",
     dhanAccessToken: s.brokerAccessToken ? "****" + decryptToken(s.brokerAccessToken).slice(-4) : "",
     apiConnected: dhanClient.isConfigured(),
-    maxDailyLoss: s.maxDailyLoss !== null && s.maxDailyLoss !== undefined ? Number(s.maxDailyLoss) : 5000,
+    maxDailyLoss: s.maxDailyLoss !== null && s.maxDailyLoss !== undefined ? Number(s.maxDailyLoss) : 0,
     theme: s.theme,
-    telegramBotToken: s.telegramBotToken || "",
-    telegramChatId: s.telegramChatId || "",
+    hasTelegramToken: !!s.telegramBotToken,
+    hasTelegramChatId: !!s.telegramChatId,
+    telegramBotToken: s.telegramBotToken ? "*".repeat(7) + s.telegramBotToken.slice(-3) : "",
+    telegramChatId: s.telegramChatId ? "*".repeat(4) + s.telegramChatId.slice(-3) : "",
     killSwitchEnabled: s.killSwitchEnabled,
     killSwitchPin: s.killSwitchPin ? "****" : null,
     hasKillSwitchPin: !!s.killSwitchPin,
@@ -145,13 +147,31 @@ router.put("/settings", async (req, res): Promise<void> => {
   }
 
 
-  const newToken = body.telegramBotToken !== undefined ? (body.telegramBotToken as string | null) || null : undefined;
-  const newChatId = body.telegramChatId !== undefined ? (body.telegramChatId as string | null) || null : undefined;
-  if (newToken !== undefined) updateData.telegramBotToken = newToken;
-  if (newChatId !== undefined) updateData.telegramChatId = newChatId;
-  const effectiveToken = newToken !== undefined ? newToken : existing.telegramBotToken;
-  const effectiveChatId = newChatId !== undefined ? newChatId : existing.telegramChatId;
-  const credentialsChanged = (newToken !== undefined && newToken !== null) || (newChatId !== undefined && newChatId !== null);
+  // Telegram token handling: null = explicit clear; non-empty real value = update; empty/masked = skip
+  const rawToken = body.telegramBotToken;
+  const rawChatId = body.telegramChatId;
+  const isMasked = (v: unknown) => typeof v === "string" && v.startsWith("*");
+  const isEmpty = (v: unknown) => v === "" || v === undefined;
+
+  if (rawToken === null) {
+    updateData.telegramBotToken = null;
+  } else if (!isEmpty(rawToken) && !isMasked(rawToken)) {
+    updateData.telegramBotToken = String(rawToken);
+  }
+
+  if (rawChatId === null) {
+    updateData.telegramChatId = null;
+  } else if (!isEmpty(rawChatId) && !isMasked(rawChatId)) {
+    updateData.telegramChatId = String(rawChatId);
+  }
+
+  const credentialsChanged =
+    (updateData.telegramBotToken !== undefined && updateData.telegramBotToken !== null) ||
+    (updateData.telegramChatId !== undefined && updateData.telegramChatId !== null);
+  const effectiveToken = (updateData.telegramBotToken as string | null | undefined) !== undefined
+    ? (updateData.telegramBotToken as string | null) : existing.telegramBotToken;
+  const effectiveChatId = (updateData.telegramChatId as string | null | undefined) !== undefined
+    ? (updateData.telegramChatId as string | null) : existing.telegramChatId;
   if (effectiveToken && effectiveChatId && credentialsChanged) void sendTelegramPing(effectiveToken, effectiveChatId);
 
   if (body.killSwitchEnabled !== undefined) {

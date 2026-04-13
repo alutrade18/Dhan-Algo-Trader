@@ -19,8 +19,8 @@ import {
 const BASE = import.meta.env.BASE_URL;
 const riskSchema = z.object({ maxDailyLoss: z.coerce.number().min(0) });
 const pnlExitSchema = z.object({
-  profitValue: z.coerce.number().min(1),
-  lossValue: z.coerce.number().min(1),
+  profitValue: z.coerce.number().min(0),
+  lossValue: z.coerce.number().min(0),
   enableKillSwitch: z.boolean().default(false),
 });
 
@@ -70,11 +70,11 @@ export default function RiskManager() {
     setAutoSquareOffTime(settingsData.autoSquareOffTime ?? "15:14");
   }, [settingsData?.id]);
 
-  const riskForm = useForm<z.infer<typeof riskSchema>>({ resolver: zodResolver(riskSchema), defaultValues: { maxDailyLoss: 5000 } });
-  const pnlForm = useForm<z.infer<typeof pnlExitSchema>>({ resolver: zodResolver(pnlExitSchema), defaultValues: { profitValue: undefined, lossValue: undefined, enableKillSwitch: false } });
+  const riskForm = useForm<z.infer<typeof riskSchema>>({ resolver: zodResolver(riskSchema), defaultValues: { maxDailyLoss: 0 } });
+  const pnlForm = useForm<z.infer<typeof pnlExitSchema>>({ resolver: zodResolver(pnlExitSchema), defaultValues: { profitValue: 0, lossValue: 0, enableKillSwitch: false } });
 
   useEffect(() => {
-    if (settingsData) riskForm.reset({ maxDailyLoss: settingsData.maxDailyLoss ?? 5000 });
+    if (settingsData) riskForm.reset({ maxDailyLoss: settingsData.maxDailyLoss ?? 0 });
   }, [settingsData?.id]);
 
   const { data: pnlStatus, refetch: refetchPnl } = useQuery<PnlExitStatus>({

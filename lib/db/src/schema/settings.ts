@@ -7,7 +7,7 @@ export const settingsTable = pgTable("settings", {
   userId: text("user_id"),
   brokerClientId: text("broker_client_id"),
   brokerAccessToken: text("broker_access_token"),
-  maxDailyLoss: numeric("max_daily_loss", { precision: 12, scale: 2 }).default("5000"),
+  maxDailyLoss: numeric("max_daily_loss", { precision: 12, scale: 2 }).default("0"),
   theme: text("theme").notNull().default("dark"),
   telegramBotToken: text("telegram_bot_token"),
   telegramChatId: text("telegram_chat_id"),
