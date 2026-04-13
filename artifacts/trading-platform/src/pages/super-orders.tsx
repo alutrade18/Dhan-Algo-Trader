@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,8 @@ import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search"
 
 const BASE = import.meta.env.BASE_URL;
 
-const TARGET_PCT  = 2;
-const SL_PCT      = 1;
+const TARGET_PCT  = 30;
+const SL_PCT      = 10;
 const DEFAULT_QTY = 5;
 
 interface SuperOrder {
@@ -231,7 +231,7 @@ export default function SuperOrders() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <p className="text-sm font-bold text-foreground">
-          Entry + Target + Stop-Loss in a single order — Default: {TARGET_PCT}% Target &amp; {SL_PCT}% Stop Loss
+          Entry, Target, Stop Loss All Cover In Single Order
         </p>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refetch()} disabled={isFetching}>
@@ -256,12 +256,9 @@ export default function SuperOrders() {
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Place Super Order
+              Place Super Order
               <Badge variant="outline" className="ml-auto text-[10px] text-amber-400 border-amber-400/30 bg-amber-400/10">INTRADAY</Badge>
             </CardTitle>
-            <CardDescription className="text-xs">
-              Bracket order with automatic {TARGET_PCT}% target and {SL_PCT}% stop-loss
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
 
@@ -270,7 +267,7 @@ export default function SuperOrders() {
               <SymbolSearch
                 value={selectedInstrument}
                 onChange={handleInstrumentSelect}
-                placeholder="Search symbol..."
+                placeholder=""
               />
             </div>
 
