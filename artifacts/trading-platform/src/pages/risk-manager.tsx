@@ -26,12 +26,12 @@ interface SettingsData {
 }
 interface PnlExitStatus { pnlExitStatus?: string; profit?: string; loss?: string; productType?: string[]; enable_kill_switch?: boolean }
 
-function SectionHeader({ color, icon, title, subtitle, badge }: { color: string; icon: React.ReactNode; title: string; subtitle: string; badge?: React.ReactNode }) {
+function SectionHeader({ color, icon, title, badge }: { color: string; icon: React.ReactNode; title: string; badge?: React.ReactNode }) {
   return (
     <div className={`flex items-start justify-between gap-3 px-5 py-3.5 border-b border-border/40 ${color}`}>
       <div className="flex items-start gap-2.5">
         <div className="mt-0.5 shrink-0">{icon}</div>
-        <div><p className="font-semibold text-sm">{title}</p><p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{subtitle}</p></div>
+        <div><p className="font-semibold text-sm">{title}</p></div>
       </div>
       {badge}
     </div>
@@ -150,12 +150,11 @@ export default function RiskManager() {
 
         {/* Risk Management */}
         <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-orange-500/5" icon={<ShieldAlert className="w-4 h-4 text-orange-400" />} title="Risk Management" subtitle="Auto-reject orders when daily loss limit is hit" />
+          <SectionHeader color="bg-orange-500/5" icon={<ShieldAlert className="w-4 h-4 text-orange-400" />} title="Risk Management" />
           <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="px-5 py-4">
             <div className="space-y-1.5 mb-4">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Daily Loss Limit (₹)</label>
               <Input type="number" min={0} step={500} placeholder="e.g. 5000" className="h-9" {...riskForm.register("maxDailyLoss")} />
-              <p className="text-[11px] text-muted-foreground">Orders are blocked when today's total loss exceeds this amount</p>
               {riskForm.formState.errors.maxDailyLoss && <p className="text-[10px] text-destructive">{riskForm.formState.errors.maxDailyLoss.message}</p>}
             </div>
             <Button type="submit" size="sm" className="gap-1.5 h-8 w-full" disabled={riskMutation.isPending}><Save className="w-3 h-3" />{riskMutation.isPending ? "Saving…" : "Save Loss Limit"}</Button>
@@ -168,7 +167,6 @@ export default function RiskManager() {
             color={pnlActive ? "bg-primary/5" : "bg-muted/10"}
             icon={<TrendingUp className="w-4 h-4 text-primary" />}
             title="P&L Based Exit"
-            subtitle="Auto-exit all positions at profit or loss threshold"
             badge={pnlActive ? <Badge variant="outline" className="text-[10px] text-primary border-primary/40">ACTIVE</Badge> : undefined}
           />
           <div className="px-5 py-4">
@@ -183,19 +181,19 @@ export default function RiskManager() {
                     <span>KS <span className="font-semibold">{pnlStatus.enable_kill_switch ? "Yes" : "No"}</span></span>
                   </div>
                 )}
-                <FR label="Profit Target (₹)" hint="Exit all when cumulative profit hits this" ctrl={
+                <FR label="Profit Target (₹)" ctrl={
                   <div className="w-32">
                     <Input type="number" min={1} placeholder="e.g. 1500" className="h-8 text-sm" {...pnlForm.register("profitValue")} />
                     {pnlForm.formState.errors.profitValue && <p className="text-[10px] text-destructive mt-0.5">Required</p>}
                   </div>
                 } />
-                <FR label="Loss Limit (₹)" hint="Exit all when cumulative loss hits this" ctrl={
+                <FR label="Loss Limit (₹)" ctrl={
                   <div className="w-32">
                     <Input type="number" min={1} placeholder="e.g. 500" className="h-8 text-sm" {...pnlForm.register("lossValue")} />
                     {pnlForm.formState.errors.lossValue && <p className="text-[10px] text-destructive mt-0.5">Required</p>}
                   </div>
                 } />
-                <FR label="Product Types" hint="Apply exit to selected product types" ctrl={
+                <FR label="Product Types" ctrl={
                   <div className="flex flex-col gap-1.5">
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox checked={pnlProductTypes.includes("INTRADAY")} onCheckedChange={() => setPnlProductTypes(prev => prev.includes("INTRADAY") ? prev.filter(t => t !== "INTRADAY") : [...prev, "INTRADAY"])} />
@@ -207,7 +205,7 @@ export default function RiskManager() {
                     </label>
                   </div>
                 } />
-                <FR label="Also activate kill switch" hint="Trigger KS when threshold is hit" last ctrl={
+                <FR label="Also activate kill switch" last ctrl={
                   <Checkbox checked={pnlForm.watch("enableKillSwitch")} onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)} />
                 } />
                 <div className="flex gap-2 pt-3">
@@ -227,12 +225,12 @@ export default function RiskManager() {
 
         {/* Auto Square-Off Timer */}
         <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-blue-500/5" icon={<Clock className="w-4 h-4 text-blue-400" />} title="Auto Square-Off Timer" subtitle="Exit all intraday positions at the set time · Mon–Fri" />
+          <SectionHeader color="bg-blue-500/5" icon={<Clock className="w-4 h-4 text-blue-400" />} title="Auto Square-Off Timer" />
           <div className="px-5 py-4">
-            <FR label="Enable Auto Square-Off" hint="Automatically exits all open intraday positions" ctrl={
+            <FR label="Enable Auto Square-Off" ctrl={
               <Switch checked={autoSquareOffEnabled} onCheckedChange={setAutoSquareOffEnabled} />
             } />
-            <FR label="Square-Off Time (IST)" hint="Recommended: 3:14 PM — just before market close" last ctrl={
+            <FR label="Square-Off Time (IST)" last ctrl={
               <input type="time" value={autoSquareOffTime} onChange={e => setAutoSquareOffTime(e.target.value)} className="h-8 w-32 rounded-md border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
             } />
             <div className="pt-3">
@@ -247,13 +245,12 @@ export default function RiskManager() {
 
         {/* Trading Guards */}
         <div className="col-span-2 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-orange-500/5" icon={<ShieldAlert className="w-4 h-4 text-orange-400" />} title="Trading Guards" subtitle="Caps on maximum trades, position size, and trading hours" />
+          <SectionHeader color="bg-orange-500/5" icon={<ShieldAlert className="w-4 h-4 text-orange-400" />} title="Trading Guards" />
           <div className="px-5 py-4">
             <div className="grid grid-cols-3 gap-5 mb-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Max Trades Per Day</label>
                 <Input type="number" min={1} step={1} placeholder="e.g. 10" className="h-9" value={maxTradesPerDay} onChange={e => setMaxTradesPerDay(e.target.value)} />
-                <p className="text-[11px] text-muted-foreground">Block new orders after this count. Empty = disabled.</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Max Position Size</label>
@@ -267,7 +264,6 @@ export default function RiskManager() {
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Block if order exceeds this value</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trading Hours (IST)</label>
@@ -276,7 +272,6 @@ export default function RiskManager() {
                   <span className="text-xs text-muted-foreground shrink-0">–</span>
                   <input type="time" value={tradingEnd} onChange={e => setTradingEnd(e.target.value)} className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                 </div>
-                <p className="text-[11px] text-muted-foreground">Orders only placed within this window</p>
               </div>
             </div>
             <Button size="sm" className="gap-1.5 h-8" onClick={() => { void genericSaveMutation.mutateAsync({ maxTradesPerDay: maxTradesPerDay ? Number(maxTradesPerDay) : null, maxPositionSizeValue: maxPosValue ? Number(maxPosValue) : null, maxPositionSizeType: maxPosType, tradingHoursStart: tradingStart, tradingHoursEnd: tradingEnd }).then(() => toast({ title: "Trading guards saved" })); }}>
@@ -287,15 +282,13 @@ export default function RiskManager() {
 
         {/* Instrument Blacklist */}
         <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-red-500/5" icon={<Ban className="w-4 h-4 text-red-400" />} title="Instrument Blacklist" subtitle="These symbols are always blocked, regardless of strategy" />
+          <SectionHeader color="bg-red-500/5" icon={<Ban className="w-4 h-4 text-red-400" />} title="Instrument Blacklist" />
           <div className="px-5 py-4 space-y-3">
             <div className="flex gap-2">
-              <Input placeholder="e.g. ADANIENT" className="h-8 text-sm font-mono flex-1" value={blacklistInput} onChange={e => setBlacklistInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && blacklistInput.trim()) { const sym = blacklistInput.trim().toUpperCase(); if (!blacklist.includes(sym)) setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }} />
+              <Input placeholder="" className="h-8 text-sm font-mono flex-1" value={blacklistInput} onChange={e => setBlacklistInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && blacklistInput.trim()) { const sym = blacklistInput.trim().toUpperCase(); if (!blacklist.includes(sym)) setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }} />
               <Button type="button" size="sm" variant="outline" className="h-8 gap-1 shrink-0" onClick={() => { const sym = blacklistInput.trim().toUpperCase(); if (sym && !blacklist.includes(sym)) { setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }}><Plus className="w-3.5 h-3.5" />Add</Button>
             </div>
-            {blacklist.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No symbols blacklisted</p>
-            ) : (
+            {blacklist.length > 0 && (
               <div className="flex flex-wrap gap-1.5 min-h-[28px]">
                 {blacklist.map(sym => (
                   <span key={sym} className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-md px-2 py-1 font-mono">
