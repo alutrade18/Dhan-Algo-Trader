@@ -1,7 +1,31 @@
 import { Router, type IRouter } from "express";
+import { eq, and } from "drizzle-orm";
+import { db, superOrdersTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 
 const router: IRouter = Router();
+
+function todayIST(): string {
+  const now = new Date();
+  const ist = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const yyyy = ist.getFullYear();
+  const mm = String(ist.getMonth() + 1).padStart(2, "0");
+  const dd = String(ist.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+interface DhanOrder {
+  orderId?: string;
+  orderNo?: string;
+  orderStatus?: string;
+  tradingSymbol?: string;
+  transactionType?: string;
+  orderType?: string;
+  quantity?: number;
+  price?: number;
+  averageTradedPrice?: number;
+  [key: string]: unknown;
+}
 
 router.get("/super-orders", async (req, res): Promise<void> => {
   if (!dhanClient.isConfigured()) {
@@ -9,8 +33,53 @@ router.get("/super-orders", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const data = await dhanClient.getSuperOrders();
-    res.json(Array.isArray(data) ? data : []);
+    const today = todayIST();
+    const dbOrders = await db
+      .select()
+      .from(superOrdersTable)
+      .where(eq(superOrdersTable.orderDate, today));
+
+    if (dbOrders.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    let dhanOrders: DhanOrder[] = [];
+    try {
+      const raw = await dhanClient.getOrders();
+      dhanOrders = Array.isArray(raw) ? (raw as DhanOrder[]) : [];
+    } catch {
+      dhanOrders = [];
+    }
+
+    const dhanMap = new Map<string, DhanOrder>();
+    for (const o of dhanOrders) {
+      const id = o.orderId ?? o.orderNo;
+      if (id) dhanMap.set(id, o);
+    }
+
+    const enriched = dbOrders.map((so) => {
+      const live = so.dhanOrderId ? dhanMap.get(so.dhanOrderId) : undefined;
+      return {
+        orderId: String(so.id),
+        dhanOrderId: so.dhanOrderId,
+        securityId: so.securityId,
+        exchangeSegment: so.exchangeSegment,
+        tradingSymbol: live?.tradingSymbol ?? so.tradingSymbol ?? so.securityId,
+        transactionType: so.transactionType,
+        orderType: so.orderType,
+        productType: so.productType,
+        quantity: so.quantity,
+        price: Number(so.price ?? 0),
+        targetPrice: Number(so.targetPrice ?? 0),
+        stopLossPrice: Number(so.stopLossPrice ?? 0),
+        orderStatus: live?.orderStatus ?? so.status,
+        averageTradedPrice: live?.averageTradedPrice,
+        createdAt: so.createdAt,
+      };
+    });
+
+    res.json(enriched);
   } catch (e) {
     if (e instanceof DhanApiError) {
       res.status(e.status).json(e.toClientResponse());
@@ -26,30 +95,82 @@ router.post("/super-orders", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const data = await dhanClient.placeSuperOrder(req.body as Record<string, unknown>);
-    res.json(data);
-  } catch (e) {
-    if (e instanceof DhanApiError) {
-      res.status(e.status).json(e.toClientResponse());
-    } else {
-      res.status(500).json({ error: "Failed to place super order" });
-    }
-  }
-});
+    const {
+      security_id,
+      exchange_segment,
+      transaction_type,
+      order_type,
+      product_type = "INTRADAY",
+      quantity,
+      price,
+      target_price,
+      stop_loss_price,
+    } = req.body as {
+      security_id: string;
+      exchange_segment: string;
+      transaction_type: string;
+      order_type: string;
+      product_type?: string;
+      quantity: number;
+      price: number;
+      target_price: number;
+      stop_loss_price: number;
+    };
 
-router.put("/super-orders/:orderId", async (req, res): Promise<void> => {
-  if (!dhanClient.isConfigured()) {
-    res.status(401).json({ error: "Broker not connected" });
-    return;
-  }
-  try {
-    const data = await dhanClient.modifySuperOrder(req.params.orderId, req.body as Record<string, unknown>);
-    res.json(data);
+    if (!security_id || !exchange_segment || !transaction_type || !quantity) {
+      res.status(400).json({ error: "Missing required fields: security_id, exchange_segment, transaction_type, quantity" });
+      return;
+    }
+
+    const dhanPayload: Record<string, unknown> = {
+      securityId: security_id,
+      exchangeSegment: exchange_segment,
+      transactionType: transaction_type,
+      orderType: order_type ?? "LIMIT",
+      productType: product_type,
+      quantity,
+      price: order_type === "MARKET" ? 0 : price,
+      validity: "DAY",
+      disclosedQuantity: 0,
+      afterMarketOrder: false,
+    };
+
+    const dhanResp = await dhanClient.placeOrder(dhanPayload) as {
+      orderId?: string;
+      orderStatus?: string;
+      [key: string]: unknown;
+    };
+
+    const dhanOrderId = dhanResp?.orderId ?? null;
+
+    const today = todayIST();
+    const [inserted] = await db.insert(superOrdersTable).values({
+      dhanOrderId,
+      securityId: security_id,
+      exchangeSegment: exchange_segment,
+      transactionType: transaction_type,
+      orderType: order_type ?? "LIMIT",
+      productType: product_type,
+      quantity,
+      price: String(price),
+      targetPrice: String(target_price),
+      stopLossPrice: String(stop_loss_price),
+      status: dhanResp?.orderStatus ?? "PENDING",
+      orderDate: today,
+    }).returning();
+
+    res.json({
+      orderId: String(inserted.id),
+      dhanOrderId,
+      orderStatus: dhanResp?.orderStatus ?? "PENDING",
+      ...dhanResp,
+    });
   } catch (e) {
     if (e instanceof DhanApiError) {
       res.status(e.status).json(e.toClientResponse());
     } else {
-      res.status(500).json({ error: "Failed to modify super order" });
+      const msg = e instanceof Error ? e.message : "Failed to place super order";
+      res.status(500).json({ error: msg });
     }
   }
 });
@@ -60,9 +181,33 @@ router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { leg } = req.query as { leg?: string };
-    const data = await dhanClient.cancelSuperOrder(req.params.orderId, (leg as "ENTRY_LEG" | "TARGET_LEG" | "STOP_LOSS_LEG") ?? "ENTRY_LEG");
-    res.json(data);
+    const { orderId } = req.params;
+    const internalId = parseInt(orderId);
+
+    const [dbRecord] = await db
+      .select()
+      .from(superOrdersTable)
+      .where(eq(superOrdersTable.id, internalId));
+
+    if (!dbRecord) {
+      res.status(404).json({ error: "Super order not found" });
+      return;
+    }
+
+    if (dbRecord.dhanOrderId) {
+      try {
+        await dhanClient.cancelOrder(dbRecord.dhanOrderId);
+      } catch {
+        // Best-effort: continue even if Dhan cancel fails (order may already be filled)
+      }
+    }
+
+    await db
+      .update(superOrdersTable)
+      .set({ status: "CANCELLED" })
+      .where(eq(superOrdersTable.id, internalId));
+
+    res.json({ success: true, orderId });
   } catch (e) {
     if (e instanceof DhanApiError) {
       res.status(e.status).json(e.toClientResponse());
