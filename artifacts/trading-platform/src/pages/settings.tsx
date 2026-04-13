@@ -224,14 +224,14 @@ export default function Settings() {
               <span><span className="font-semibold">{connectResult.errorCode}:</span> {connectResult.errorMessage}</span>
             </div>
           )}
-          <div className="flex items-center gap-2.5 pt-1">
-            <Button type="submit" size="sm" className="h-9 px-6 gap-1.5 flex-1" disabled={connectMutation.isPending}>
+          <div className="flex gap-2.5 pt-1">
+            <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1" disabled={connectMutation.isPending}>
               {connectMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Connecting…</>
                 : <><Wifi className="w-3.5 h-3.5" />{isConnected ? "Reconnect" : "Save & Connect"}</>}
             </Button>
             {isConnected && (
-              <Button type="button" variant="outline" size="sm" className="gap-1.5 h-9 border-destructive/40 text-destructive hover:bg-destructive/8" disabled={disconnectMutation.isPending} onClick={() => disconnectMutation.mutate()}>
+              <Button type="button" variant="outline" size="sm" className="gap-1.5 h-10 border-destructive/40 text-destructive hover:bg-destructive/8" disabled={disconnectMutation.isPending} onClick={() => disconnectMutation.mutate()}>
                 <LogOut className="w-3.5 h-3.5" />{disconnectMutation.isPending ? "…" : "Disconnect"}
               </Button>
             )}
@@ -279,14 +279,14 @@ export default function Settings() {
             <Input type="text" className="h-10 font-mono bg-background/60" autoComplete="off" {...telegramForm.register("telegramChatId")} />
             {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>}
           </div>
-          <div className="flex items-center gap-2.5 pt-1">
-            <Button type="submit" size="sm" className="h-9 px-6 gap-1.5 flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={telegramMutation.isPending}>
+          <div className="flex gap-2.5 pt-1">
+            <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={telegramMutation.isPending}>
               {telegramMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>
                 : <><Bell className="w-3.5 h-3.5" />{settingsData?.hasTelegramToken ? "Update Telegram" : "Save Telegram"}</>}
             </Button>
             {(settingsData?.hasTelegramToken || settingsData?.hasTelegramChatId) && (
-              <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/8" disabled={telegramResetMutation.isPending} onClick={() => { if (confirm("Remove saved Telegram credentials?")) telegramResetMutation.mutate(); }}>
+              <Button type="button" variant="outline" size="sm" className="h-10 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/8" disabled={telegramResetMutation.isPending} onClick={() => { if (confirm("Remove saved Telegram credentials?")) telegramResetMutation.mutate(); }}>
                 <XCircle className="w-3.5 h-3.5" />Reset
               </Button>
             )}
