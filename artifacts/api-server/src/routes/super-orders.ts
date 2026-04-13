@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, superOrdersTable } from "@workspace/db";
+import { db, superOrdersTable, settingsTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
+import { runOrderGuards } from "../lib/order-guards";
 
 const router: IRouter = Router();
 
@@ -119,6 +120,23 @@ router.post("/super-orders", async (req, res): Promise<void> => {
 
     if (!security_id || !exchange_segment || !transaction_type || !quantity) {
       res.status(400).json({ error: "Missing required fields: security_id, exchange_segment, transaction_type, quantity" });
+      return;
+    }
+
+    const [settings] = await db.select().from(settingsTable);
+    if (settings?.killSwitchEnabled) {
+      res.status(403).json({ error: "Kill switch is active. All order placement is blocked." });
+      return;
+    }
+
+    const tradingSymbol = req.body.trading_symbol ?? req.body.tradingSymbol ?? security_id;
+    const guard = await runOrderGuards({
+      tradingSymbol: String(tradingSymbol),
+      price: price ?? 0,
+      quantity,
+    });
+    if (!guard.allowed) {
+      res.status(403).json({ error: guard.reason ?? "Order blocked by trading guard" });
       return;
     }
 

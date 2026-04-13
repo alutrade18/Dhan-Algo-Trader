@@ -45,7 +45,7 @@ router.post("/orders", async (req, res): Promise<void> => {
 
   try {
     const guard = await runOrderGuards({
-      tradingSymbol: String(parsed.data.securityId),
+      tradingSymbol: parsed.data.tradingSymbol ?? String(parsed.data.securityId),
       price: parsed.data.price ?? 0,
       quantity: parsed.data.quantity,
     });

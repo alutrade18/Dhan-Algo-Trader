@@ -112,6 +112,7 @@ export const PlaceOrderBody = zod.object({
   boProfitValue: zod.number().optional(),
   boStopLossValue: zod.number().optional(),
   tag: zod.string().optional(),
+  tradingSymbol: zod.string().optional(),
 });
 
 /**

@@ -25,4 +25,5 @@ export interface PlaceOrderBody {
   boProfitValue?: number;
   boStopLossValue?: number;
   tag?: string;
+  tradingSymbol?: string;
 }

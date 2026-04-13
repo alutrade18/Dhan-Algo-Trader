@@ -147,7 +147,7 @@ class MarketFeedWS extends EventEmitter {
       RequestCode: requestCode,
       InstrumentCount: securityIds.length,
       InstrumentList: securityIds.map(id => ({
-        ExchangeSegment: Object.keys(EXCHANGE_MAP).find(k => Number(k) === exchange) ?? "1",
+        ExchangeSegment: EXCHANGE_MAP[exchange] ?? "NSE_EQ",
         SecurityId: String(id),
       })),
     });
@@ -155,15 +155,20 @@ class MarketFeedWS extends EventEmitter {
   }
 
   unsubscribe(exchangeSegment: string, securityIds: number[]) {
+    ["ticker", "quote", "full"].forEach(mode => {
+      this.subscriptions.delete(`${exchangeSegment}:${mode}`);
+    });
+
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const exchangeNumMap: Record<string, number> = {
-      "IDX_I": 0, "NSE_EQ": 1, "NSE_FNO": 2, "BSE_EQ": 4, "MCX_COMM": 7,
+      "IDX_I": 0, "NSE_EQ": 1, "NSE_FNO": 2, "NSE_CURRENCY": 3,
+      "BSE_EQ": 4, "BSE_FNO": 5, "BSE_CURRENCY": 6, "MCX_COMM": 7,
     };
     const exchNum = exchangeNumMap[exchangeSegment] ?? 1;
     const msg = JSON.stringify({
       RequestCode: 16,
       InstrumentCount: securityIds.length,
-      InstrumentList: securityIds.map(id => ({ ExchangeSegment: String(exchNum), SecurityId: String(id) })),
+      InstrumentList: securityIds.map(id => ({ ExchangeSegment: EXCHANGE_MAP[exchNum] ?? "NSE_EQ", SecurityId: String(id) })),
     });
     this.ws.send(msg);
   }

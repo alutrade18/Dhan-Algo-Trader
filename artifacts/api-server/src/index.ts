@@ -8,6 +8,7 @@ import { marketFeedWS } from "./lib/market-feed-ws";
 import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
 import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
+import { startSuperOrderMonitor } from "./lib/super-order-monitor";
 
 const rawPort = process.env["PORT"];
 
@@ -73,6 +74,7 @@ loadSavedCredentials().then(() => {
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
     startAutoSquareOffScheduler();
+    startSuperOrderMonitor();
   });
 });
 
