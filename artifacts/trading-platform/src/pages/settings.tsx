@@ -156,7 +156,7 @@ function ServerIpInfo() {
             <Server className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold">Your Server's IP</p>
+            <p className="text-sm font-semibold">Your Server IP</p>
           </div>
         </div>
         <button onClick={reload} className="text-muted-foreground hover:text-foreground transition-colors" title="Refresh IP">
@@ -188,14 +188,14 @@ function ServerIpInfo() {
           {/* One-click whitelist buttons */}
           {ip && (
             <div className="flex items-center gap-2 shrink-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Whitelist via API</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Set IP Address</p>
               <Button
                 size="sm"
                 className="h-9 gap-1.5 text-xs"
                 disabled={!!setting}
                 onClick={() => void setIp("PRIMARY")}
               >
-                {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Whitelist IP - Primary Recommend</>}
+                {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Set as Primary (Recommend)</>}
               </Button>
               <Button
                 size="sm"
