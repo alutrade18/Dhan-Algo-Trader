@@ -11,7 +11,6 @@ import Orders from "@/pages/orders";
 import Positions from "@/pages/positions";
 import Strategies from "@/pages/strategies";
 import Backtesting from "@/pages/backtesting";
-import PaperTrading from "@/pages/paper-trading";
 import Settings from "@/pages/settings";
 import RiskManager from "@/pages/risk-manager";
 import SystemNotifications from "@/pages/system-notifications";
@@ -31,7 +30,6 @@ function Router() {
         <Route path="/positions" component={Positions} />
         <Route path="/strategies" component={Strategies} />
         <Route path="/backtesting" component={Backtesting} />
-        <Route path="/paper-trading" component={PaperTrading} />
         <Route path="/settings" component={Settings} />
         <Route path="/risk-manager" component={RiskManager} />
         <Route path="/system-notifications" component={SystemNotifications} />

@@ -5,7 +5,6 @@ import {
   Briefcase,
   TerminalSquare,
   FlaskConical,
-  PlayCircle,
   Settings,
   ShieldAlert,
   X,
@@ -35,7 +34,6 @@ const NAV_SECTIONS = [
     items: [
       { href: "/strategies", label: "Strategies", icon: TerminalSquare },
       { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
-      { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
     ],
   },
   {

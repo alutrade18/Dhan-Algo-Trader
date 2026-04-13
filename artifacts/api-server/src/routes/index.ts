@@ -7,7 +7,6 @@ import fundsRouter from "./funds";
 import marketRouter from "./market";
 import settingsRouter from "./settings";
 import brokerRouter from "./broker";
-import paperTradesRouter from "./paper-trades";
 import riskRouter from "./risk";
 import tradesRouter from "./trades";
 import logsRouter from "./logs";
@@ -55,7 +54,6 @@ router.use([
   "/funds",         // GET fund limits
   "/settings",
   "/broker",
-  "/paper-trades",
   "/risk",
   "/trades",
   "/logs",
@@ -72,7 +70,6 @@ router.use(fundsRouter);
 router.use(marketRouter);
 router.use(settingsRouter);
 router.use(brokerRouter);
-router.use(paperTradesRouter);
 router.use(riskRouter);
 router.use(tradesRouter);
 router.use(logsRouter);
