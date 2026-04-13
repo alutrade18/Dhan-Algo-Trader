@@ -182,13 +182,15 @@ export default function RiskManager() {
   if (isLoading) {
     return (
       <div className="space-y-4 w-full">
-        <div className="grid grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-56 rounded-2xl" />)}
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-56 rounded-2xl" />
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <Skeleton className="col-span-2 h-40 rounded-2xl" />
-          <Skeleton className="h-40 rounded-2xl" />
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-52 rounded-2xl" />
+          <Skeleton className="h-52 rounded-2xl" />
         </div>
+        <Skeleton className="h-44 rounded-2xl w-full" />
       </div>
     );
   }
@@ -273,7 +275,7 @@ export default function RiskManager() {
                   </button>
                 </div>
                 {deletePinSecond.length === 4 && deletePinSecond !== deletePinFirst && (
-                  <p className="text-[11px] text-destructive font-medium -mt-2">PINs do not match</p>
+                  <p className="text-[11px] text-destructive font-medium">PINs do not match</p>
                 )}
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1 h-9" onClick={() => { setDeletePinStep("enter"); setDeletePinSecond(""); setShowDeleteSecond(false); }}>← Back</Button>
@@ -291,8 +293,8 @@ export default function RiskManager() {
         </div>
       )}
 
-      {/* ── Row 1 ── */}
-      <div className="grid grid-cols-3 gap-4 items-start">
+      {/* ── Row 1: Risk Management | Auto Square-Off ── */}
+      <div className="grid grid-cols-2 gap-4 items-start">
 
         {/* Risk Management */}
         <div className="rounded-2xl border border-orange-500/20 bg-card overflow-hidden shadow-sm">
@@ -323,85 +325,6 @@ export default function RiskManager() {
               {riskMutation.isPending ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Save className="w-3.5 h-3.5" />Save Limit</>}
             </Button>
           </form>
-        </div>
-
-        {/* P&L Based Exit */}
-        <div className={`rounded-2xl border bg-card overflow-hidden shadow-sm transition-colors ${pnlActive ? "border-primary/40" : "border-border/50"}`}>
-          <div className={`px-5 py-3.5 border-b border-border/30 flex items-center justify-between ${pnlActive ? "bg-primary/8" : "bg-muted/5"}`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${pnlActive ? "bg-primary/20" : "bg-muted/20"}`}>
-                <Target className={`w-4 h-4 ${pnlActive ? "text-primary" : "text-muted-foreground"}`} />
-              </div>
-              <p className="font-semibold text-sm">P&L Based Exit</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/30 border border-border/50 px-2 py-0.5 rounded-full">INTRADAY</span>
-              {pnlActive && (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-primary uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />ACTIVE
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="px-5 py-4">
-            {!isConnected ? (
-              <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
-                <WifiOff className="w-6 h-6 text-muted-foreground/40" />
-                <p className="text-xs text-muted-foreground">Connect broker first</p>
-              </div>
-            ) : (
-              <form onSubmit={pnlForm.handleSubmit(v => pnlExitMutation.mutate(v))} className="space-y-3">
-                {pnlActive && pnlStatus?.pnlExitStatus === "ACTIVE" && (
-                  <div className="grid grid-cols-3 gap-2 mb-1">
-                    <div className="rounded-lg bg-green-500/8 border border-green-500/20 px-2.5 py-2 text-center">
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Target</p>
-                      <p className="text-sm font-bold text-green-400 tabular-nums">₹{pnlStatus.profit}</p>
-                    </div>
-                    <div className="rounded-lg bg-destructive/8 border border-destructive/20 px-2.5 py-2 text-center">
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Stop</p>
-                      <p className="text-sm font-bold text-destructive tabular-nums">₹{pnlStatus.loss}</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/20 border border-border/30 px-2.5 py-2 text-center">
-                      <p className="text-[9px] text-muted-foreground uppercase tracking-widest">KS</p>
-                      <p className="text-sm font-bold tabular-nums">{pnlStatus.enable_kill_switch ? "Yes" : "No"}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <SectionLabel>Profit Target (₹)</SectionLabel>
-                    <div className="relative">
-                      <TrendingUp className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-green-500/60" />
-                      <Input type="number" min={1} className="h-9 pl-7 text-sm tabular-nums bg-background/60" {...pnlForm.register("profitValue")} />
-                    </div>
-                    {pnlForm.formState.errors.profitValue && <p className="text-[10px] text-destructive">Required</p>}
-                  </div>
-                  <div className="space-y-1">
-                    <SectionLabel>Loss Limit (₹)</SectionLabel>
-                    <div className="relative">
-                      <TrendingDown className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-destructive/60" />
-                      <Input type="number" min={1} className="h-9 pl-7 text-sm tabular-nums bg-background/60" {...pnlForm.register("lossValue")} />
-                    </div>
-                    {pnlForm.formState.errors.lossValue && <p className="text-[10px] text-destructive">Required</p>}
-                  </div>
-                </div>
-                <label className="flex items-center gap-2.5 py-2 cursor-pointer group">
-                  <Checkbox checked={pnlForm.watch("enableKillSwitch")} onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)} />
-                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">Also activate kill switch on exit</span>
-                </label>
-                <div className="flex gap-2 pt-1">
-                  <Button type="submit" size="sm" className="h-9 flex-1 gap-1.5" disabled={pnlExitMutation.isPending}>
-                    {pnlExitMutation.isPending ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />…</> : <><Zap className="w-3.5 h-3.5" />{pnlActive ? "Update" : "Activate"}</>}
-                  </Button>
-                  {pnlActive && (
-                    <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/8" disabled={stopPnlExitMutation.isPending} onClick={() => stopPnlExitMutation.mutate()}>
-                      <TrendingDown className="w-3.5 h-3.5" />{stopPnlExitMutation.isPending ? "…" : "Stop"}
-                    </Button>
-                  )}
-                </div>
-              </form>
-            )}
-          </div>
         </div>
 
         {/* Auto Square-Off Timer */}
@@ -439,14 +362,13 @@ export default function RiskManager() {
             </Button>
           </div>
         </div>
-
       </div>
 
-      {/* ── Row 2: Kill Switch (2-wide) + PIN (1-wide) ── */}
-      <div className="grid grid-cols-3 gap-4 items-start">
+      {/* ── Row 2: Emergency Kill Switch | Kill Switch PIN ── */}
+      <div className="grid grid-cols-2 gap-4 items-start">
 
         {/* Emergency Kill Switch */}
-        <div className={`col-span-2 rounded-2xl border overflow-hidden shadow-sm transition-all ${killSwitchActive ? "border-destructive/50 bg-destructive/5" : "border-border/50 bg-card"}`}>
+        <div className={`rounded-2xl border overflow-hidden shadow-sm transition-all ${killSwitchActive ? "border-destructive/50 bg-destructive/5" : "border-border/50 bg-card"}`}>
           <div className={`px-5 py-3.5 border-b flex items-center justify-between ${killSwitchActive ? "border-destructive/30 bg-destructive/10" : "border-border/30 bg-muted/5"}`}>
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${killSwitchActive ? "bg-destructive/25" : "bg-muted/25"}`}>
@@ -457,7 +379,7 @@ export default function RiskManager() {
             <div className="flex items-center gap-2.5">
               {settingsData?.hasKillSwitchPin && (
                 <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full">
-                  <Lock className="w-2.5 h-2.5" />PIN Protected
+                  <Lock className="w-2.5 h-2.5" />PIN
                 </span>
               )}
               {killSwitchActive ? (
@@ -471,43 +393,34 @@ export default function RiskManager() {
               )}
             </div>
           </div>
-          <div className="px-6 py-5">
+          <div className="px-5 py-5">
             {!isConnected ? (
               <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
                 <WifiOff className="w-4 h-4 shrink-0" />Connect broker first to use kill switch.
               </div>
             ) : killSwitchActive ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-3 py-4 px-5 rounded-2xl bg-destructive/12 border border-destructive/30">
-                  <Power className="w-5 h-5 text-destructive shrink-0" />
+                <div className="flex items-center gap-3 py-3.5 px-4 rounded-2xl bg-destructive/12 border border-destructive/30">
+                  <Power className="w-4 h-4 text-destructive shrink-0" />
                   <div>
-                    <p className="text-sm font-semibold text-destructive">All order placement blocked</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">No new orders can be placed until deactivated.</p>
+                    <p className="text-sm font-semibold text-destructive">All orders blocked</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">No new orders until deactivated.</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    className={`h-10 gap-2 px-6 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/8" : "opacity-40 cursor-not-allowed"}`}
-                    disabled={killSwitchMutation.isPending || !canDeactivate}
-                    onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
-                  >
-                    <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Deactivating…" : "Deactivate Kill Switch"}
-                  </Button>
-                  {!canDeactivate && <p className="text-[11px] text-muted-foreground">Daily deactivation limit reached · Resets at midnight IST</p>}
-                </div>
+                <Button
+                  variant="outline"
+                  className={`w-full h-10 gap-2 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/8" : "opacity-40 cursor-not-allowed"}`}
+                  disabled={killSwitchMutation.isPending || !canDeactivate}
+                  onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
+                >
+                  <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Deactivating…" : "Deactivate Kill Switch"}
+                </Button>
+                {!canDeactivate && <p className="text-[11px] text-muted-foreground text-center">Daily limit reached · Resets at midnight IST</p>}
               </div>
             ) : (
-              <div className="flex items-center gap-5">
-                <div className="flex-1">
-                  <p className="text-xs text-muted-foreground leading-relaxed">Instantly halts all new order placement across every strategy. Use only in emergencies.</p>
-                </div>
-                <Button
-                  variant="destructive"
-                  className="h-10 gap-2 px-7 shrink-0 text-sm font-semibold"
-                  disabled={killSwitchMutation.isPending}
-                  onClick={() => handleKillSwitchAction("ACTIVATE")}
-                >
+              <div className="space-y-3.5">
+                <p className="text-xs text-muted-foreground leading-relaxed">Instantly halts all new order placement across every strategy. Use only in emergencies.</p>
+                <Button variant="destructive" className="w-full h-10 gap-2 font-semibold" disabled={killSwitchMutation.isPending} onClick={() => handleKillSwitchAction("ACTIVATE")}>
                   <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Activating…" : "Activate Kill Switch"}
                 </Button>
               </div>
@@ -534,49 +447,34 @@ export default function RiskManager() {
                 <Lock className="w-3 h-3 shrink-0" />Active — enter new PIN to change.
               </div>
             )}
-            <div className="space-y-2.5">
-              <div className="space-y-1.5">
-                <SectionLabel>{settingsData?.hasKillSwitchPin ? "New PIN" : "Set PIN"}</SectionLabel>
-                <div className="relative">
-                  <Input
-                    type={showPin ? "text" : "password"}
-                    placeholder="• • • •"
-                    maxLength={4}
-                    className="h-10 text-center font-mono tracking-[0.4em] text-lg pr-10 bg-background/60"
-                    value={pinInput}
-                    onChange={e => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  />
-                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowPin(!showPin)}>
-                    {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <SectionLabel>Confirm PIN</SectionLabel>
-                <Input
-                  type="password"
-                  placeholder="• • • •"
-                  maxLength={4}
-                  className={`h-10 text-center font-mono tracking-[0.4em] text-lg bg-background/60 ${pinInput && pinConfirm && pinInput !== pinConfirm ? "border-destructive ring-1 ring-destructive/40" : ""}`}
-                  value={pinConfirm}
-                  onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            <div className="space-y-1.5">
+              <SectionLabel>{settingsData?.hasKillSwitchPin ? "New PIN" : "Set PIN"}</SectionLabel>
+              <div className="relative">
+                <Input type={showPin ? "text" : "password"} placeholder="• • • •" maxLength={4}
+                  className="h-10 text-center font-mono tracking-[0.4em] text-lg pr-10 bg-background/60"
+                  value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 />
-                {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-[10px] text-destructive font-medium">PINs do not match</p>}
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowPin(!showPin)}>
+                  {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
-            <Button
-              size="sm"
-              className="w-full h-9 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+            <div className="space-y-1.5">
+              <SectionLabel>Confirm PIN</SectionLabel>
+              <Input type="password" placeholder="• • • •" maxLength={4}
+                className={`h-10 text-center font-mono tracking-[0.4em] text-lg bg-background/60 ${pinInput && pinConfirm && pinInput !== pinConfirm ? "border-destructive ring-1 ring-destructive/40" : ""}`}
+                value={pinConfirm} onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              />
+              {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-[10px] text-destructive font-medium">PINs do not match</p>}
+            </div>
+            <Button size="sm" className="w-full h-9 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
               disabled={pinInput.length !== 4 || pinInput !== pinConfirm || genericSaveMutation.isPending}
               onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: settingsData?.hasKillSwitchPin ? "PIN updated" : "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}
             >
               <Lock className="w-3.5 h-3.5" />{settingsData?.hasKillSwitchPin ? "Update PIN" : "Set PIN"}
             </Button>
             {settingsData?.hasKillSwitchPin && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full h-9 gap-1.5 border-destructive/35 text-destructive hover:bg-destructive/8"
+              <Button size="sm" variant="outline" className="w-full h-9 gap-1.5 border-destructive/35 text-destructive hover:bg-destructive/8"
                 onClick={() => { setDeletePinStep("enter"); setShowDeleteModal(true); }}
               >
                 <Trash2 className="w-3.5 h-3.5" />Delete PIN
@@ -584,8 +482,100 @@ export default function RiskManager() {
             )}
           </div>
         </div>
-
       </div>
+
+      {/* ── Row 3: P&L Based Exit — Full Width ── */}
+      <div className={`rounded-2xl border bg-card overflow-hidden shadow-sm transition-colors ${pnlActive ? "border-primary/40" : "border-border/50"}`}>
+        <div className={`px-5 py-3.5 border-b border-border/30 flex items-center justify-between ${pnlActive ? "bg-primary/8" : "bg-muted/5"}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${pnlActive ? "bg-primary/20" : "bg-muted/20"}`}>
+              <Target className={`w-4 h-4 ${pnlActive ? "text-primary" : "text-muted-foreground"}`} />
+            </div>
+            <p className="font-semibold text-sm">P&L Based Exit</p>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/30 border border-border/50 px-2 py-0.5 rounded-full">INTRADAY</span>
+            {pnlActive && (
+              <span className="flex items-center gap-1.5 text-[10px] font-bold text-primary uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />ACTIVE
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          {!isConnected ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
+              <WifiOff className="w-6 h-6 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Connect broker first to use P&L exit.</p>
+            </div>
+          ) : (
+            <form onSubmit={pnlForm.handleSubmit(v => pnlExitMutation.mutate(v))}>
+              {/* Active status strip */}
+              {pnlActive && pnlStatus?.pnlExitStatus === "ACTIVE" && (
+                <div className="flex items-center gap-6 mb-5 px-4 py-3 rounded-xl bg-primary/5 border border-primary/20">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-3.5 h-3.5 text-green-400" />
+                    <span className="text-xs text-muted-foreground">Profit Target</span>
+                    <span className="text-sm font-bold text-green-400 tabular-nums">₹{pnlStatus.profit}</span>
+                  </div>
+                  <div className="w-px h-4 bg-border/50" />
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="w-3.5 h-3.5 text-destructive" />
+                    <span className="text-xs text-muted-foreground">Loss Stop</span>
+                    <span className="text-sm font-bold text-destructive tabular-nums">₹{pnlStatus.loss}</span>
+                  </div>
+                  <div className="w-px h-4 bg-border/50" />
+                  <div className="flex items-center gap-2">
+                    <Power className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Kill Switch</span>
+                    <span className="text-sm font-semibold">{pnlStatus.enable_kill_switch ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* 3-column input layout across the full width */}
+              <div className="grid grid-cols-3 gap-5 items-end">
+                <div className="space-y-1.5">
+                  <SectionLabel>Profit Target (₹)</SectionLabel>
+                  <div className="relative">
+                    <TrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-green-500/60" />
+                    <Input type="number" min={1} className="h-10 pl-8 tabular-nums bg-background/60" {...pnlForm.register("profitValue")} />
+                  </div>
+                  {pnlForm.formState.errors.profitValue && <p className="text-[10px] text-destructive">Required</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <SectionLabel>Loss Limit (₹)</SectionLabel>
+                  <div className="relative">
+                    <TrendingDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-destructive/60" />
+                    <Input type="number" min={1} className="h-10 pl-8 tabular-nums bg-background/60" {...pnlForm.register("lossValue")} />
+                  </div>
+                  {pnlForm.formState.errors.lossValue && <p className="text-[10px] text-destructive">Required</p>}
+                </div>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer group">
+                    <Checkbox checked={pnlForm.watch("enableKillSwitch")} onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)} />
+                    <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">Also activate kill switch on exit</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <Button type="submit" size="sm" className="h-10 flex-1 gap-1.5" disabled={pnlExitMutation.isPending}>
+                      {pnlExitMutation.isPending
+                        ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />…</>
+                        : <><Zap className="w-3.5 h-3.5" />{pnlActive ? "Update" : "Activate"}</>}
+                    </Button>
+                    {pnlActive && (
+                      <Button type="button" variant="outline" size="sm" className="h-10 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/8" disabled={stopPnlExitMutation.isPending} onClick={() => stopPnlExitMutation.mutate()}>
+                        <TrendingDown className="w-3.5 h-3.5" />{stopPnlExitMutation.isPending ? "…" : "Stop"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }
