@@ -24,66 +24,15 @@ import {
 
 const BASE = import.meta.env.BASE_URL;
 
-// dhanSecId  = security ID used in Dhan's option-chain & expiry-list API calls
-// dbSecId    = underlying_security_id stored in our instruments DB
-const INDEX_UNDERLYINGS = [
-  {
-    label: "NIFTY 50",
-    symbol: "NIFTY",
-    dhanSecId: 13,
-    dbSecId: 26000,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-  {
-    label: "BANK NIFTY",
-    symbol: "BANKNIFTY",
-    dhanSecId: 25,
-    dbSecId: 26009,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-  {
-    label: "FIN NIFTY",
-    symbol: "FINNIFTY",
-    dhanSecId: 27,
-    dbSecId: 26037,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-  {
-    label: "MIDCAP NIFTY",
-    symbol: "MIDCPNIFTY",
-    dhanSecId: 442,
-    dbSecId: 26074,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-  {
-    label: "SENSEX",
-    symbol: "SENSEX",
-    dhanSecId: 1,
-    dbSecId: 1,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-  {
-    label: "BANKEX",
-    symbol: "BANKEX",
-    dhanSecId: 12,
-    dbSecId: 12,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-  {
-    label: "NIFTYNXT50",
-    symbol: "NIFTYNXT50",
-    dhanSecId: 26013,
-    dbSecId: 26013,
-    segment: "IDX_I",
-    exchange: "NSE" as const,
-  },
-];
+// Index underlying shape — loaded from DB (instruments table, instrument="INDEX")
+interface IndexUnderlying {
+  label: string;
+  symbol: string;
+  dhanSecId: number;   // security_id from DB — used for Dhan API calls
+  dbSecId: number;     // underlying_security_id from DB
+  segment: string;     // always "IDX_I" for INDEX instruments
+  exchange: "NSE" | "BSE" | "MCX";
+}
 
 type Mode = "index" | "stock";
 type Exchange = "NSE" | "MCX";
@@ -319,35 +268,75 @@ function StockSearch({ onSelect }: { onSelect: (s: StockUnderlying) => void }) {
   );
 }
 
+// ── DB instrument row (partial) ──────────────────────────────────────
+interface DbInstrument {
+  securityId: number;
+  underlyingSecurityId: number | null;
+  symbolName: string;
+  displayName: string | null;
+  exchId: string;
+  segment: string;
+}
+
+function mapDbToUnderlying(r: DbInstrument): IndexUnderlying {
+  // segment field from DB: "I" (index), "D" (derivatives), etc.
+  // Dhan uses "IDX_I" for index option chain / expiry calls
+  const exchSeg = r.exchId === "BSE" ? "IDX_I" : "IDX_I";
+  const exch = (r.exchId === "BSE" ? "BSE" : r.exchId === "MCX" ? "MCX" : "NSE") as "NSE" | "BSE" | "MCX";
+  return {
+    label: r.displayName ?? r.symbolName,
+    symbol: r.symbolName,
+    dhanSecId: r.securityId,
+    dbSecId: r.underlyingSecurityId ?? r.securityId,
+    segment: exchSeg,
+    exchange: exch,
+  };
+}
+
 // ── Main Component ──────────────────────────────────────────────────
 export default function OptionChain() {
   const [mode, setMode] = useState<Mode>("index");
-  const [indexUnderlying, setIndexUnderlying] = useState(INDEX_UNDERLYINGS[0]);
+  const [indexUnderlying, setIndexUnderlying] = useState<IndexUnderlying | null>(null);
   const [stockUnderlying, setStockUnderlying] =
     useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
 
+  // Load index underlyings from DB (instrument="INDEX")
+  const { data: indexList = [], isLoading: indexListLoading } = useQuery<IndexUnderlying[]>({
+    queryKey: ["index-underlyings"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/instruments?instrument=INDEX&limit=50`);
+      if (!res.ok) return [];
+      const rows = (await res.json()) as DbInstrument[];
+      return rows.map(mapDbToUnderlying);
+    },
+    staleTime: Infinity,
+  });
+
+  // Auto-select first index once loaded
+  const activeIndex = indexUnderlying ?? indexList[0] ?? null;
+
   // Active IDs / segment
   const activeDbSecId =
     mode === "index"
-      ? indexUnderlying.dbSecId
+      ? (activeIndex?.dbSecId ?? null)
       : (stockUnderlying?.underlyingSecurityId ?? null);
   const activeDhanSecId =
     mode === "index"
-      ? indexUnderlying.dhanSecId
+      ? (activeIndex?.dhanSecId ?? null)
       : (stockUnderlying?.underlyingSecurityId ?? null);
   const activeInstrument = mode === "index" ? "OPTIDX" : "OPTSTK";
   const activeSegment =
     mode === "index"
-      ? indexUnderlying.segment
+      ? (activeIndex?.segment ?? "IDX_I")
       : stockUnderlying?.exchId === "BSE"
         ? "BSE_EQ"
         : "NSE_EQ";
   const activeLabel =
     mode === "index"
-      ? indexUnderlying.label
+      ? (activeIndex?.label ?? "")
       : (stockUnderlying?.underlyingSymbol ?? "");
-  const activeExchange: Exchange = "NSE"; // All current underlyings are NSE/BSE (same F&O hours)
+  const activeExchange: Exchange = "NSE";
 
   // Market hours gate
   const marketStatus = useMarketStatus(activeExchange);
@@ -566,22 +555,18 @@ export default function OptionChain() {
 
           {mode === "index" ? (
             <Select
-              value={String(indexUnderlying.dhanSecId)}
+              value={activeIndex ? String(activeIndex.dhanSecId) : ""}
               onValueChange={(v) => {
-                const u = INDEX_UNDERLYINGS.find(
-                  (u) => String(u.dhanSecId) === v,
-                );
-                if (u) {
-                  setIndexUnderlying(u);
-                  setExpiry("");
-                }
+                const u = indexList.find((u) => String(u.dhanSecId) === v);
+                if (u) { setIndexUnderlying(u); setExpiry(""); }
               }}
+              disabled={indexListLoading || indexList.length === 0}
             >
               <SelectTrigger className="w-36 text-xs h-9">
-                <SelectValue />
+                <SelectValue placeholder={indexListLoading ? "Loading…" : "Select Index"} />
               </SelectTrigger>
               <SelectContent>
-                {INDEX_UNDERLYINGS.map((u) => (
+                {indexList.map((u) => (
                   <SelectItem key={u.dhanSecId} value={String(u.dhanSecId)}>
                     {u.label}
                   </SelectItem>

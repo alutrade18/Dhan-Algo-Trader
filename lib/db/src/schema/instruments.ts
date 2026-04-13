@@ -22,6 +22,7 @@ export const instrumentsTable = pgTable(
     expiryFlag: text("expiry_flag"),
     upperLimit: numeric("upper_limit", { precision: 12, scale: 2 }),
     lowerLimit: numeric("lower_limit", { precision: 12, scale: 2 }),
+    category: text("category"),
   },
   (t) => [
     uniqueIndex("instruments_security_id_exch_idx").on(t.securityId, t.exchId),
