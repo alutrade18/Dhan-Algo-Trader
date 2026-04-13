@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Plus, X, TrendingUp, TrendingDown, WifiOff, AlertTriangle, Loader2 } from "lucide-react";
+import { RefreshCw, Plus, X, TrendingUp, TrendingDown, WifiOff, AlertTriangle, AlertCircle, Loader2 } from "lucide-react";
 import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
@@ -241,6 +241,14 @@ export default function SuperOrders() {
             <Plus className="w-3.5 h-3.5" /> New Super Order
           </Button>
         </div>
+      </div>
+
+      <div className="flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-sm text-yellow-700 dark:text-yellow-400">
+        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>
+          Target and stop loss monitoring is being implemented. Currently, these values are
+          stored for reference only and do not automatically place exit orders.
+        </span>
       </div>
 
       {notConnected && (
