@@ -117,6 +117,7 @@ async function insertBatch(client, records) {
     INSERT INTO instruments (${cols.join(',')})
     VALUES ${placeholders.join(',')}
     ON CONFLICT (security_id, exch_id) DO UPDATE SET
+      instrument = EXCLUDED.instrument,
       category = EXCLUDED.category,
       display_name = EXCLUDED.display_name,
       symbol_name = EXCLUDED.symbol_name,
