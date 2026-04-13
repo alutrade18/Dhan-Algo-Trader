@@ -22,24 +22,28 @@ async function sendTelegramPing(botToken: string, chatId: string): Promise<void>
       hour12: true,
     });
     const message = [
+      `🚀 *${APP_NAME.toUpperCase()} — ALERTS ACTIVE*`,
       "━━━━━━━━━━━━━━━━━━━━━━━",
-      `🤖  *${APP_NAME.toUpperCase()}*`,
+      "",
+      "✅ *Telegram channel connected successfully\\.*",
+      "",
+      "You will now receive real\\-time notifications for:",
+      "• 📈 Order executions & fills",
+      "• 🛡 Kill switch activations",
+      "• ⚠️ Daily loss limit breaches",
+      "• 🔁 Auto square\\-off triggers",
+      "",
       "━━━━━━━━━━━━━━━━━━━━━━━",
-      "",
-      "✅  *Bot Connected Successfully*",
-      "",
-      "Your Telegram channel is now linked to the platform.",
-      "",
-      `🕐  *Connected at:* ${now} IST`,
-      "",
+      `🕐 *Activated:* ${now} IST`,
+      `🏦 *Broker:* Dhan NSE/BSE`,
       "━━━━━━━━━━━━━━━━━━━━━━━",
-      `_${APP_NAME} Platform — Powered by Dhan_`,
+      `⚡ _${APP_NAME} · Precision\\. Speed\\. Control\\._`,
     ].join("\n");
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "Markdown" }),
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "MarkdownV2" }),
     });
   } catch {
     // fire-and-forget
