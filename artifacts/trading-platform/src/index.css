@@ -72,96 +72,142 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── LIGHT THEME — Obsidian Violet ────────────────── */
+/* ═══════════════════════════════════════════════════════
+   LIGHT THEME — Corporate Trading (#F8FAFC / #2563EB)
+   ═══════════════════════════════════════════════════════ */
 :root,
 .light {
-  --background: 265 22% 97%;        /* soft lavender-white */
-  --foreground: 265 38% 9%;         /* deep purple near-black */
-  --border: 265 16% 86%;
-  --input: 0 0% 100%;
-  --ring: 262 80% 54%;              /* vivid violet ring */
-  --card: 0 0% 100%;
-  --card-foreground: 265 38% 9%;
-  --card-border: 265 16% 86%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 265 38% 9%;
-  --popover-border: 265 16% 86%;
-  --primary: 262 80% 54%;           /* deep vivid violet */
-  --primary-foreground: 0 0% 100%;
-  --secondary: 265 18% 92%;
-  --secondary-foreground: 265 28% 20%;
-  --muted: 265 14% 94%;
-  --muted-foreground: 265 12% 46%;
-  --accent: 262 55% 93%;            /* light violet tint */
-  --accent-foreground: 262 80% 28%;
-  --destructive: 4 76% 50%;
+  /* Core */
+  --background:          210 40% 98%;    /* #F8FAFC */
+  --foreground:          222 47% 11%;    /* #0F172A */
+  --border:              214 32% 91%;    /* #E2E8F0 */
+  --input:               0 0% 100%;      /* #FFFFFF */
+  --ring:                219 82% 55%;    /* #2563EB */
+
+  /* Cards / Surfaces */
+  --card:                0 0% 100%;      /* #FFFFFF */
+  --card-foreground:     222 47% 11%;
+  --card-border:         214 32% 91%;
+
+  /* Popovers */
+  --popover:             0 0% 100%;
+  --popover-foreground:  222 47% 11%;
+  --popover-border:      214 32% 91%;
+
+  /* Primary — Blue #2563EB */
+  --primary:             219 82% 55%;
+  --primary-foreground:  0 0% 100%;
+
+  /* Secondary — Violet #7C3AED */
+  --secondary:           262 80% 57%;
+  --secondary-foreground: 0 0% 100%;
+
+  /* Muted */
+  --muted:               214 28% 94%;
+  --muted-foreground:    215 20% 35%;    /* #475569 */
+
+  /* Accent */
+  --accent:              219 60% 93%;
+  --accent-foreground:   219 82% 30%;
+
+  /* Semantic */
+  --destructive:         0 72% 51%;      /* #DC2626 */
   --destructive-foreground: 0 0% 100%;
-  --success: 145 62% 34%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 90% 40%;
-  --warning-foreground: 0 0% 100%;
-  --sidebar: 265 18% 94%;           /* lavender-white sidebar */
-  --sidebar-foreground: 265 28% 16%;
-  --sidebar-border: 265 16% 86%;
-  --sidebar-primary: 262 80% 54%;
+  --success:             142 76% 36%;    /* #16A34A */
+  --success-foreground:  0 0% 100%;
+  --warning:             34 97% 44%;     /* #D97706 */
+  --warning-foreground:  0 0% 100%;
+
+  /* Sidebar */
+  --sidebar:             210 35% 96%;
+  --sidebar-foreground:  222 40% 18%;
+  --sidebar-border:      214 32% 89%;
+  --sidebar-primary:     219 82% 55%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 262 50% 90%;    /* violet hover tint */
-  --sidebar-accent-foreground: 262 80% 28%;
-  --sidebar-ring: 262 80% 54%;
-  --chart-1: 262 80% 54%;
-  --chart-2: 145 62% 34%;
-  --chart-3: 4 76% 50%;
-  --chart-4: 200 72% 44%;
-  --chart-5: 38 90% 40%;
-  --app-font-sans: 'Inter', sans-serif;
+  --sidebar-accent:      219 55% 90%;
+  --sidebar-accent-foreground: 219 82% 25%;
+  --sidebar-ring:        219 82% 55%;
+
+  /* Charts */
+  --chart-1:             219 82% 55%;
+  --chart-2:             142 76% 36%;
+  --chart-3:             0 72% 51%;
+  --chart-4:             262 80% 57%;
+  --chart-5:             34 97% 44%;
+
+  /* Typography */
+  --app-font-sans:  'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
-  --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  --app-font-mono:  'JetBrains Mono', 'Fira Code', Menlo, monospace;
   --radius: 0.5rem;
 }
 
-/* ── DARK THEME — Obsidian Violet ──────────────────── */
+/* ═══════════════════════════════════════════════════════
+   DARK THEME — Corporate Trading (#0B0F14 / #4F9CF9)
+   ═══════════════════════════════════════════════════════ */
 .dark {
-  --background: 265 14% 8%;         /* near-black purple-tinted */
-  --foreground: 265 16% 90%;        /* soft lavender-white text */
-  --border: 265 12% 18%;
-  --input: 265 12% 13%;
-  --ring: 262 75% 62%;              /* vivid violet */
-  --card: 265 14% 11%;
-  --card-foreground: 265 16% 90%;
-  --card-border: 265 12% 18%;
-  --popover: 265 14% 11%;
-  --popover-foreground: 265 16% 90%;
-  --popover-border: 265 12% 18%;
-  --primary: 262 75% 62%;           /* vivid violet */
-  --primary-foreground: 0 0% 100%;
-  --secondary: 265 12% 14%;
-  --secondary-foreground: 265 12% 76%;
-  --muted: 265 12% 12%;
-  --muted-foreground: 265 10% 54%;
-  --accent: 265 12% 14%;
-  --accent-foreground: 265 12% 76%;
-  --destructive: 4 76% 56%;
+  /* Core */
+  --background:          213 30%  6%;    /* #0B0F14 */
+  --foreground:          210 30% 93%;    /* #E6EDF3 */
+  --border:              215 26% 17%;    /* #1F2937 */
+  --input:               220 28% 12%;
+  --ring:                213 92% 65%;    /* #4F9CF9 */
+
+  /* Cards / Surfaces — #121821 */
+  --card:                222 28% 10%;    /* #121821 */
+  --card-foreground:     210 30% 93%;
+  --card-border:         215 26% 17%;
+
+  /* Popovers */
+  --popover:             222 28% 10%;
+  --popover-foreground:  210 30% 93%;
+  --popover-border:      215 26% 17%;
+
+  /* Primary — Blue #4F9CF9 */
+  --primary:             213 92% 65%;
+  --primary-foreground:  222 47% 8%;
+
+  /* Secondary — Violet #7C3AED */
+  --secondary:           262 80% 57%;
+  --secondary-foreground: 0 0% 100%;
+
+  /* Muted */
+  --muted:               220 24% 13%;
+  --muted-foreground:    210 14% 56%;    /* #9AA4B2 */
+
+  /* Accent */
+  --accent:              220 24% 14%;
+  --accent-foreground:   210 30% 82%;
+
+  /* Semantic */
+  --destructive:         0 84% 60%;      /* #EF4444 */
   --destructive-foreground: 0 0% 100%;
-  --success: 145 60% 44%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 85% 56%;
-  --warning-foreground: 0 0% 100%;
-  --sidebar: 265 16% 6%;            /* deepest obsidian sidebar */
-  --sidebar-foreground: 265 12% 78%;
-  --sidebar-border: 265 12% 16%;
-  --sidebar-primary: 262 75% 62%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 265 12% 13%;
-  --sidebar-accent-foreground: 265 12% 84%;
-  --sidebar-ring: 262 75% 62%;
-  --chart-1: 262 75% 62%;
-  --chart-2: 145 60% 44%;
-  --chart-3: 4 76% 56%;
-  --chart-4: 200 72% 52%;
-  --chart-5: 38 85% 56%;
-  --app-font-sans: 'Inter', sans-serif;
+  --success:             142 71% 45%;    /* #22C55E */
+  --success-foreground:  0 0% 100%;
+  --warning:             38 92% 50%;     /* #F59E0B */
+  --warning-foreground:  0 0% 100%;
+
+  /* Sidebar — deepest layer */
+  --sidebar:             213 32%  4%;
+  --sidebar-foreground:  210 22% 72%;
+  --sidebar-border:      215 24% 14%;
+  --sidebar-primary:     213 92% 65%;
+  --sidebar-primary-foreground: 222 47% 8%;
+  --sidebar-accent:      220 24% 11%;
+  --sidebar-accent-foreground: 210 28% 86%;
+  --sidebar-ring:        213 92% 65%;
+
+  /* Charts */
+  --chart-1:             213 92% 65%;
+  --chart-2:             142 71% 45%;
+  --chart-3:             0 84% 60%;
+  --chart-4:             262 80% 57%;
+  --chart-5:             38 92% 50%;
+
+  /* Typography */
+  --app-font-sans:  'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
-  --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  --app-font-mono:  'JetBrains Mono', 'Fira Code', Menlo, monospace;
   --radius: 0.5rem;
 }
 
@@ -188,7 +234,7 @@
     @apply bg-muted-foreground/70;
   }
 
-  /* Light theme — blue calendar icon */
+  /* Light theme — calendar picker icon */
   input[type="date"],
   input[type="datetime-local"] {
     color-scheme: light;
@@ -204,7 +250,7 @@
     opacity: 1;
   }
 
-  /* Dark theme — white calendar icon */
+  /* Dark theme — white calendar picker icon */
   .dark input[type="date"],
   .dark input[type="datetime-local"] {
     color-scheme: dark;
@@ -221,18 +267,18 @@
   }
 
   /* ── Order Book depth rows ── */
-  .depth-buy-row  { background: hsl(145 62% 34% / 0.07); }
-  .depth-sell-row { background: hsl(4 76% 48% / 0.07); }
-  .dark .depth-buy-row  { background: hsl(145 60% 44% / 0.14); }
-  .dark .depth-sell-row { background: hsl(4 76% 56% / 0.14); }
+  .depth-buy-row  { background: hsl(142 76% 36% / 0.07); }
+  .depth-sell-row { background: hsl(0 72% 51% / 0.07); }
+  .dark .depth-buy-row  { background: hsl(142 71% 45% / 0.14); }
+  .dark .depth-sell-row { background: hsl(0 84% 60% / 0.14); }
 
   /* ── Option Chain CE/PE row tints ── */
-  .oc-ce-row { background: hsl(145 62% 34% / 0.06); }
-  .oc-pe-row { background: hsl(4 76% 48% / 0.06); }
-  .oc-atm-row { background: hsl(38 90% 42% / 0.12); border-left: 2px solid hsl(var(--warning)); }
-  .dark .oc-ce-row { background: hsl(145 60% 44% / 0.14); }
-  .dark .oc-pe-row { background: hsl(4 76% 56% / 0.14); }
-  .dark .oc-atm-row { background: hsl(38 88% 50% / 0.18); border-left: 2px solid hsl(var(--warning)); }
+  .oc-ce-row { background: hsl(142 76% 36% / 0.06); }
+  .oc-pe-row { background: hsl(0 72% 51% / 0.06); }
+  .oc-atm-row { background: hsl(34 97% 44% / 0.12); border-left: 2px solid hsl(var(--warning)); }
+  .dark .oc-ce-row { background: hsl(142 71% 45% / 0.14); }
+  .dark .oc-pe-row { background: hsl(0 84% 60% / 0.14); }
+  .dark .oc-atm-row { background: hsl(38 92% 50% / 0.18); border-left: 2px solid hsl(var(--warning)); }
 
   /* ── Position P&L colours ── */
   .pnl-positive { color: hsl(var(--success)); font-weight: 500; }
