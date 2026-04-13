@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { marketSocket } from "@/lib/market-socket";
-import { RefreshCw, LogOut, TrendingUp, TrendingDown, Minus, AlertCircle } from "lucide-react";
+import { RefreshCw, LogOut, TrendingUp, TrendingDown, Minus, AlertCircle, ShieldX } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -54,7 +54,8 @@ interface DhanPosition {
   crossCurrency?: boolean;
 }
 
-const REFETCH_MS         = 5_000;
+// Data APIs: 5 req/sec, 100k/day — 3s polling = safe within limits
+const REFETCH_MS         = 3_000;
 const REFRESH_COOLDOWN   = 2_000;
 
 const isClosed      = (p: DhanPosition) => (p.netQty ?? 0) === 0 || p.positionType === "CLOSED";
@@ -186,6 +187,44 @@ export default function Positions() {
   return (
     <div className="flex flex-col gap-4">
 
+      {/* ── Exit All Hero Banner (shown when any open position exists) ── */}
+      {openAll.length > 0 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-destructive/30 bg-destructive/5 px-5 py-3.5">
+          <div className="flex items-start gap-3 min-w-0">
+            <ShieldX className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-destructive">Exit All Positions</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Squares off all <span className="font-semibold text-foreground">{openAll.length}</span> open position{openAll.length !== 1 ? "s" : ""} for the current trading day. Does not cancel pending orders.
+              </p>
+            </div>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="gap-1.5 shrink-0 h-9 px-4 font-semibold" disabled={exitingAll}>
+                <LogOut className="h-4 w-4" />
+                {exitingAll ? "Exiting All…" : "Exit All Positions"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="max-w-sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2"><ShieldX className="w-5 h-5 text-destructive" />Exit All Positions?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will place MARKET orders to square off all <strong>{openAll.length}</strong> open position{openAll.length !== 1 ? "s" : ""} immediately.
+                  Pending orders are <strong>not</strong> cancelled. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={exitAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Yes, Exit All
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
+
       {/* ── Stats bar ── */}
       <div className="grid grid-cols-4 divide-x divide-border rounded-lg border bg-card overflow-hidden">
         {[
@@ -237,31 +276,6 @@ export default function Positions() {
             <RefreshCw className={cn("h-3.5 w-3.5", (isLoading || cooling) && "animate-spin")} />
             Refresh
           </Button>
-          {intraday.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="h-8 gap-1.5 text-xs" disabled={exitingAll}>
-                  <LogOut className="h-3.5 w-3.5" />
-                  {exitingAll ? "Exiting…" : "Exit All Intraday"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="max-w-sm">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Exit All Intraday Positions?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Places MARKET orders to square off all <strong>{intraday.length}</strong> open intraday
-                    positions immediately. Pending orders are not cancelled.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={exitAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Yes, Exit All
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
         </div>
       </div>
 
@@ -309,7 +323,7 @@ export default function Positions() {
                 const avg      = getAvg(pos);
                 const isLong   = qty >= 0;
                 const closed_  = isClosed(pos);
-                const canExit  = !closed_ && isIntraday(pos);
+                const canExit  = !closed_;
                 const exiting_ = exiting[pos.securityId ?? ""];
                 const expiry   = expiryLabel(pos.drvExpiryDate);
                 const strike   = (pos.drvStrikePrice ?? 0) > 0 ? pos.drvStrikePrice : null;
@@ -420,22 +434,33 @@ export default function Positions() {
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="outline" size="sm" disabled={exiting_}
-                              className="h-6 text-[10px] px-2.5 border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500">
+                              className="h-6 text-[10px] px-2.5 border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 gap-1">
+                              <LogOut className="h-3 w-3" />
                               {exiting_ ? "…" : "Exit"}
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent className="max-w-sm">
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Exit {pos.tradingSymbol}?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Place a MARKET {isLong ? "SELL" : "BUY"} order for <strong>{Math.abs(qty)}</strong> qty
-                                of <strong>{pos.tradingSymbol}</strong> at market price.
+                              <AlertDialogTitle className="flex items-center gap-2">
+                                <LogOut className="w-4 h-4 text-destructive" />Exit {pos.tradingSymbol}?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription asChild>
+                                <div className="space-y-2 text-sm text-muted-foreground">
+                                  <p>Places a <strong className="text-foreground">MARKET {isLong ? "SELL" : "BUY"}</strong> order for{" "}
+                                    <strong className="text-foreground">{Math.abs(qty)} qty</strong> of{" "}
+                                    <strong className="text-foreground">{pos.tradingSymbol}</strong> at market price.</p>
+                                  <div className="flex gap-3 text-xs border border-border/50 rounded-lg px-3 py-2 bg-muted/20">
+                                    <span>Product: <strong>{pos.productType}</strong></span>
+                                    <span>Side: <strong className={isLong ? "text-emerald-400" : "text-red-400"}>{isLong ? "LONG → SELL" : "SHORT → BUY"}</strong></span>
+                                    {ltp != null && <span>LTP: <strong>₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>}
+                                  </div>
+                                </div>
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction onClick={() => exitSingle(pos)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                Yes, Exit
+                                Yes, Exit Position
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
