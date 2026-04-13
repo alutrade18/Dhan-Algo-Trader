@@ -248,10 +248,12 @@ export const dhanClient = {
     const body: Record<string, number[]> = {
       [exchangeSegment]: [parseInt(securityId, 10)],
     };
-    const raw = await dhanRequest("POST", "/marketfeed/ltp", body) as Record<string, Record<string, { last_price?: number }>>;
-    const segData = raw[exchangeSegment] ?? raw[Object.keys(raw)[0]];
+    const raw = await dhanRequest("POST", "/marketfeed/ltp", body) as Record<string, unknown>;
+    // Dhan v2 wraps response: { data: { NSE_EQ: { "1333": { last_price: ... } } }, status: "success" }
+    const unwrapped = (raw.data && typeof raw.data === "object" ? raw.data : raw) as Record<string, Record<string, { last_price?: number }>>;
+    const segData = unwrapped[exchangeSegment] ?? unwrapped[Object.keys(unwrapped)[0]];
     const entry   = segData?.[securityId] ?? segData?.[Object.keys(segData ?? {})[0]];
-    return entry?.last_price ?? 0;
+    return Number(entry?.last_price ?? 0);
   },
 
   async getHistoricalData(data: {

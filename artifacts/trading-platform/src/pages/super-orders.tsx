@@ -336,7 +336,7 @@ export default function SuperOrders() {
                 </div>
                 {ltpUnavailable && (
                   <p className="text-[10px] text-amber-400/80">
-                    Live price unavailable — Dhan Market Data subscription required. Enter price manually.
+                    Live price unavailable — market may be closed or symbol not found. Enter price manually.
                   </p>
                 )}
               </div>
