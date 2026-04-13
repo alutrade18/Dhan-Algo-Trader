@@ -19,8 +19,8 @@ const brokerSchema = z.object({ clientId: z.string(), accessToken: z.string() })
 const TELEGRAM_TOKEN_REGEX = /^\d{8,12}:[A-Za-z0-9_-]{35,}$/;
 const TELEGRAM_CHAT_ID_REGEX = /^-?\d+$/;
 const telegramSchema = z.object({
-  telegramBotToken: z.string().refine(v => !v || TELEGRAM_TOKEN_REGEX.test(v), "Invalid token format"),
-  telegramChatId: z.string().refine(v => !v || TELEGRAM_CHAT_ID_REGEX.test(v), "Must be numeric"),
+  telegramBotToken: z.string().refine(v => !v || v.startsWith("*") || TELEGRAM_TOKEN_REGEX.test(v), "Invalid token format"),
+  telegramChatId: z.string().refine(v => !v || v.startsWith("*") || TELEGRAM_CHAT_ID_REGEX.test(v), "Must be numeric"),
 });
 
 interface FundDetails { dhanClientId?: string; availableBalance?: number; sodLimit?: number; utilizedAmount?: number; withdrawableBalance?: number }
@@ -92,7 +92,10 @@ export default function Settings() {
   }, [isConnected, maskedClientId, maskedAccessToken]);
 
   useEffect(() => {
-    if (settingsData) telegramForm.reset({ telegramBotToken: "", telegramChatId: "" });
+    if (settingsData) telegramForm.reset({
+      telegramBotToken: settingsData.telegramBotToken ?? "",
+      telegramChatId: settingsData.telegramChatId ?? "",
+    });
   }, [settingsData?.id]);
 
   const connectMutation = useMutation({
@@ -120,8 +123,8 @@ export default function Settings() {
   const telegramMutation = useMutation({
     mutationFn: async (data: { telegramBotToken: string; telegramChatId: string }) => {
       const payload: Record<string, string> = {};
-      if (data.telegramBotToken) payload.telegramBotToken = data.telegramBotToken;
-      if (data.telegramChatId) payload.telegramChatId = data.telegramChatId;
+      if (data.telegramBotToken && !data.telegramBotToken.startsWith("*")) payload.telegramBotToken = data.telegramBotToken;
+      if (data.telegramChatId && !data.telegramChatId.startsWith("*")) payload.telegramChatId = data.telegramChatId;
       if (Object.keys(payload).length === 0) throw new Error("NO_CHANGE");
       const res = await fetch(`${BASE}api/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error("Failed");
@@ -257,29 +260,10 @@ export default function Settings() {
 
         <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
 
-          {/* Masked current values display */}
-          {(settingsData?.hasTelegramToken || settingsData?.hasTelegramChatId) && (
-            <div className="rounded-xl bg-violet-500/8 border border-violet-500/20 px-3.5 py-2.5 space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Current Credentials</p>
-              {settingsData.hasTelegramToken && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground w-16 shrink-0">Bot Token</span>
-                  <span className="font-mono tracking-wider text-violet-300">{settingsData.telegramBotToken}</span>
-                </div>
-              )}
-              {settingsData.hasTelegramChatId && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground w-16 shrink-0">Chat ID</span>
-                  <span className="font-mono tracking-wider text-violet-300">{settingsData.telegramChatId}</span>
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="space-y-1.5">
-            <SectionLabel>{settingsData?.hasTelegramToken ? "New Bot Token" : "Bot Token"}</SectionLabel>
+            <SectionLabel>Bot Token</SectionLabel>
             <div className="relative">
-              <Input type={showBotToken ? "text" : "password"} placeholder={settingsData?.hasTelegramToken ? "Enter new token to replace" : ""} className="h-10 font-mono text-xs pr-10 bg-background/60" autoComplete="off" {...telegramForm.register("telegramBotToken")} />
+              <Input type={showBotToken ? "text" : "password"} className="h-10 font-mono text-xs pr-10 bg-background/60" autoComplete="off" {...telegramForm.register("telegramBotToken")} />
               <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setShowBotToken(!showBotToken)}>
                 {showBotToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -287,8 +271,8 @@ export default function Settings() {
             {telegramForm.formState.errors.telegramBotToken && <p className="text-[10px] text-destructive">{telegramForm.formState.errors.telegramBotToken.message}</p>}
           </div>
           <div className="space-y-1.5">
-            <SectionLabel>{settingsData?.hasTelegramChatId ? "New Chat ID" : "Chat ID"}</SectionLabel>
-            <Input type="text" placeholder={settingsData?.hasTelegramChatId ? "Enter new Chat ID to replace" : ""} className="h-10 font-mono bg-background/60" autoComplete="off" {...telegramForm.register("telegramChatId")} />
+            <SectionLabel>Chat ID</SectionLabel>
+            <Input type="text" className="h-10 font-mono bg-background/60" autoComplete="off" {...telegramForm.register("telegramChatId")} />
             {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>}
           </div>
           <div className="flex items-center gap-2.5 pt-1">
