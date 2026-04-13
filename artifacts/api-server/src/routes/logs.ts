@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { appLogsTable } from "@workspace/db/schema";
+import { appLogsTable, tradeLogsTable } from "@workspace/db/schema";
 import { desc, and, gte, lte, eq, ilike, or, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -9,7 +9,6 @@ router.get("/logs", async (req, res): Promise<void> => {
   try {
     const {
       tab,
-      level,
       category,
       search,
       fromDate,
@@ -25,19 +24,12 @@ router.get("/logs", async (req, res): Promise<void> => {
 
     const conditions = [];
 
-    // Tab-based preset filters
     if (tab === "failed") {
-      // Failed = explicit failed status OR any error-level log
       conditions.push(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!);
     } else if (tab === "success") {
-      // Success = explicit success status only
       conditions.push(eq(appLogsTable.status, "success"));
     }
-    // tab === "all" or undefined → no status filter
 
-    if (level && level !== "all") {
-      conditions.push(eq(appLogsTable.level, level));
-    }
     if (category && category !== "all") {
       conditions.push(eq(appLogsTable.category, category));
     }
@@ -61,17 +53,8 @@ router.get("/logs", async (req, res): Promise<void> => {
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [logs, countResult] = await Promise.all([
-      db
-        .select()
-        .from(appLogsTable)
-        .where(where)
-        .orderBy(desc(appLogsTable.createdAt))
-        .limit(limitNum)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(appLogsTable)
-        .where(where),
+      db.select().from(appLogsTable).where(where).orderBy(desc(appLogsTable.createdAt)).limit(limitNum).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(appLogsTable).where(where),
     ]);
 
     res.json({
@@ -86,21 +69,26 @@ router.get("/logs", async (req, res): Promise<void> => {
   }
 });
 
-// GET /logs/counts — tab badge counts in a single query
+// GET /logs/counts — badge counts for tab headers
+// Failed = app_logs (failed/error) + trade_logs (failed) combined
 router.get("/logs/counts", async (_req, res): Promise<void> => {
   try {
-    const [failedRow, successRow] = await Promise.all([
+    const [failedAppRow, failedTradeRow, successRow] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(appLogsTable)
         .where(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!),
       db
         .select({ count: sql<number>`count(*)::int` })
+        .from(tradeLogsTable)
+        .where(eq(tradeLogsTable.status, "failed")),
+      db
+        .select({ count: sql<number>`count(*)::int` })
         .from(appLogsTable)
         .where(eq(appLogsTable.status, "success")),
     ]);
     res.json({
-      failed: failedRow[0]?.count ?? 0,
+      failed: (failedAppRow[0]?.count ?? 0) + (failedTradeRow[0]?.count ?? 0),
       success: successRow[0]?.count ?? 0,
     });
   } catch (e) {

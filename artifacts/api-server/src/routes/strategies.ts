@@ -86,10 +86,10 @@ router.post("/strategies/engine/stop", (_req, res): void => {
 
 router.get("/strategies/trade-logs", async (req, res): Promise<void> => {
   try {
-    const { fromTimestamp } = req.query as Record<string, string>;
-    const conditions = fromTimestamp
-      ? [gte(tradeLogsTable.executedAt, new Date(fromTimestamp))]
-      : [];
+    const { fromTimestamp, status } = req.query as Record<string, string>;
+    const conditions = [];
+    if (fromTimestamp) conditions.push(gte(tradeLogsTable.executedAt, new Date(fromTimestamp)));
+    if (status && status !== "all") conditions.push(eq(tradeLogsTable.status, status));
     const logs = await db
       .select()
       .from(tradeLogsTable)
