@@ -28,12 +28,15 @@ async function checkAndSquareOff(): Promise<void> {
     if (!settings?.autoSquareOffEnabled) return;
     if (!dhanClient.isConfigured()) return;
 
-    const { timeStr, dateStr } = nowIST();
+    const { hours, minutes, timeStr, dateStr } = nowIST();
     if (!isWeekday(dateStr)) return;
     if (lastSquareOffDate === dateStr) return;
 
     const targetTime = settings.autoSquareOffTime ?? "15:14";
-    if (timeStr !== targetTime) return;
+    const [targetH, targetM] = targetTime.split(":").map(Number);
+    const currentMinutes = hours * 60 + minutes;
+    const targetMinutes = targetH * 60 + targetM;
+    if (Math.abs(currentMinutes - targetMinutes) > 1) return;
 
     lastSquareOffDate = dateStr;
 
