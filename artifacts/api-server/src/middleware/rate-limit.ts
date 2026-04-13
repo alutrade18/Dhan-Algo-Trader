@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { checkRateLimit, ApiCategory } from "../lib/rate-limiter";
+import { checkRateLimit, checkOptionChainRateLimit, ApiCategory } from "../lib/rate-limiter";
 
 function makeRateLimitMiddleware(category: ApiCategory) {
   return function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -11,7 +11,8 @@ function makeRateLimitMiddleware(category: ApiCategory) {
     }
 
     if (!result.allowed) {
-      const retryAfterSec = result.retryAfterMs ? Math.ceil(result.retryAfterMs / 1000) : 1;
+      const retryAfterMs = result.retryAfterMs ?? 1000;
+      const retryAfterSec = Math.ceil(retryAfterMs / 1000);
       res.setHeader("Retry-After", String(retryAfterSec));
       res.status(429).json({
         errorCode: "DH-904",
@@ -20,6 +21,7 @@ function makeRateLimitMiddleware(category: ApiCategory) {
         violatedWindow: result.violatedWindow,
         limit: result.limit,
         retryAfterSeconds: retryAfterSec,
+        retryAfterMs,
       });
       return;
     }
@@ -32,3 +34,29 @@ export const orderRateLimit = makeRateLimitMiddleware("order");
 export const dataRateLimit = makeRateLimitMiddleware("data");
 export const quoteRateLimit = makeRateLimitMiddleware("quote");
 export const nonTradingRateLimit = makeRateLimitMiddleware("nontrading");
+
+// ── Option Chain: 1 request per 3 seconds per underlying+expiry combo ──
+export function optionChainRateLimitMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  const body = req.body as Record<string, unknown>;
+  const key = `${body.underSecurityId ?? ""}:${body.expiry ?? "any"}`;
+  const result = checkOptionChainRateLimit(key);
+
+  if (!result.allowed) {
+    const retryAfterSec = Math.ceil(result.waitMs / 1000);
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.setHeader("X-RateLimit-Category", "option-chain");
+    res.status(429).json({
+      errorCode: "DH-904",
+      errorMessage: `Option Chain rate limit: 1 request per 3 seconds per underlying. Retry after ${retryAfterSec}s.`,
+      category: "option-chain",
+      retryAfterSeconds: retryAfterSec,
+      retryAfterMs: result.waitMs,
+    });
+    return;
+  }
+  next();
+}

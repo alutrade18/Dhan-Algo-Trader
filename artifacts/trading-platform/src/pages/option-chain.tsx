@@ -414,8 +414,8 @@ export default function OptionChain() {
       }>;
     },
     enabled: !!expiry && !!activeDhanSecId && marketStatus.isOpen,
-    refetchInterval: marketStatus.isOpen ? 10_000 : false,
-    staleTime: 8_000,
+    refetchInterval: marketStatus.isOpen ? 3_000 : false,
+    staleTime: 2_500,
     refetchOnWindowFocus: false,
     retry: 0,
   });
@@ -741,7 +741,7 @@ export default function OptionChain() {
         </Card>
       ) : (
         /* ── Option Chain Table ── */
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className={`overflow-x-auto rounded-lg border border-border transition-opacity duration-200 ${isFetching ? "opacity-70" : "opacity-100"}`}>
           <table className="w-full text-xs border-collapse">
             <thead>
               {/* Section labels */}

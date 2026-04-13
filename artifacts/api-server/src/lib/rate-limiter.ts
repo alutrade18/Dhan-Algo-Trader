@@ -180,3 +180,22 @@ export function recordOrderModification(orderId: string): { allowed: boolean; co
 
 const ORDER_MOD_CAP = 25;
 const orderModCounts: Record<string, number> = {};
+
+// ── Option Chain special: 1 request per 3 seconds per underlying+expiry ──
+const optionChainLastCall: Record<string, number> = {};
+
+export function checkOptionChainRateLimit(key: string): { allowed: boolean; waitMs: number } {
+  const now = Date.now();
+  const INTERVAL_MS = 3100; // 3.1 sec buffer (Dhan allows 1 per 3 sec)
+  const last = optionChainLastCall[key] ?? 0;
+  const elapsed = now - last;
+
+  if (elapsed < INTERVAL_MS) {
+    const waitMs = INTERVAL_MS - elapsed;
+    logger.warn({ key, waitMs }, "[RateLimit] Option Chain 3-sec throttle — too fast");
+    return { allowed: false, waitMs };
+  }
+
+  optionChainLastCall[key] = now;
+  return { allowed: true, waitMs: 0 };
+}

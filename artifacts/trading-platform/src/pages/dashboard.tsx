@@ -267,8 +267,8 @@ export default function Dashboard() {
   const { data: funds, isLoading: isFundsLoading } = useGetFundLimits({
     query: {
       queryKey: getGetFundLimitsQueryKey(),
-      refetchInterval: msUntilNext9amIST,
-      staleTime: msUntilNext9amIST(),
+      refetchInterval: 60_000,
+      staleTime: 50_000,
     },
   });
 
@@ -354,8 +354,8 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    refetchInterval: msUntilNext9amIST,
-    staleTime: msUntilNext9amIST(),
+    refetchInterval: 300_000,
+    staleTime: 240_000,
   });
 
   // Period P&L — fetched live from backend.
@@ -382,8 +382,8 @@ export default function Dashboard() {
       return res.json();
     },
     enabled: presetDays !== null,
-    refetchInterval: msUntilNext9amIST,
-    staleTime: msUntilNext9amIST(),
+    refetchInterval: 300_000,
+    staleTime: 240_000,
   });
 
   const dhanKillActive =

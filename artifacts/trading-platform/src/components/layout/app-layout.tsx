@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Sidebar } from "./sidebar";
 import { useHealthCheck, useGetFundLimits, getHealthCheckQueryKey, getGetFundLimitsQueryKey } from "@workspace/api-client-react";
@@ -75,6 +75,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
   const [staticIpError, setStaticIpError] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+  const rateLimitDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -82,6 +84,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handler = () => setStaticIpError(true);
     window.addEventListener("dhan:staticip-error", handler);
     return () => window.removeEventListener("dhan:staticip-error", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { retryAfterMs, message } = (e as CustomEvent<{ retryAfterMs: number; message?: string }>).detail;
+      const sec = Math.ceil(retryAfterMs / 1000);
+      setRateLimitMsg(message ?? `Dhan API rate limit — request throttled. Retrying in ${sec}s…`);
+      if (rateLimitDismissTimer.current) clearTimeout(rateLimitDismissTimer.current);
+      rateLimitDismissTimer.current = setTimeout(() => setRateLimitMsg(null), retryAfterMs + 2000);
+    };
+    window.addEventListener("dhan:rate-limit", handler);
+    return () => {
+      window.removeEventListener("dhan:rate-limit", handler);
+      if (rateLimitDismissTimer.current) clearTimeout(rateLimitDismissTimer.current);
+    };
   }, []);
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
@@ -335,6 +352,16 @@ export function AppLayout({ children }: AppLayoutProps) {
               ⚠️ DH-911: Dhan API blocked — your server IP is not whitelisted. Add it in Dhan developer settings, then reconnect.
             </p>
             <button className="text-xs text-destructive underline underline-offset-2 hover:no-underline" onClick={() => setStaticIpError(false)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+        {rateLimitMsg && (
+          <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2 flex items-center justify-between gap-3">
+            <p className="text-xs text-yellow-500 font-medium">
+              ⏱ {rateLimitMsg}
+            </p>
+            <button className="text-xs text-yellow-500 underline underline-offset-2 hover:no-underline" onClick={() => setRateLimitMsg(null)}>
               Dismiss
             </button>
           </div>

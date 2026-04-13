@@ -1,0 +1,353 @@
+Also find the countdown or refresh indicator text if present and update it to say "3s" not "3 min".
+
+The option chain table should now feel live — data changes every 3 seconds. Make sure the loading indicator (isFetching) shows a subtle pulse on the table while refetching so user knows it's live:
+
+Find the table wrapper div and add a class when `isFetching` is true:
+```tsx
+<div className={cn("overflow-x-auto rounded-md border border-border transition-opacity", isFetching && "opacity-80")}>
+```
+
+=============================================================
+TASK 5: Add Frontend 429 Rate Limit Handler — Graceful Retry
+=============================================================
+
+Create new file: artifacts/trading-platform/src/lib/api-fetch.ts
+
+This is a smart fetch wrapper used by ALL pages that handles 429 gracefully:
+
+```typescript
+interface FetchOptions extends RequestInit {
+  retries?: number;
+  onRateLimit?: (retryAfterMs: number) => void;
+}
+
+export async function apiFetch<T = unknown>(
+  url: string,
+  options: FetchOptions = {}
+): Promise<T> {
+  const { retries = 2, onRateLimit, ...fetchOptions } = options;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(url, fetchOptions);
+
+    if (res.status === 429) {
+      const data = await res.json().catch(() => ({})) as {
+        retryAfterSeconds?: number;
+        retryAfterMs?: number;
+        errorMessage?: string;
+      };
+
+      const retryAfterMs = data.retryAfterMs
+        ?? (data.retryAfterSeconds ? data.retryAfterSeconds * 1000 : 1000);
+
+      // Notify caller (e.g. show toast)
+      if (onRateLimit) onRateLimit(retryAfterMs);
+
+      // Dispatch global event for rate limit banner
+      window.dispatchEvent(new CustomEvent("dhan:rate-limit", {
+        detail: { retryAfterMs, url, message: data.errorMessage }
+      }));
+
+      if (attempt < retries) {
+        // Wait then retry
+        await new Promise(r => setTimeout(r, retryAfterMs));
+        continue;
+      }
+
+      // All retries exhausted
+      throw new Error(data.errorMessage ?? `Rate limit exceeded. Retry after ${Math.ceil(retryAfterMs / 1000)}s`);
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` })) as Record<string, unknown>;
+      throw new Error((err.errorMessage ?? err.error ?? `HTTP ${res.status}`) as string);
+    }
+
+    return res.json() as Promise<T>;
+  }
+
+  throw new Error("Max retries exceeded");
+}
+```
+
+=============================================================
+TASK 6: Add Global Rate Limit Warning Banner
+=============================================================
+
+File: artifacts/trading-platform/src/components/layout/app-layout.tsx
+
+Add rate limit banner (shows when any API hits 429, auto-hides after 5s):
+
+Find the existing state declarations and add:
+```tsx
+const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+
+useEffect(() => {
+  const handler = (e: Event) => {
+    const detail = (e as CustomEvent<{ retryAfterMs: number; message?: string }>).detail;
+    const sec = Math.ceil(detail.retryAfterMs / 1000);
+    setRateLimitMsg(`Rate limit hit — retrying in ${sec}s`);
+    setTimeout(() => setRateLimitMsg(null), Math.max(detail.retryAfterMs + 500, 5000));
+  };
+  window.addEventListener("dhan:rate-limit", handler);
+  return () => window.removeEventListener("dhan:rate-limit", handler);
+}, []);
+```
+
+Add this banner in JSX (above the existing kill switch banner, below the header):
+```tsx
+{rateLimitMsg && (
+  <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-1.5 text-xs text-amber-400 flex items-center justify-between">
+    <span>⏱ {rateLimitMsg}</span>
+    <button onClick={() => setRateLimitMsg(null)} className="opacity-60 hover:opacity-100 ml-4">✕</button>
+  </div>
+)}
+```
+
+=============================================================
+TASK 7: Fix Paper Trading Live Price — Rate Limit Safe
+=============================================================
+
+File: artifacts/trading-platform/src/pages/paper-trading.tsx
+
+Current interval is 5000ms (5 seconds). Quote API allows 1/sec so 5s is fine.
+BUT: if broker is not connected, it keeps hitting the API. Add a guard:
+
+Find the setInterval that calls fetchSelectedPrice and simulateAll:
+```typescript
+const id = setInterval(() => {
+  fetchSelectedPrice();
+  simulateAll();
+}, 5000);
+```
+
+Keep 5000ms — it's within rate limits (1 request per 5 seconds for quote = fine).
+But add error backoff — if quote fetch fails 3 times in a row, increase interval to 15s:
+
+```typescript
+let failCount = 0;
+let intervalMs = 5000;
+let id: ReturnType<typeof setInterval>;
+
+const tick = () => {
+  fetchSelectedPrice()
+    .then(() => { failCount = 0; })
+    .catch(() => {
+      failCount++;
+      if (failCount >= 3 && intervalMs < 15000) {
+        intervalMs = 15000;
+        clearInterval(id);
+        id = setInterval(tick, intervalMs);
+      }
+    });
+  simulateAll();
+};
+
+id = setInterval(tick, intervalMs);
+return () => clearInterval(id);
+```
+
+=============================================================
+TASK 8: Fix Orders Page Auto-Refresh — Respect Rate Limits
+=============================================================
+
+File: artifacts/trading-platform/src/pages/orders.tsx
+
+Current: refreshes every 11,000ms (11 seconds)
+Orders are under non-trading rate limit (20/sec) so 11s is fine. Keep it.
+
+BUT update the auto-refresh to use Socket.io order:update events as PRIMARY,
+and polling as FALLBACK only when WebSocket is not connected:
+
+Find the auto-refresh useEffect and replace:
+```typescript
+useEffect(() => {
+  if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+
+  // Primary: use Socket.io order updates (no polling needed when WS connected)
+  // Check marketSocket connection
+  import("@/lib/market-socket").then(({ marketSocket }) => {
+    const cleanup = marketSocket.onOrderUpdate(() => {
+      // Order update received via WS — refresh orders list
+      void fetchOrders(false);
+    });
+
+    // Fallback polling: only when WS is not connected
+    autoRefreshRef.current = setInterval(() => {
+      if (!marketSocket.isConnected()) {
+        void fetchOrders(false);
+      }
+    }, 15_000); // 15s fallback polling
+
+    return () => {
+      cleanup();
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    };
+  }).catch(() => {
+    // If import fails, just use polling
+    autoRefreshRef.current = setInterval(() => void fetchOrders(false), 15_000);
+  });
+
+  return () => {
+    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+  };
+}, [fetchOrders]);
+```
+
+Also update the countdown display to show "WS Live" when WebSocket is connected, else show countdown:
+```tsx
+// In the JSX countdown area, show WebSocket status:
+const [wsConnected, setWsConnected] = useState(false);
+useEffect(() => {
+  import("@/lib/market-socket").then(({ marketSocket }) => {
+    setWsConnected(marketSocket.isConnected());
+    const interval = setInterval(() => setWsConnected(marketSocket.isConnected()), 3000);
+    return () => clearInterval(interval);
+  }).catch(() => {});
+}, []);
+
+// In JSX:
+{wsConnected ? (
+  <span className="text-xs text-success flex items-center gap-1">
+    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
+    Live via WebSocket
+  </span>
+) : (
+  <span className="text-xs text-muted-foreground">Auto-refresh every 15s</span>
+)}
+```
+
+=============================================================
+TASK 9: Fix Dashboard — Rate-Safe Fund/Summary Refresh
+=============================================================
+
+File: artifacts/trading-platform/src/pages/dashboard.tsx
+
+Dashboard fetches summary, equity curve, period P&L — all with `msUntilNext9amIST` interval which is very long (next day reset). This means data doesn't refresh during the trading day.
+
+Fix: Use appropriate intervals for trading data:
+
+Find all `refetchInterval: msUntilNext9amIST` and replace based on the data type:
+
+1. `dashboard/summary` (P&L, positions count) → `refetchInterval: 30_000` (30 sec, non-trading API)
+2. `dashboard/equity-curve` (chart data) → `refetchInterval: 300_000` (5 min, rarely changes)
+3. `dashboard/period-pnl` (today's P&L) → `refetchInterval: 60_000` (1 min)
+4. `risk/killswitch` → keep `refetchInterval: 15_000` (already correct)
+5. `funds` (available balance) → if fetched in dashboard, `refetchInterval: 60_000`
+
+These are all non-trading APIs (20/sec limit) so even 5-second polling would be fine, but 30-60s is sensible.
+
+=============================================================
+TASK 10: Fix Positions Page — Rate-Safe Live Price via WebSocket
+=============================================================
+
+File: artifacts/trading-platform/src/pages/positions.tsx
+
+(This was already fixed in the previous phase to use marketSocket.subscribe)
+
+Add a fallback: if WebSocket is not connected, poll positions REST API every 30 seconds:
+
+After the existing WebSocket subscribe useEffect, add:
+
+```typescript
+// Fallback REST polling when WebSocket not connected
+useEffect(() => {
+  const check = setInterval(() => {
+    import("@/lib/market-socket").then(({ marketSocket }) => {
+      if (!marketSocket.isConnected()) {
+        void refetch();
+      }
+    }).catch(() => void refetch());
+  }, 30_000);
+  return () => clearInterval(check);
+}, [refetch]);
+```
+
+=============================================================
+TASK 11: Add Rate Limit Stats Display on Logs/Settings Page
+=============================================================
+
+File: artifacts/trading-platform/src/pages/logs.tsx (or settings.tsx if logs not suitable)
+
+Add a "Rate Limit Monitor" section showing live remaining API calls:
+
+```tsx
+function RateLimitMonitor() {
+  const BASE = import.meta.env.BASE_URL;
+  const [stats, setStats] = useState<Record<string, Record<string, number>> | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${BASE}api/rate-limits`);
+        if (res.ok) setStats(await res.json().then((d: any) => d.remaining));
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!stats) return null;
+
+  const categories = [
+    { key: "order", label: "Order APIs", color: "text-blue-400", limits: "10/s · 250/min · 1000/hr · 7000/day" },
+    { key: "data", label: "Data APIs", color: "text-purple-400", limits: "5/s · 100k/day" },
+    { key: "quote", label: "Quote APIs", color: "text-amber-400", limits: "1/s" },
+    { key: "nontrading", label: "Non-Trading", color: "text-gray-400", limits: "20/s" },
+  ];
+
+  return (
+    <div className="rounded-md border border-border bg-card p-4 mb-4">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+        Rate Limit Monitor — Dhan API
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {categories.map(cat => {
+          const s = stats[cat.key] ?? {};
+          return (
+            <div key={cat.key} className="bg-muted/40 rounded-md p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-xs font-medium ${cat.color}`}>{cat.label}</span>
+                <span className="text-[10px] text-muted-foreground">{cat.limits}</span>
+              </div>
+              <div className="space-y-1">
+                {Object.entries(s).map(([window, rem]) => (
+                  <div key={window} className="flex justify-between text-[11px]">
+                    <span className="text-muted-foreground capitalize">{window.replace("_remaining", "")}</span>
+                    <span className={rem === 0 ? "text-destructive font-mono" : "text-foreground font-mono"}>{rem} left</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-2">
+        Option Chain: 1 request / 3 seconds per underlying (special Dhan rule)
+      </p>
+    </div>
+  );
+}
+```
+
+Add `<RateLimitMonitor />` at the top of the Logs page render.
+
+=============================================================
+FINAL VERIFICATION
+=============================================================
+
+After all changes, verify:
+
+1. Option chain refetchInterval is 3_000 (3 seconds) — NOT 180_000
+2. routes/index.ts has super-orders, forever-orders, conditional under orderRateLimit
+3. routes/index.ts has option chain under optionChainRateLimitMiddleware (NOT dataRateLimit)
+4. rate-limiter.ts exports checkOptionChainRateLimit
+5. rate-limit.ts middleware exports optionChainRateLimitMiddleware
+6. apiFetch wrapper exists and handles 429 with retry
+7. app-layout.tsx shows rate limit banner on 429
+8. GET /api/rate-limits endpoint works
+9. Dashboard refetchIntervals are sensible (30s for summary, 60s for P&L)
+
+Run: pnpm run typecheck
+Fix all TypeScript errors before done.

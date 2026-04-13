@@ -1,0 +1,245 @@
+You are working on "Rajesh Algo" — Dhan INTRADAY algo trading platform.
+
+DHAN OFFICIAL RATE LIMITS (implement exactly as per these):
+  Order APIs:      10/sec | 250/min | 1000/hr | 7000/day
+  Data APIs:       5/sec  | 100,000/day
+  Quote APIs:      1/sec  | Unlimited min/hr/day
+  Non-Trading:     20/sec | Unlimited
+  Option Chain:    1 request per 3 seconds (special rule — NOT covered by general data limit)
+  Order Modify:    Max 25 modifications per order (already implemented, keep it)
+
+PROBLEM SUMMARY:
+1. Backend rate-limiter.ts has correct limits BUT routes/index.ts is missing several routes
+2. Option Chain frontend polls every 180,000ms (3 min) — should be every 3,000ms (3 sec per Dhan docs)
+3. Orders auto-refresh is every 11,000ms — fine, keep it
+4. Paper trading live price is every 5,000ms — fine, keep it
+5. Dashboard kill switch check is every 15,000ms — fine
+6. Option chain backend route uses general `dataRateLimit` (5/sec) — needs its own 3-sec throttle
+7. Super orders, forever orders, conditional triggers routes are NOT in the rate limit middleware
+8. Instruments search is NOT rate limited
+9. No frontend-side rate limit guard — if Dhan returns 429, frontend shows crash instead of graceful retry
+10. No `Retry-After` header handling on frontend
+11. Live price on Positions page uses WebSocket (good) but no fallback polling
+
+DO ALL OF THE FOLLOWING:
+
+=============================================================
+TASK 1: Fix Backend Rate Limiter — Add Option Chain Special Limiter
+=============================================================
+
+File: artifacts/api-server/src/lib/rate-limiter.ts
+
+Add a new special rate limiter just for Option Chain (1 request per 3 seconds):
+
+After the existing `orderModCounts` section at the bottom, add:
+
+```typescript
+// Option Chain: 1 unique request per 3 seconds per underlying+expiry combo
+const optionChainLastCall: Record<string, number> = {};
+
+export function checkOptionChainRateLimit(key: string): { allowed: boolean; waitMs: number } {
+  const now = Date.now();
+  const INTERVAL_MS = 3100; // 3.1 sec to be safe (Dhan says 3 sec)
+  const last = optionChainLastCall[key] ?? 0;
+  const elapsed = now - last;
+
+  if (elapsed < INTERVAL_MS) {
+    const waitMs = INTERVAL_MS - elapsed;
+    logger.warn({ key, waitMs }, "[RateLimit] Option Chain 3-sec throttle — too fast");
+    return { allowed: false, waitMs };
+  }
+
+  optionChainLastCall[key] = now;
+  return { allowed: true, waitMs: 0 };
+}
+```
+
+Also export a new API category for option chain in middleware:
+
+File: artifacts/api-server/src/middleware/rate-limit.ts
+
+Add at the bottom:
+
+```typescript
+import { checkOptionChainRateLimit } from "../lib/rate-limiter";
+
+export function optionChainRateLimitMiddleware(
+  req: import("express").Request,
+  res: import("express").Response,
+  next: import("express").NextFunction
+): void {
+  // Build a key from underlying + expiry so different underlyings don't block each other
+  const body = req.body as Record<string, unknown>;
+  const key = `${body.underSecurityId ?? ""}:${body.expiry ?? "any"}`;
+  const result = checkOptionChainRateLimit(key);
+
+  if (!result.allowed) {
+    const retryAfterSec = Math.ceil(result.waitMs / 1000);
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.setHeader("X-RateLimit-Category", "option-chain");
+    res.status(429).json({
+      errorCode: "DH-904",
+      errorMessage: `Option Chain rate limit: 1 request per 3 seconds per underlying. Retry after ${retryAfterSec}s.`,
+      retryAfterSeconds: retryAfterSec,
+      retryAfterMs: result.waitMs,
+    });
+    return;
+  }
+  next();
+}
+```
+
+=============================================================
+TASK 2: Fix routes/index.ts — Apply Rate Limits to ALL Routes
+=============================================================
+
+File: artifacts/api-server/src/routes/index.ts
+
+Replace the entire rate limit middleware section (keep all router.use(xxxRouter) lines as-is, only change the middleware assignments):
+
+```typescript
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import dashboardRouter from "./dashboard";
+import ordersRouter from "./orders";
+import positionsRouter from "./positions";
+import fundsRouter from "./funds";
+import marketRouter from "./market";
+import strategiesRouter from "./strategies";
+import settingsRouter from "./settings";
+import brokerRouter from "./broker";
+import paperTradesRouter from "./paper-trades";
+import riskRouter from "./risk";
+import tradesRouter from "./trades";
+import logsRouter from "./logs";
+import superOrdersRouter from "./super-orders";
+import foreverOrdersRouter from "./forever-orders";
+import conditionalRouter from "./conditional";
+import { createPostbackRouter } from "./postback";
+import { getIO } from "../lib/io";
+import instrumentsRouter from "./instruments";
+import {
+  orderRateLimit,
+  dataRateLimit,
+  quoteRateLimit,
+  nonTradingRateLimit,
+  optionChainRateLimitMiddleware,
+} from "../middleware/rate-limit";
+
+const router: IRouter = Router();
+
+// ── ORDER APIs: 10/sec, 250/min, 1000/hr, 7000/day ──────────────────
+router.use("/orders", orderRateLimit);
+router.use("/super-orders", orderRateLimit);
+router.use("/forever-orders", orderRateLimit);
+router.use("/conditional", orderRateLimit);
+router.use("/positions/exit-single", orderRateLimit); // exit single = order placement
+
+// ── QUOTE APIs: 1/sec (LTP, OHLC, full quote snapshots) ─────────────
+router.use("/market/quote", quoteRateLimit);
+router.use("/market/ltp", quoteRateLimit);
+router.use("/funds/margin", quoteRateLimit); // margin calc uses market data
+
+// ── OPTION CHAIN: 1 per 3 seconds (Dhan special rule) ───────────────
+router.use("/market/option-chain", optionChainRateLimitMiddleware);
+
+// ── DATA APIs: 5/sec, 100,000/day (historical/intraday candles) ──────
+router.use("/market/historical", dataRateLimit);
+router.use("/market/intraday", dataRateLimit);
+router.use("/market/expiry-list", dataRateLimit);
+router.use("/market/option-strikes", dataRateLimit);
+router.use("/market/security-list", dataRateLimit);
+router.use("/market/securities", dataRateLimit);
+
+// ── NON-TRADING APIs: 20/sec (all management & info endpoints) ───────
+router.use([
+  "/health",
+  "/dashboard",
+  "/positions",      // GET positions (read-only)
+  "/funds",          // GET fund limits
+  "/settings",
+  "/broker",
+  "/strategies",
+  "/paper-trades",
+  "/risk",
+  "/trades",
+  "/logs",
+  "/instruments",    // symbol search
+  "/postback",
+], nonTradingRateLimit);
+
+// ── ROUTE REGISTRATIONS ───────────────────────────────────────────────
+router.use(healthRouter);
+router.use(dashboardRouter);
+router.use(ordersRouter);
+router.use(positionsRouter);
+router.use(fundsRouter);
+router.use(marketRouter);
+router.use(strategiesRouter);
+router.use(settingsRouter);
+router.use(brokerRouter);
+router.use(paperTradesRouter);
+router.use(riskRouter);
+router.use(tradesRouter);
+router.use(logsRouter);
+router.use(instrumentsRouter);
+router.use(superOrdersRouter);
+router.use(foreverOrdersRouter);
+router.use(conditionalRouter);
+router.use((req, res, next) => {
+  const io = getIO();
+  if (io) {
+    createPostbackRouter(io)(req, res, next);
+  } else {
+    next();
+  }
+});
+
+export default router;
+```
+
+=============================================================
+TASK 3: Add Rate Limit Status API Endpoint
+=============================================================
+
+File: artifacts/api-server/src/routes/broker.ts
+
+Add this route (shows live rate limit counters for debugging):
+
+```typescript
+import { getRateLimitStats } from "../lib/rate-limiter";
+
+router.get("/rate-limits", (_req, res): Promise<void> => {
+  res.json({
+    limits: {
+      order:      { perSecond: 10, perMinute: 250, perHour: 1000, perDay: 7000 },
+      data:       { perSecond: 5, perDay: 100000 },
+      quote:      { perSecond: 1 },
+      nontrading: { perSecond: 20 },
+      optionChain: { special: "1 per 3 seconds per underlying" },
+    },
+    remaining: getRateLimitStats(),
+    timestamp: new Date().toISOString(),
+  });
+  return Promise.resolve();
+});
+```
+
+=============================================================
+TASK 4: Fix Option Chain Frontend — 3-Second Auto-Refresh
+=============================================================
+
+File: artifacts/trading-platform/src/pages/option-chain.tsx
+
+Find this line:
+```typescript
+refetchInterval: 180_000,
+```
+
+Replace with:
+```typescript
+refetchInterval: 3_000,   // Dhan allows 1 request per 3 seconds for option chain
+staleTime: 2_500,          // consider data stale after 2.5s
+```
+
+Also find the "Auto-refresh every 3 min" text and replace with:

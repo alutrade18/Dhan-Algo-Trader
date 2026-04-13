@@ -22,12 +22,101 @@ import {
   TrendingDown,
   Trash2,
   History,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL;
 const LS_KEY = "log_view_reset_at";
+
+interface RateLimitStats {
+  limits: Record<string, Record<string, number | string>>;
+  remaining: Record<string, Record<string, number>>;
+  timestamp: string;
+}
+
+function RateLimitMonitor() {
+  const { data, isLoading } = useQuery<RateLimitStats>({
+    queryKey: ["rate-limit-stats"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/rate-limits`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    refetchInterval: 5_000,
+    staleTime: 3_000,
+  });
+
+  const categories = [
+    { key: "order",      label: "Order API",       limits: "10/sec · 250/min · 1000/hr · 7000/day", color: "text-blue-400" },
+    { key: "data",       label: "Data API",         limits: "5/sec · 100K/day",                       color: "text-green-400" },
+    { key: "quote",      label: "Quote API",        limits: "1/sec",                                  color: "text-yellow-400" },
+    { key: "nontrading", label: "Non-Trading API",  limits: "20/sec",                                 color: "text-purple-400" },
+  ];
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Activity className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">Dhan API Rate Limit Monitor</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">Live · refreshes every 5s</span>
+        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {categories.map((c) => <Skeleton key={c.key} className="h-16 w-full" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {categories.map((cat) => {
+              const rem = data?.remaining?.[cat.key] ?? {};
+              const perSecRem = rem["perSecond_remaining"] ?? rem["second"];
+              const perMinRem = rem["perMinute_remaining"] ?? rem["minute"];
+              const perHrRem  = rem["perHour_remaining"]   ?? rem["hour"];
+              const perDayRem = rem["perDay_remaining"]    ?? rem["day"];
+              return (
+                <div key={cat.key} className="rounded-md border border-border bg-muted/30 p-3 space-y-1.5">
+                  <div className={`text-xs font-semibold ${cat.color}`}>{cat.label}</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">{cat.limits}</div>
+                  <div className="pt-1 space-y-0.5">
+                    {perSecRem !== undefined && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-muted-foreground">Per second</span>
+                        <span className="font-mono font-medium text-foreground">{String(perSecRem)} left</span>
+                      </div>
+                    )}
+                    {perMinRem !== undefined && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-muted-foreground">Per minute</span>
+                        <span className="font-mono font-medium text-foreground">{String(perMinRem)} left</span>
+                      </div>
+                    )}
+                    {perHrRem !== undefined && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-muted-foreground">Per hour</span>
+                        <span className="font-mono font-medium text-foreground">{String(perHrRem)} left</span>
+                      </div>
+                    )}
+                    {perDayRem !== undefined && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-muted-foreground">Per day</span>
+                        <span className="font-mono font-medium text-foreground">{String(perDayRem)} left</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Option Chain: 1 request per 3 seconds per underlying (Dhan special rule) · Order modification cap: 25 per order
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 const LS_TRADE_KEY = "trade_log_view_reset_at";
 const LIMIT = 200;
 
@@ -649,6 +738,8 @@ export default function Logs() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <RateLimitMonitor />
     </div>
   );
 }

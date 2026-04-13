@@ -4,6 +4,7 @@ import { db, settingsTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { marketFeedWS } from "../lib/market-feed-ws";
 import { orderUpdateWS } from "../lib/order-update-ws";
+import { getRateLimitStats } from "../lib/rate-limiter";
 
 const router: IRouter = Router();
 
@@ -195,6 +196,21 @@ router.get("/broker/status", async (_req, res): Promise<void> => {
       maskedClientId,
     });
   }
+});
+
+// GET /rate-limits — Live rate limit counters for all API categories
+router.get("/rate-limits", (_req, res): void => {
+  res.json({
+    limits: {
+      order:       { perSecond: 10, perMinute: 250, perHour: 1000, perDay: 7000 },
+      data:        { perSecond: 5, perDay: 100000 },
+      quote:       { perSecond: 1 },
+      nontrading:  { perSecond: 20 },
+      optionChain: { special: "1 per 3 seconds per underlying" },
+    },
+    remaining: getRateLimitStats(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export default router;
