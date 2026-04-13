@@ -11,17 +11,26 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { ShieldAlert, TrendingUp, TrendingDown, Clock, Save, WifiOff } from "lucide-react";
+import {
+  ShieldAlert, TrendingUp, TrendingDown, Clock, Save, WifiOff,
+  Power, Lock, Eye, EyeOff, Trash2, CheckCircle2,
+} from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 const riskSchema = z.object({ maxDailyLoss: z.coerce.number().min(0) });
-const pnlExitSchema = z.object({ profitValue: z.coerce.number().min(1), lossValue: z.coerce.number().min(1), enableKillSwitch: z.boolean().default(false) });
+const pnlExitSchema = z.object({
+  profitValue: z.coerce.number().min(1),
+  lossValue: z.coerce.number().min(1),
+  enableKillSwitch: z.boolean().default(false),
+});
 
 interface SettingsData {
   id: number; apiConnected: boolean; maxDailyLoss: number | null;
   autoSquareOffEnabled: boolean; autoSquareOffTime: string;
+  hasKillSwitchPin: boolean;
 }
 interface PnlExitStatus { pnlExitStatus?: string; profit?: string; loss?: string; productType?: string[]; enable_kill_switch?: boolean }
+interface KillSwitchStatus { killSwitchStatus?: string; isActive?: boolean; canDeactivateToday?: boolean; deactivationsUsed?: number }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm ${className}`}>{children}</div>;
@@ -62,6 +71,20 @@ export default function RiskManager() {
   const [pnlActive, setPnlActive] = useState(false);
   const [pnlLoaded, setPnlLoaded] = useState(false);
 
+  const [optimisticKsActive, setOptimisticKsActive] = useState<boolean | null>(null);
+  const [pinDialogFor, setPinDialogFor] = useState<string | null>(null);
+  const [pinVerifyInput, setPinVerifyInput] = useState("");
+
+  const [pinInput, setPinInput] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [showPin, setShowPin] = useState(false);
+
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirming">("idle");
+  const [deletePinEntry, setDeletePinEntry] = useState("");
+  const [deletePinConfirm, setDeletePinConfirm] = useState("");
+  const [showDeletePin, setShowDeletePin] = useState(false);
+  const [showDeleteConfirmPin, setShowDeleteConfirmPin] = useState(false);
+
   useEffect(() => {
     if (!settingsData) return;
     setAutoSquareOffEnabled(settingsData.autoSquareOffEnabled ?? false);
@@ -79,6 +102,14 @@ export default function RiskManager() {
     queryKey: ["pnl-exit-status"], enabled: isConnected, staleTime: 0, gcTime: 0, refetchInterval: 15_000,
     queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/pnl-exit`, { cache: "no-store" }); if (!r.ok) return {}; return r.json(); },
   });
+  const { data: ksStatus, refetch: refetchKs } = useQuery<KillSwitchStatus>({
+    queryKey: ["killswitch-status"], enabled: isConnected, refetchInterval: 15000, staleTime: 0, gcTime: 0,
+    queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/killswitch`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }); if (!r.ok) return {}; return r.json(); },
+  });
+
+  const killSwitchActive = optimisticKsActive !== null ? optimisticKsActive
+    : (ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE");
+  const canDeactivate = ksStatus?.canDeactivateToday !== false;
 
   useEffect(() => {
     if (pnlStatus && !pnlLoaded) {
@@ -122,17 +153,78 @@ export default function RiskManager() {
     onSuccess: () => { setPnlActive(false); setPnlLoaded(false); void refetchPnl(); toast({ title: "P&L Exit Stopped" }); },
     onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
+  const killSwitchMutation = useMutation({
+    mutationFn: async (status: "ACTIVATE" | "DEACTIVATE") => {
+      const res = await fetch(`${BASE}api/risk/killswitch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      const json = await res.json() as KillSwitchStatus & { error?: string; code?: string };
+      if (!res.ok) throw { message: json.error ?? "Failed", code: (json as Record<string, unknown>).code };
+      return json;
+    },
+    onSuccess: (_data, status) => {
+      setOptimisticKsActive(status === "ACTIVATE");
+      setTimeout(() => { setOptimisticKsActive(null); void refetchKs(); }, 2000);
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      toast({ title: status === "ACTIVATE" ? "Kill Switch Activated" : "Kill Switch Deactivated", variant: status === "ACTIVATE" ? "destructive" : "default", description: status === "ACTIVATE" ? "All order placement blocked." : "Trading resumed." });
+    },
+    onError: (err: { message?: string; code?: string }) => {
+      if (err.code === "DAILY_LIMIT_REACHED") toast({ title: "Daily Limit Reached", description: "Auto-resets at midnight IST.", variant: "destructive" });
+      else toast({ title: "Kill switch error", description: err.message ?? "Failed", variant: "destructive" });
+    },
+  });
+
+  function handleKillSwitchAction(status: "ACTIVATE" | "DEACTIVATE") {
+    if (settingsData?.hasKillSwitchPin) setPinDialogFor(status);
+    else killSwitchMutation.mutate(status);
+  }
+  async function verifyPinAndProceed() {
+    if (!pinDialogFor) return;
+    const res = await fetch(`${BASE}api/settings/verify-pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: pinVerifyInput }) });
+    const data = await res.json() as { valid: boolean };
+    if (data.valid) { killSwitchMutation.mutate(pinDialogFor as "ACTIVATE" | "DEACTIVATE"); setPinDialogFor(null); setPinVerifyInput(""); }
+    else toast({ title: "Incorrect PIN", variant: "destructive" });
+  }
+
+  function resetDeleteFlow() {
+    setDeleteStep("idle");
+    setDeletePinEntry("");
+    setDeletePinConfirm("");
+    setShowDeletePin(false);
+    setShowDeleteConfirmPin(false);
+  }
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-3 gap-4 w-full">
-        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
+      <div className="space-y-4 w-full">
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton className="col-span-2 h-44 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+
+      {/* PIN Verify Dialog */}
+      {pinDialogFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-background border border-border rounded-2xl p-6 w-80 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-2"><Lock className="w-5 h-5 text-amber-400" /><h3 className="font-semibold">Kill Switch PIN Required</h3></div>
+            <p className="text-xs text-muted-foreground">Enter your 4-digit PIN to {pinDialogFor === "ACTIVATE" ? "activate" : "deactivate"} the kill switch.</p>
+            <Input type="password" placeholder="••••" maxLength={4} value={pinVerifyInput} onChange={e => setPinVerifyInput(e.target.value)} onKeyDown={e => e.key === "Enter" && void verifyPinAndProceed()} className="text-center text-xl tracking-widest font-mono" />
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => { setPinDialogFor(null); setPinVerifyInput(""); }}>Cancel</Button>
+              <Button size="sm" className="flex-1" onClick={() => void verifyPinAndProceed()} disabled={pinVerifyInput.length < 4}>Confirm</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Row 1: Risk Management | P&L Based Exit | Auto Square-Off ── */}
       <div className="grid grid-cols-3 gap-4 items-start">
 
         {/* Risk Management */}
@@ -246,6 +338,210 @@ export default function RiskManager() {
             <Button size="sm" className="w-full h-9" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
               <Save className="w-3.5 h-3.5 mr-1.5" />Save Timer
             </Button>
+          </div>
+        </Card>
+
+      </div>
+
+      {/* ── Row 2: Emergency Kill Switch (2-wide) | Kill Switch PIN (1-wide) ── */}
+      <div className="grid grid-cols-3 gap-4 items-start">
+
+        {/* Emergency Kill Switch */}
+        <Card className={`col-span-2 ${killSwitchActive ? "border-destructive/40" : ""}`}>
+          <CardHeader
+            icon={<Power className={`w-3.5 h-3.5 ${killSwitchActive ? "text-destructive" : "text-muted-foreground"}`} />}
+            iconBg={killSwitchActive ? "bg-destructive/20" : "bg-muted/20"}
+            title="Emergency Kill Switch"
+            badge={
+              <div className="flex items-center gap-2">
+                {settingsData?.hasKillSwitchPin && (
+                  <Badge variant="outline" className="text-[10px] h-5 text-amber-400 border-amber-500/30 gap-1">
+                    <Lock className="w-2.5 h-2.5" />PIN Protected
+                  </Badge>
+                )}
+                {killSwitchActive
+                  ? <Badge className="text-[10px] h-5 bg-destructive/20 text-destructive border border-destructive/30 shadow-none">ACTIVE</Badge>
+                  : <Badge variant="outline" className="text-[10px] h-5 text-green-400 border-green-500/30">INACTIVE</Badge>
+                }
+              </div>
+            }
+          />
+          <div className="px-6 py-6">
+            {!isConnected ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <WifiOff className="w-3.5 h-3.5" />Connect broker first to use kill switch.
+              </div>
+            ) : killSwitchActive ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 py-3 px-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium">
+                  <Power className="w-4 h-4 shrink-0" />
+                  <span>All order placement is currently blocked.</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-10 gap-2 px-6 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/10" : "opacity-40 cursor-not-allowed"}`}
+                  disabled={killSwitchMutation.isPending || !canDeactivate}
+                  onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
+                >
+                  <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Deactivating…" : "Deactivate Kill Switch"}
+                </Button>
+                {!canDeactivate && <p className="text-[11px] text-muted-foreground">Daily deactivation limit reached. Resets at midnight IST.</p>}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">Instantly halts all new order placement across all strategies. Use in emergencies only.</p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-10 gap-2 px-6 text-sm"
+                  disabled={killSwitchMutation.isPending}
+                  onClick={() => handleKillSwitchAction("ACTIVATE")}
+                >
+                  <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Activating…" : "Activate Kill Switch"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Kill Switch PIN */}
+        <Card>
+          <CardHeader
+            icon={<Lock className="w-3.5 h-3.5 text-amber-400" />}
+            iconBg="bg-amber-500/15"
+            title="Kill Switch PIN"
+            badge={
+              settingsData?.hasKillSwitchPin
+                ? <Badge variant="outline" className="text-[10px] h-5 text-amber-400 border-amber-500/30 gap-1"><Lock className="w-2.5 h-2.5" />Set</Badge>
+                : <Badge variant="outline" className="text-[10px] h-5 text-muted-foreground border-border/50">Not Set</Badge>
+            }
+          />
+          <div className="px-5 pt-3 pb-5 space-y-3">
+
+            {/* Set / Change PIN */}
+            {settingsData?.hasKillSwitchPin && (
+              <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <Lock className="w-3 h-3 shrink-0" />PIN active — enter new PIN below to change.
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {settingsData?.hasKillSwitchPin ? "New PIN" : "Set PIN"}
+              </label>
+              <div className="relative">
+                <Input
+                  type={showPin ? "text" : "password"}
+                  placeholder="••••"
+                  maxLength={4}
+                  className="h-9 text-center font-mono tracking-widest pr-9"
+                  value={pinInput}
+                  onChange={e => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                />
+                <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPin(!showPin)}>
+                  {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Confirm PIN</label>
+              <Input
+                type="password"
+                placeholder="••••"
+                maxLength={4}
+                className={`h-9 text-center font-mono tracking-widest ${pinInput && pinConfirm && pinInput !== pinConfirm ? "border-destructive" : ""}`}
+                value={pinConfirm}
+                onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              />
+              {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-[10px] text-destructive">PINs do not match</p>}
+            </div>
+            <Button
+              size="sm"
+              className="w-full h-9 gap-1.5"
+              disabled={pinInput.length !== 4 || pinInput !== pinConfirm || genericSaveMutation.isPending}
+              onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: settingsData?.hasKillSwitchPin ? "PIN updated" : "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}
+            >
+              <Lock className="w-3.5 h-3.5" />{settingsData?.hasKillSwitchPin ? "Update PIN" : "Set PIN"}
+            </Button>
+
+            {/* Delete PIN — requires re-entering PIN */}
+            {settingsData?.hasKillSwitchPin && (
+              <div className="border-t border-border/30 pt-3 space-y-2">
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Delete PIN</label>
+
+                {deleteStep === "idle" && (
+                  <>
+                    <div className="relative">
+                      <Input
+                        type={showDeletePin ? "text" : "password"}
+                        placeholder="Enter current PIN"
+                        maxLength={4}
+                        className="h-9 text-center font-mono tracking-widest pr-9"
+                        value={deletePinEntry}
+                        onChange={e => setDeletePinEntry(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      />
+                      <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowDeletePin(!showDeletePin)}>
+                        {showDeletePin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    {deletePinEntry.length === 4 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-9 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteStep("confirming")}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />Delete PIN
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                {deleteStep === "confirming" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                      <Trash2 className="w-3 h-3 shrink-0" />Enter the same PIN again to confirm deletion.
+                    </div>
+                    <div className="relative">
+                      <Input
+                        type={showDeleteConfirmPin ? "text" : "password"}
+                        placeholder="Re-enter PIN to confirm"
+                        maxLength={4}
+                        className={`h-9 text-center font-mono tracking-widest pr-9 ${deletePinConfirm.length === 4 && deletePinConfirm !== deletePinEntry ? "border-destructive" : ""}`}
+                        value={deletePinConfirm}
+                        onChange={e => setDeletePinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                        autoFocus
+                      />
+                      <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowDeleteConfirmPin(!showDeleteConfirmPin)}>
+                        {showDeleteConfirmPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    {deletePinConfirm.length === 4 && deletePinConfirm !== deletePinEntry && (
+                      <p className="text-[10px] text-destructive">PINs do not match</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-9 text-xs"
+                        onClick={resetDeleteFlow}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="flex-1 h-9 gap-1.5 text-xs"
+                        disabled={deletePinConfirm.length !== 4 || deletePinConfirm !== deletePinEntry || genericSaveMutation.isPending}
+                        onClick={() => { void genericSaveMutation.mutateAsync({ clearKillSwitchPin: true }).then(() => { toast({ title: "PIN removed" }); resetDeleteFlow(); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />Confirm Delete
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </Card>
 
