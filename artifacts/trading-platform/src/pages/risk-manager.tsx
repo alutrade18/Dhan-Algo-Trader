@@ -403,19 +403,6 @@ export default function RiskManager() {
               </span>
             </div>
 
-            {/* Reset quota info — from API */}
-            {isConnected && (
-              <div className="flex items-center justify-between rounded-xl bg-muted/15 border border-border/30 px-4 py-2.5">
-                <span className="text-xs text-muted-foreground">Daily Deactivation Resets</span>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold tabular-nums ${canDeactivate ? "text-green-400" : "text-destructive"}`}>
-                    {canDeactivate ? "1 Available" : "0 Remaining"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">/ 1 total</span>
-                </div>
-              </div>
-            )}
-
             {/* Action buttons */}
             <div className="mt-auto">
               {!isConnected ? (
