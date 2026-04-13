@@ -1,6 +1,28 @@
 import { Response } from "express";
 import { DhanApiError } from "./dhan-client";
 import { logger } from "./logger";
+import { sendTelegramAlert } from "./telegram";
+
+const ALERT_CODES = new Set(["DH-901", "DH-905"]);
+const alertCooldown = new Map<string, number>();
+const COOLDOWN_MS = 15 * 60 * 1_000; // 15 min — don't spam
+
+function maybeSendCriticalAlert(errorCode: string, context: string) {
+  const now = Date.now();
+  const last = alertCooldown.get(errorCode) ?? 0;
+  if (now - last < COOLDOWN_MS) return;
+  alertCooldown.set(errorCode, now);
+
+  if (errorCode === "DH-901") {
+    void sendTelegramAlert(
+      "🔴 *TOKEN EXPIRED (DH\\-901)*\n\nYour Dhan access token has expired\\. Orders and live data will fail until you reconnect\\.\n\n*Action:* Go to Settings → paste a new access token\\.",
+    );
+  } else if (errorCode === "DH-905") {
+    void sendTelegramAlert(
+      "🔴 *IP NOT WHITELISTED (DH\\-905)*\n\nYour server IP is not whitelisted in the Dhan portal\\. Order APIs are blocked\\.\n\n*Action:* Dhan Portal → My Profile → Manage App → whitelist your server IP\\.",
+    );
+  }
+}
 
 export function handleRouteError(
   res: Response,
@@ -10,6 +32,11 @@ export function handleRouteError(
   if (err instanceof DhanApiError) {
     const body = err.toClientResponse();
     logger.warn({ context, errorCode: body.errorCode }, `${context}: ${body.errorMessage}`);
+
+    if (ALERT_CODES.has(body.errorCode)) {
+      maybeSendCriticalAlert(body.errorCode, context);
+    }
+
     res.status(err.status).json(body);
     return;
   }

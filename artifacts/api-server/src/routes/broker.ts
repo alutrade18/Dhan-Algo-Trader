@@ -58,7 +58,7 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
     const settings = await getOrCreateSettings();
     await db
       .update(settingsTable)
-      .set({ brokerClientId: cid, brokerAccessToken: encryptToken(token) })
+      .set({ brokerClientId: cid, brokerAccessToken: encryptToken(token), tokenGeneratedAt: new Date() })
       .where(eq(settingsTable.id, settings.id));
 
     req.log.info({ clientId: "****" + cid.slice(-4) }, "Broker credentials verified and saved to DB");
@@ -158,9 +158,31 @@ router.get("/broker/token-info", async (_req, res): Promise<void> => {
       res.json({ hasToken: false });
       return;
     }
-    res.json({ hasToken: true, tokenUpdatedAt: settings.updatedAt });
+    res.json({
+      hasToken: true,
+      tokenGeneratedAt: settings.tokenGeneratedAt?.toISOString() ?? null,
+    });
   } catch {
     res.json({ hasToken: false });
+  }
+});
+
+// GET /broker/server-ip — Returns the server's outbound public IP (for Dhan whitelist)
+let cachedServerIp: string | null = null;
+let ipCachedAt = 0;
+router.get("/broker/server-ip", async (_req, res): Promise<void> => {
+  try {
+    if (cachedServerIp && Date.now() - ipCachedAt < 5 * 60 * 1_000) {
+      res.json({ ip: cachedServerIp });
+      return;
+    }
+    const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(4_000) });
+    const { ip } = (await r.json()) as { ip: string };
+    cachedServerIp = ip;
+    ipCachedAt = Date.now();
+    res.json({ ip });
+  } catch {
+    res.json({ ip: null, error: "Could not determine server IP" });
   }
 });
 

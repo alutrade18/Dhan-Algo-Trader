@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
-  Bell, AlertTriangle, Send,
+  Bell, AlertTriangle, Send, Server, Copy, ExternalLink, RefreshCw,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -35,27 +35,146 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</p>;
 }
 
-function TokenExpiryWarning() {
-  const [info, setInfo] = useState<{ hasToken: boolean; tokenUpdatedAt?: string } | null>(null);
-  useEffect(() => { fetch(`${BASE}api/broker/token-info`).then(r => r.json()).then(setInfo).catch(() => {}); }, []);
-  if (!info?.hasToken || !info.tokenUpdatedAt) return null;
-  const expiresAt = new Date(new Date(info.tokenUpdatedAt).getTime() + 24 * 60 * 60 * 1000);
+function useTokenInfo() {
+  const [info, setInfo] = useState<{ hasToken: boolean; tokenGeneratedAt?: string | null } | null>(null);
+  const load = () => {
+    fetch(`${BASE}api/broker/token-info`).then(r => r.json()).then(setInfo).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+  return { info, reload: load };
+}
+
+function useServerIp() {
+  const [ip, setIp] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const load = () => {
+    setLoading(true);
+    fetch(`${BASE}api/broker/server-ip`).then(r => r.json()).then((d: { ip: string | null }) => { setIp(d.ip); setLoading(false); }).catch(() => { setLoading(false); });
+  };
+  useEffect(() => { load(); }, []);
+  return { ip, loading, reload: load };
+}
+
+function TokenExpiryBanner({ onReconnect }: { onReconnect: () => void }) {
+  const { info, reload } = useTokenInfo();
+  const { toast } = useToast();
+  const [renewing, setRenewing] = useState(false);
+
+  if (!info?.hasToken || !info.tokenGeneratedAt) return null;
+  const expiresAt = new Date(new Date(info.tokenGeneratedAt).getTime() + 24 * 60 * 60 * 1000);
   const hoursLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
   if (hoursLeft > 4) return null;
+
+  const expired = hoursLeft <= 0;
+
+  const handleRenew = async () => {
+    setRenewing(true);
+    try {
+      const res = await fetch(`${BASE}api/broker/renew-token`, { method: "POST" });
+      const d = await res.json() as { success?: boolean };
+      if (d.success) {
+        toast({ title: "Token renewed successfully" });
+        reload();
+      } else {
+        toast({ title: "Auto-renew not available", description: "Dhan does not support API token renewal. Paste a fresh token in the Broker Connection form.", variant: "destructive" });
+        onReconnect();
+      }
+    } finally {
+      setRenewing(false);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-warning/40 bg-warning/8 px-5 py-3 col-span-2">
-      <div className="flex items-center gap-2.5">
-        <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-        <p className="text-xs font-medium text-warning">
-          Access token expires in <span className="font-bold">~{Math.max(0, Math.floor(hoursLeft))}h {Math.floor((hoursLeft % 1) * 60)}m</span> — renew to stay connected.
-        </p>
+    <div className={`col-span-2 flex items-start justify-between gap-3 rounded-2xl border px-5 py-3.5 ${expired ? "border-destructive/40 bg-destructive/8" : "border-warning/40 bg-warning/8"}`}>
+      <div className="flex items-start gap-2.5">
+        <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${expired ? "text-destructive" : "text-warning"}`} />
+        <div>
+          <p className={`text-sm font-semibold ${expired ? "text-destructive" : "text-warning"}`}>
+            {expired ? "Access token expired — orders will fail" : `Token expires in ~${Math.max(0, Math.floor(hoursLeft))}h ${Math.floor((hoursLeft % 1) * 60)}m`}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Dhan tokens are valid for 24 hours. Generate a new token from <span className="font-semibold">Dhan Web → My Profile → Access Token</span> and paste it below.
+          </p>
+        </div>
       </div>
       <button
-        className="text-xs font-semibold text-warning border border-warning/50 px-3 py-1.5 rounded-lg hover:bg-warning/15 transition-colors whitespace-nowrap"
-        onClick={async () => { const res = await fetch(`${BASE}api/broker/renew-token`, { method: "POST" }); const d = await res.json(); alert(d.success ? "Token renewed!" : "Renewal failed."); }}
+        disabled={renewing}
+        className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap shrink-0 ${expired ? "border-destructive/50 text-destructive hover:bg-destructive/15" : "border-warning/50 text-warning hover:bg-warning/15"}`}
+        onClick={() => void handleRenew()}
       >
-        Renew Now
+        {renewing ? "Trying…" : expired ? "Reconnect Now" : "Reconnect"}
       </button>
+    </div>
+  );
+}
+
+function ServerIpInfo() {
+  const { ip, loading, reload } = useServerIp();
+  const { toast } = useToast();
+
+  const copy = () => {
+    if (!ip) return;
+    void navigator.clipboard.writeText(ip).then(() => toast({ title: "IP copied to clipboard" }));
+  };
+
+  return (
+    <div className="col-span-2 rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+      <div className="px-5 py-3.5 border-b border-border/30 bg-muted/5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+            <Server className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Server IP — Dhan Whitelist</p>
+            <p className="text-[10px] text-muted-foreground">Required for order APIs to work on VPS</p>
+          </div>
+        </div>
+        <button onClick={reload} className="text-muted-foreground hover:text-foreground transition-colors">
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="px-5 py-4 flex items-start gap-6 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Your Server's Public IP</p>
+          <div className="flex items-center gap-2">
+            {loading ? (
+              <div className="h-9 w-40 rounded-lg bg-muted/30 animate-pulse" />
+            ) : ip ? (
+              <>
+                <code className="font-mono text-base font-bold text-foreground bg-muted/20 border border-border/40 px-3 py-1.5 rounded-lg select-all">{ip}</code>
+                <button onClick={copy} className="text-muted-foreground hover:text-primary transition-colors" title="Copy IP">
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">Unable to detect — check network</span>
+            )}
+          </div>
+        </div>
+        <div className="flex-1 min-w-[220px] space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">How to whitelist (do this once per server)</p>
+          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+            <li>Go to <span className="text-foreground font-medium">Dhan Web → My Profile → Manage App</span></li>
+            <li>Select your app and click <span className="text-foreground font-medium">Whitelist IP</span></li>
+            <li>Add the IP shown above and save</li>
+            <li>Reconnect your broker in the form below</li>
+          </ol>
+          <a
+            href="https://developer.dhan.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+          >
+            Open Dhan Developer Portal <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+        <div className="w-full rounded-xl border border-warning/25 bg-warning/8 px-4 py-2.5 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
+          <p className="text-xs text-warning">
+            <span className="font-semibold">DH-905 on order APIs</span> = your IP is not whitelisted. Fund/market data APIs work from any IP but order placement, modification and cancellation require IP whitelisting.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -163,7 +282,8 @@ export default function Settings() {
 
   return (
     <div className="grid grid-cols-2 gap-4 w-full items-stretch">
-      <TokenExpiryWarning />
+      <TokenExpiryBanner onReconnect={() => brokerForm.setFocus("accessToken")} />
+      <ServerIpInfo />
 
       {/* ── Broker Connection ── */}
       <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-success/30 bg-card" : "border-border/50 bg-card"}`}>
