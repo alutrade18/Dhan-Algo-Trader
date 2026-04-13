@@ -203,66 +203,30 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
     from.setDate(from.getDate() - (days - 1));
     const fromStr = from.toISOString().split("T")[0];
 
-    const ledgerResult = await dhanClient.getLedger(fromStr, toStr)
+    // Use trade history (realizedProfit per executed trade) for pure trading P&L.
+    // This completely excludes brokerage charges, STT, exchange fees,
+    // Data API subscription costs, or any other non-trade debits from the ledger.
+    const tradesResult = await dhanClient.getAllTradeHistory(fromStr, toStr)
       .catch(() => null);
 
-    if (!ledgerResult) {
-      res.status(500).json({ error: "Ledger fetch failed" });
+    if (!tradesResult) {
+      res.status(500).json({ error: "Trade history fetch failed" });
       return;
     }
 
-    const entries = Array.isArray(ledgerResult)
-      ? (ledgerResult as Record<string, unknown>[])
+    const trades = Array.isArray(tradesResult)
+      ? (tradesResult as Record<string, unknown>[])
       : [];
 
-    // Direct P&L sum: add up only trade/settlement entries, exclude all fund flows.
-    // This avoids the "opening balance = 0" and "unsettled deposit" pitfalls
-    // that plagued the currentBalance-based formula.
-    //
-    //   periodPnl = Σ credit(trade entries) − Σ debit(trade entries)
-    //
-    // "Trade entries" = everything that is NOT:
-    //   • OPENING BALANCE / CLOSING BALANCE
-    //   • A deposit (FUNDS DEPOSITED, NEFT, UPI, ONLINE TRANSFER, etc.)
-    //   • A withdrawal (FUNDS WITHDRAW, PAYOUT, etc.)
-
     let periodPnl = 0;
-    const debug = req.query.debug === "true";
-    const tradeEntries: unknown[] = [];
-    const skippedEntries: unknown[] = [];
-
-    for (const e of entries) {
-      const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
-
-      // Always skip opening/closing balance rows
-      if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
-
-      const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
-      const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
-      const safeCredit = isNaN(credit) ? 0 : credit;
-      const safeDebit  = isNaN(debit)  ? 0 : debit;
-
-      if (safeCredit === 0 && safeDebit === 0) continue;
-
-      // Skip fund flows — they are NOT profit or loss
-      if (isFundFlow(narr)) {
-        if (debug) skippedEntries.push({ narr: e.narration, credit: safeCredit, debit: safeDebit, date: e.voucherdate, reason: "fund_flow" });
-        continue;
-      }
-
-      // This is a genuine trading / settlement / charge entry
-      periodPnl += safeCredit - safeDebit;
-      if (debug) tradeEntries.push({ narr: e.narration, credit: safeCredit, debit: safeDebit, net: safeCredit - safeDebit, date: e.voucherdate });
+    for (const t of trades) {
+      const profit = parseFloat(String(t.realizedProfit ?? t.profit ?? "0"));
+      if (!isNaN(profit)) periodPnl += profit;
     }
 
     periodPnl = Math.round(periodPnl * 100) / 100;
 
-    if (debug) {
-      res.json({ periodPnl, days, fromStr, toStr, tradeEntries, skippedEntries });
-      return;
-    }
-
-    res.json({ periodPnl, days });
+    res.json({ periodPnl, days, tradeCount: trades.length });
   } catch (e) {
     req.log.error({ err: e }, "Period P&L error");
     res.status(500).json({ error: "Failed to compute period P&L" });
