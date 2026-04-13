@@ -9,6 +9,7 @@ import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
 import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
 import { startSuperOrderMonitor } from "./lib/super-order-monitor";
+import { startKillSwitchScheduler } from "./routes/risk";
 import { decryptToken } from "./lib/crypto-utils";
 
 const rawPort = process.env["PORT"];
@@ -77,6 +78,7 @@ loadSavedCredentials().then(() => {
     logger.info({ port }, "Server listening");
     startAutoSquareOffScheduler();
     startSuperOrderMonitor();
+    startKillSwitchScheduler();
   });
 });
 

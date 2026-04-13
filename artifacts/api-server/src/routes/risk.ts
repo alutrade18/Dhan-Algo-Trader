@@ -71,8 +71,11 @@ async function autoDeactivateKillSwitch() {
   }
 }
 
-function startKillSwitchScheduler() {
-  setInterval(() => {
+let killSwitchSchedulerInterval: ReturnType<typeof setInterval> | null = null;
+
+export function startKillSwitchScheduler() {
+  if (killSwitchSchedulerInterval) return;
+  killSwitchSchedulerInterval = setInterval(() => {
     const now = new Date();
     // Convert to IST (UTC+5:30) and check for midnight (00:00 IST)
     const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
@@ -84,8 +87,6 @@ function startKillSwitchScheduler() {
     }
   }, 60 * 1000);
 }
-
-startKillSwitchScheduler();
 
 router.get("/risk/killswitch", async (_req, res): Promise<void> => {
   noCache(res);
