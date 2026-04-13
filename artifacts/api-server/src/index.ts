@@ -9,6 +9,7 @@ import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
 import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
 import { startSuperOrderMonitor } from "./lib/super-order-monitor";
+import { decryptToken } from "./lib/crypto-utils";
 
 const rawPort = process.env["PORT"];
 
@@ -56,10 +57,11 @@ async function loadSavedCredentials() {
   try {
     const [settings] = await db.select().from(settingsTable);
     if (settings?.brokerClientId && settings?.brokerAccessToken) {
-      dhanClient.configure(settings.brokerClientId, settings.brokerAccessToken);
+      const token = decryptToken(settings.brokerAccessToken);
+      dhanClient.configure(settings.brokerClientId, token);
       logger.info({ clientId: "****" + settings.brokerClientId.slice(-4) }, "Loaded broker credentials from database");
-      marketFeedWS.configure(settings.brokerClientId, settings.brokerAccessToken);
-      orderUpdateWS.configure(settings.brokerClientId, settings.brokerAccessToken);
+      marketFeedWS.configure(settings.brokerClientId, token);
+      orderUpdateWS.configure(settings.brokerClientId, token);
       marketFeedWS.connect();
       orderUpdateWS.connect();
     } else {

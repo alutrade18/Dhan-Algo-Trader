@@ -5,6 +5,7 @@ import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { marketFeedWS } from "../lib/market-feed-ws";
 import { orderUpdateWS } from "../lib/order-update-ws";
 import { getRateLimitStats } from "../lib/rate-limiter";
+import { encryptToken, decryptToken } from "../lib/crypto-utils";
 
 const router: IRouter = Router();
 
@@ -57,7 +58,7 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
     const settings = await getOrCreateSettings();
     await db
       .update(settingsTable)
-      .set({ brokerClientId: cid, brokerAccessToken: token })
+      .set({ brokerClientId: cid, brokerAccessToken: encryptToken(token) })
       .where(eq(settingsTable.id, settings.id));
 
     req.log.info({ clientId: "****" + cid.slice(-4) }, "Broker credentials verified and saved to DB");
@@ -139,7 +140,7 @@ router.post("/broker/renew-token", async (req, res): Promise<void> => {
       const { eq: eqFn } = await import("drizzle-orm");
       const [settings] = await db.select().from(settingsTable).limit(1);
       if (settings) {
-        await db.update(settingsTable).set({ brokerAccessToken: data.accessToken }).where(eqFn(settingsTable.id, settings.id));
+        await db.update(settingsTable).set({ brokerAccessToken: encryptToken(data.accessToken) }).where(eqFn(settingsTable.id, settings.id));
       }
       marketFeedWS.configure(creds.clientId, data.accessToken);
       orderUpdateWS.configure(creds.clientId, data.accessToken);

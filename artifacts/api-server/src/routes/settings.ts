@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
+import { decryptToken } from "../lib/crypto-utils";
 
 function hashPin(pin: string): string {
   const salt = process.env.PIN_SALT ?? "rajesh-algo-pin-salt";
@@ -71,7 +72,7 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
   return {
     id: s.id,
     dhanClientId: s.brokerClientId ? "****" + s.brokerClientId.slice(-4) : "",
-    dhanAccessToken: s.brokerAccessToken ? "****" + s.brokerAccessToken.slice(-4) : "",
+    dhanAccessToken: s.brokerAccessToken ? "****" + decryptToken(s.brokerAccessToken).slice(-4) : "",
     apiConnected: dhanClient.isConfigured(),
     defaultProductType: s.defaultProductType,
     defaultOrderType: s.defaultOrderType,
