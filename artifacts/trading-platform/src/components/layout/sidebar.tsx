@@ -27,6 +27,7 @@ const NAV_SECTIONS = [
       { href: "/orders", label: "Order Book", icon: List },
       { href: "/option-chain", label: "Option Chain", icon: LineChart },
       { href: "/super-orders", label: "Super Orders", icon: Layers },
+      { href: "/trade-history", label: "Ledger Statement", icon: BookOpen },
     ],
   },
   {
@@ -35,12 +36,6 @@ const NAV_SECTIONS = [
       { href: "/strategies", label: "Strategies", icon: TerminalSquare },
       { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
       { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
-    ],
-  },
-  {
-    label: "REPORTS",
-    items: [
-      { href: "/trade-history", label: "Ledger Statement", icon: BookOpen },
     ],
   },
   {
