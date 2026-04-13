@@ -243,9 +243,9 @@ export default function Settings() {
                 <Badge variant="outline" className="text-green-400 border-green-500/30 bg-green-500/10 gap-1.5"><CheckCircle2 className="w-3 h-3" />Connected</Badge>
                 <span className="font-mono text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{funds.dhanClientId ?? maskedClientId}</span>
                 {funds.availableBalance !== undefined && <>
-                  <span className="text-muted-foreground">Bal <span className="text-green-400 font-semibold">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span></span>
-                  <span className="text-muted-foreground">Margin <span className="font-semibold">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span></span>
-                  <span className="text-muted-foreground">Withdrawable <span className="font-semibold">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span></span>
+                  <span className="text-muted-foreground">Bal <span className="text-green-400 font-semibold">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                  <span className="text-muted-foreground">Margin <span className="font-semibold">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                  <span className="text-muted-foreground">Withdrawable <span className="font-semibold">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
                 </>}
                 <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-muted-foreground" disabled={refreshMutation.isPending} onClick={() => { refreshMutation.mutate(); void refetchBrokerStatus(); }}>
                   <RefreshCw className={`w-3 h-3 ${refreshMutation.isPending ? "animate-spin" : ""}`} />Refresh
