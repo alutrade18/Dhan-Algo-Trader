@@ -15,7 +15,6 @@ export const settingsTable = pgTable("settings", {
   maxDailyLoss: numeric("max_daily_loss", { precision: 12, scale: 2 }).default("5000"),
   maxDailyProfit: numeric("max_daily_profit", { precision: 12, scale: 2 }),
   enableAutoTrading: boolean("enable_auto_trading").notNull().default(false),
-  enableNotifications: boolean("enable_notifications").notNull().default(true),
   riskPerTrade: numeric("risk_per_trade", { precision: 5, scale: 2 }),
   theme: text("theme").notNull().default("dark"),
   telegramBotToken: text("telegram_bot_token"),
@@ -33,29 +32,6 @@ export const settingsTable = pgTable("settings", {
   maxPositionSizeType: text("max_position_size_type").notNull().default("FIXED"),
 
   instrumentBlacklist: jsonb("instrument_blacklist").$type<string[]>().default([]),
-
-  notificationPreferences: jsonb("notification_preferences").$type<{
-    orderFilled: boolean;
-    targetHit: boolean;
-    stopLossHit: boolean;
-    killSwitchTriggered: boolean;
-    tokenExpiry: boolean;
-    strategyPausedActivated: boolean;
-    dailyPnlSummary: boolean;
-    autoSquareOff: boolean;
-  }>().default({
-    orderFilled: true,
-    targetHit: true,
-    stopLossHit: true,
-    killSwitchTriggered: true,
-    tokenExpiry: true,
-    strategyPausedActivated: true,
-    dailyPnlSummary: false,
-    autoSquareOff: true,
-  }),
-
-  pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(false),
-  pushSubscription: jsonb("push_subscription"),
 
   dashboardWidgets: jsonb("dashboard_widgets").$type<{
     todayPnl: boolean;

@@ -13,7 +13,6 @@ import Strategies from "@/pages/strategies";
 import Backtesting from "@/pages/backtesting";
 import Settings from "@/pages/settings";
 import RiskManager from "@/pages/risk-manager";
-import SystemNotifications from "@/pages/system-notifications";
 import Logs from "@/pages/logs";
 import SuperOrders from "@/pages/super-orders";
 import OptionChain from "@/pages/option-chain";
@@ -38,7 +37,6 @@ function AppRoutes() {
         <Route path="/backtesting" component={Backtesting} />
         <Route path="/settings" component={Settings} />
         <Route path="/risk-manager" component={RiskManager} />
-        <Route path="/system-notifications" component={SystemNotifications} />
         <Route path="/logs" component={Logs} />
         <Route path="/super-orders" component={SuperOrders} />
         <Route path="/option-chain" component={OptionChain} />

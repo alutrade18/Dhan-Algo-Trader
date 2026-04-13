@@ -84,7 +84,6 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     maxDailyLoss: s.maxDailyLoss !== null && s.maxDailyLoss !== undefined ? Number(s.maxDailyLoss) : 5000,
     maxDailyProfit: s.maxDailyProfit ? Number(s.maxDailyProfit) : null,
     enableAutoTrading: s.enableAutoTrading,
-    enableNotifications: s.enableNotifications,
     riskPerTrade: s.riskPerTrade ? Number(s.riskPerTrade) : null,
     theme: s.theme,
     telegramBotToken: s.telegramBotToken || "",
@@ -99,17 +98,6 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     maxPositionSizeValue: s.maxPositionSizeValue ? Number(s.maxPositionSizeValue) : null,
     maxPositionSizeType: s.maxPositionSizeType,
     instrumentBlacklist: (s.instrumentBlacklist as string[] | null) ?? [],
-    notificationPreferences: s.notificationPreferences ?? {
-      orderFilled: true,
-      targetHit: true,
-      stopLossHit: true,
-      killSwitchTriggered: true,
-      tokenExpiry: true,
-      strategyPausedActivated: true,
-      dailyPnlSummary: false,
-      autoSquareOff: true,
-    },
-    pushNotificationsEnabled: s.pushNotificationsEnabled,
     dashboardWidgets: s.dashboardWidgets ?? {
       todayPnl: true,
       totalPnl: true,
@@ -155,13 +143,11 @@ router.put("/settings", async (req, res): Promise<void> => {
   set("defaultExchange", "defaultExchange");
   set("defaultQuantity", "defaultQuantity", v => v != null ? Number(v) : null);
   set("enableAutoTrading", "enableAutoTrading", v => Boolean(v));
-  set("enableNotifications", "enableNotifications", v => Boolean(v));
   set("theme", "theme");
   set("autoSquareOffEnabled", "autoSquareOffEnabled", v => Boolean(v));
   set("autoSquareOffTime", "autoSquareOffTime");
   set("maxTradesPerDay", "maxTradesPerDay", v => v != null ? Number(v) : null);
   set("maxPositionSizeType", "maxPositionSizeType");
-  set("pushNotificationsEnabled", "pushNotificationsEnabled", v => Boolean(v));
   set("refreshIntervalSeconds", "refreshIntervalSeconds", v => Number(v));
   set("tradingHoursStart", "tradingHoursStart");
   set("tradingHoursEnd", "tradingHoursEnd");
@@ -197,16 +183,10 @@ router.put("/settings", async (req, res): Promise<void> => {
     updateData.instrumentBlacklist = newList;
     auditEntries.push({ field: "instrumentBlacklist", old: JSON.stringify(existing.instrumentBlacklist), new: JSON.stringify(newList) });
   }
-  if (body.notificationPreferences !== undefined && typeof body.notificationPreferences === "object") {
-    updateData.notificationPreferences = body.notificationPreferences;
-    auditEntries.push({ field: "notificationPreferences", old: JSON.stringify(existing.notificationPreferences), new: JSON.stringify(body.notificationPreferences) });
-  }
   if (body.dashboardWidgets !== undefined && typeof body.dashboardWidgets === "object") {
     updateData.dashboardWidgets = body.dashboardWidgets;
   }
-  if (body.pushSubscription !== undefined) {
-    updateData.pushSubscription = body.pushSubscription;
-  }
+
 
   const newToken = body.telegramBotToken !== undefined ? (body.telegramBotToken as string | null) || null : undefined;
   const newChatId = body.telegramChatId !== undefined ? (body.telegramChatId as string | null) || null : undefined;

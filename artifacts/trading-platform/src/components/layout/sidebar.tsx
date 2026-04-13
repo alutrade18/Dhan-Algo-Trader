@@ -13,7 +13,6 @@ import {
   LineChart,
   BookOpen,
   ShieldCheck,
-  BellRing,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +40,6 @@ const NAV_SECTIONS = [
     items: [
       { href: "/logs", label: "Logs", icon: ScrollText },
       { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/system-notifications", label: "Notifications", icon: BellRing },
       { href: "/risk-manager", label: "Risk Manager", icon: ShieldCheck },
     ],
   },
