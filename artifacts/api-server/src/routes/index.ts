@@ -14,7 +14,6 @@ import superOrdersRouter from "./super-orders";
 import { createPostbackRouter } from "./postback";
 import { getIO } from "../lib/io";
 import instrumentsRouter from "./instruments";
-import adminRouter from "./admin";
 import {
   orderRateLimit,
   dataRateLimit,
@@ -76,7 +75,6 @@ router.use(tradesRouter);
 router.use(logsRouter);
 router.use(instrumentsRouter);
 router.use(superOrdersRouter);
-router.use(adminRouter);
 router.use((req, res, next) => {
   const io = getIO();
   if (io) {

@@ -179,41 +179,6 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - `Position` and `Strategy` types in frontend are derived via `NonNullable<GetPositionsQueryResult>[number]` / `NonNullable<GetStrategiesQueryResult>[number]` — do NOT import from `@workspace/api-zod` which is not in trading-platform deps
 - TanStack Query v5 / Orval v8: when passing `{ query: { ... } }` options to generated hooks, always include `queryKey: getXyzQueryKey()` to satisfy `UseQueryOptions` type
 
-## SaaS Architecture (Active)
-
-### Clerk Auth
-- `@clerk/react` v6 + `@clerk/express` — multi-tenant authentication
-- Trading platform: ClerkProvider wraps app; landing page at `/` for signed-out users, `/dashboard` for signed-in
-- Proxy middleware at `/__clerk` routes (dev) — `CLERK_PROXY_PATH = /api/__clerk`
-- `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY` — auto-provisioned by Replit auth pane
-
-### Multi-Tenancy
-- `settings.userId` — Clerk userId stored in settings table; each user gets own row
-- `super_orders.userId` — orders tagged by Clerk userId; GET/POST/DELETE all filter by userId
-- `getOrCreateSettings(userId)` — creates per-user settings row on first access
-- `getAuth(req)` from `@clerk/express` extracts userId in every route
-
-### Admin App (artifacts/admin — /admin/)
-- Port 23744 / externalPort 5000
-- No auth (internal use only — restrict via network/IP in production)
-- Pages: Dashboard (platform stats), Users (all Clerk users from DB), Super Orders (cross-user), System Logs
-- API at `/api/admin/*` — stats, users, recent-orders, logs
-
-### Admin API Routes
-- `GET /api/admin/stats` — totalUsers, totalSuperOrders, configuredBrokers, recentErrors
-- `GET /api/admin/users` — all settings rows with superOrderCount
-- `GET /api/admin/recent-orders` — last 50 super orders across all users
-- `GET /api/admin/logs?limit=N` — app_logs table (max 500)
-
-### Pricing Plans
-- Monthly: ₹2,999 | 3-Month: ₹6,999 | Annual: ₹26,999
-- Plans displayed on landing page; Razorpay integration placeholder (not yet wired)
-
-### Vite React Singleton Fix
-- Added `resolve.alias` for react/react-dom in `artifacts/trading-platform/vite.config.ts`
-- Forces single React copy when `@clerk/react` and other packages share react peer dep
-- Also added `optimizeDeps.include: ["react", "react-dom", "@clerk/react"]`
-
 ## Recent Changes
 
 ### Phase 3 — Frontend UI Upgrades

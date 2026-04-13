@@ -1,9 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
-import { getAuth } from "@clerk/express";
 
 async function sendTelegramPing(botToken: string, chatId: string): Promise<void> {
   try {
@@ -54,14 +53,10 @@ async function addAuditLog(action: string, field: string | null, oldVal: string 
 
 const router: IRouter = Router();
 
-export async function getOrCreateSettings(userId?: string | null) {
-  const where = userId
-    ? eq(settingsTable.userId, userId)
-    : isNull(settingsTable.userId);
-
-  let [settings] = await db.select().from(settingsTable).where(where);
+export async function getOrCreateSettings() {
+  let [settings] = await db.select().from(settingsTable);
   if (!settings) {
-    [settings] = await db.insert(settingsTable).values({ userId: userId ?? null }).returning();
+    [settings] = await db.insert(settingsTable).values({}).returning();
   }
   return settings;
 }
@@ -120,8 +115,7 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
 
 router.get("/settings", async (req, res): Promise<void> => {
   try {
-    const { userId } = getAuth(req);
-    const settings = await getOrCreateSettings(userId);
+    const settings = await getOrCreateSettings();
     res.json(serializeSettings(settings));
   } catch (e) {
     req.log.error({ err: e }, "Failed to fetch settings");
@@ -130,8 +124,7 @@ router.get("/settings", async (req, res): Promise<void> => {
 });
 
 router.put("/settings", async (req, res): Promise<void> => {
-  const { userId } = getAuth(req);
-  const existing = await getOrCreateSettings(userId);
+  const existing = await getOrCreateSettings();
   const body = req.body as Record<string, unknown>;
   const updateData: Record<string, unknown> = {};
   const auditEntries: Array<{ field: string; old: string | null; new: string | null }> = [];
@@ -253,8 +246,7 @@ router.put("/settings", async (req, res): Promise<void> => {
 
 router.post("/settings/verify-pin", async (req, res): Promise<void> => {
   const { pin } = req.body as { pin?: string };
-  const { userId } = getAuth(req);
-  const settings = await getOrCreateSettings(userId);
+  const settings = await getOrCreateSettings();
   if (!settings.killSwitchPin) {
     res.json({ valid: true, message: "No PIN set" });
     return;

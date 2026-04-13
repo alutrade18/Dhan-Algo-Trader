@@ -1,8 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, superOrdersTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
-import { getAuth } from "@clerk/express";
 
 const router: IRouter = Router();
 
@@ -34,15 +33,11 @@ router.get("/super-orders", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { userId } = getAuth(req);
     const today = todayIST();
-    const whereClause = userId
-      ? and(eq(superOrdersTable.orderDate, today), eq(superOrdersTable.userId, userId))
-      : eq(superOrdersTable.orderDate, today);
     const dbOrders = await db
       .select()
       .from(superOrdersTable)
-      .where(whereClause);
+      .where(eq(superOrdersTable.orderDate, today));
 
     if (dbOrders.length === 0) {
       res.json([]);
@@ -100,7 +95,6 @@ router.post("/super-orders", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { userId } = getAuth(req);
     const {
       security_id,
       exchange_segment,
@@ -151,7 +145,6 @@ router.post("/super-orders", async (req, res): Promise<void> => {
 
     const today = todayIST();
     const [inserted] = await db.insert(superOrdersTable).values({
-      userId: userId ?? null,
       dhanOrderId,
       securityId: security_id,
       exchangeSegment: exchange_segment,
@@ -188,18 +181,13 @@ router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { userId } = getAuth(req);
     const { orderId } = req.params;
     const internalId = parseInt(orderId);
-
-    const whereClause = userId
-      ? and(eq(superOrdersTable.id, internalId), eq(superOrdersTable.userId, userId))
-      : eq(superOrdersTable.id, internalId);
 
     const [dbRecord] = await db
       .select()
       .from(superOrdersTable)
-      .where(whereClause);
+      .where(eq(superOrdersTable.id, internalId));
 
     if (!dbRecord) {
       res.status(404).json({ error: "Super order not found" });
@@ -217,7 +205,7 @@ router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {
     await db
       .update(superOrdersTable)
       .set({ status: "CANCELLED" })
-      .where(whereClause);
+      .where(eq(superOrdersTable.id, internalId));
 
     res.json({ success: true, orderId });
   } catch (e) {
