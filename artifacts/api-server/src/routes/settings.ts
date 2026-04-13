@@ -1,8 +1,14 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
+import crypto from "crypto";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
+
+function hashPin(pin: string): string {
+  const salt = process.env.PIN_SALT ?? "rajesh-algo-pin-salt";
+  return crypto.createHash("sha256").update(pin + salt).digest("hex");
+}
 
 async function sendTelegramPing(botToken: string, chatId: string): Promise<void> {
   try {
@@ -220,7 +226,7 @@ router.put("/settings", async (req, res): Promise<void> => {
   }
 
   if (body.killSwitchPin !== undefined) {
-    updateData.killSwitchPin = body.killSwitchPin ? String(body.killSwitchPin) : null;
+    updateData.killSwitchPin = body.killSwitchPin ? hashPin(String(body.killSwitchPin)) : null;
     auditEntries.push({ field: "killSwitchPin", old: existing.killSwitchPin ? "****" : null, new: body.killSwitchPin ? "****" : null });
   }
 
@@ -252,7 +258,7 @@ router.post("/settings/verify-pin", async (req, res): Promise<void> => {
     res.json({ valid: true, message: "No PIN set" });
     return;
   }
-  if (pin === settings.killSwitchPin) {
+  if (pin && hashPin(pin) === settings.killSwitchPin) {
     res.json({ valid: true });
   } else {
     res.status(401).json({ valid: false, error: "Incorrect PIN" });
