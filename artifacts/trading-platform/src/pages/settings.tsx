@@ -189,13 +189,13 @@ export default function Settings() {
         {isConnected && funds.availableBalance !== undefined && (
           <div className="px-5 py-2.5 flex items-center gap-1.5 border-b border-border/25 bg-muted/5 text-xs flex-wrap">
             <span className="text-muted-foreground">Available:</span>
-            <span className="font-semibold text-green-400 tabular-nums">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="font-semibold text-green-400 tabular-nums">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-border/60 mx-1">·</span>
             <span className="text-muted-foreground">Margin Used:</span>
-            <span className="font-semibold text-amber-400 tabular-nums">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="font-semibold text-amber-400 tabular-nums">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-border/60 mx-1">·</span>
             <span className="text-muted-foreground">Withdrawable:</span>
-            <span className="font-semibold text-blue-400 tabular-nums">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="font-semibold text-blue-400 tabular-nums">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         )}
 
