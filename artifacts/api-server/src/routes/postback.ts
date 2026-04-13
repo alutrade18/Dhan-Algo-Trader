@@ -7,6 +7,16 @@ export function createPostbackRouter(io: SocketIOServer): IRouter {
   const router: IRouter = Router();
 
   router.post("/postback", async (req, res): Promise<void> => {
+    const expectedSecret = process.env.POSTBACK_SECRET;
+    if (expectedSecret) {
+      const provided = req.headers["x-postback-secret"] as string | undefined;
+      if (provided !== expectedSecret) {
+        logger.warn({ ip: req.ip }, "Postback rejected: invalid or missing secret");
+        res.status(401).json({ error: "Unauthorized postback" });
+        return;
+      }
+    }
+
     try {
       const payload = req.body as Record<string, unknown>;
       logger.info({ postback: payload }, "Dhan postback received");
