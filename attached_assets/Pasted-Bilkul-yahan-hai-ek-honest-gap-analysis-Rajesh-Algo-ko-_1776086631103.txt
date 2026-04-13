@@ -1,0 +1,108 @@
+Bilkul, yahan hai ek honest gap analysis — Rajesh Algo ko proper SaaS subscription product banane ke liye kya kya chahiye:
+
+🔐 1. Authentication & Multi-Tenancy (Sabse Zaroori)
+
+Abhi koi login system nahi hai — app directly open ho jaati hai
+Har user ka apna alag account hona chahiye (multi-tenant architecture)
+
+Abhi ek hi Dhan API key hard-coded hai — SaaS mein har user apni Dhan credentials connect karta hai
+
+Database tables mein userId column nahi hai — sab data shared/global hai
+
+💳 2. Subscription & Payment System
+
+Koi pricing plan nahi (Basic / Pro / Elite jaise tiers)
+Koi payment gateway nahi (Razorpay ya Stripe India ke liye)
+
+Free trial mechanism nahi
+
+Plan ke hisaab se feature gating nahi (e.g., Basic mein sirf 2 strategies, Pro mein unlimited)
+
+Invoice / billing history nahi
+
+👥 3. User Management
+
+Admin dashboard nahi — koi dekh nahi sakta kitne users hain, kaun active hai, kaun ne kya subscribe kiya
+
+User onboarding flow nahi (signup → broker connect → first strategy)
+
+Email verification nahi
+
+Password reset nahi
+
+🔑 4. Dhan Token Management per User
+
+Abhi ek global token hai environment variable mein
+SaaS mein har user ka token alag DB row mein encrypted store hona chahiye
+Token expiry detection aur renewal reminder per user hona chahiye
+
+🛡️ 5. Security Gaps
+
+Koi API rate limiting per user nahi (ek user dusre ka data access kar sakta hai)
+
+Row-level security nahi database mein
+
+Secrets (Dhan tokens) encrypted nahi hain DB mein
+
+HTTPS enforce nahi (deployment pe hota hai, dev mein nahi)
+
+Audit logs nahi — kaun ne kya kiya ka record nahi
+
+📊 6. SaaS Analytics & Monitoring
+
+Admin analytics nahi — MRR, churn, active users
+User-level usage tracking nahi (kitni strategies run ki, kitne orders place kiye)
+
+Quota enforcement nahi (e.g., Pro plan = max 10 strategies)
+
+Uptime monitoring / alerting nahi
+
+📧 7. Communication & Notifications
+
+
+Email system nahi (welcome mail, password reset, subscription confirmation)
+
+In-app notifications system nahi
+
+Telegram alerts hain but per user configuration ke liye proper setup nahi
+
+📄 8. Legal & Compliance
+
+
+Terms of Service / Privacy Policy page nahi
+
+SEBI disclaimer nahi ("This is not investment advice")
+
+India-specific: GST billing support nahi
+
+Data retention policy nahi
+
+🚀 9. Onboarding & UX
+
+
+Koi onboarding wizard nahi (new user ko samajh nahi aayega kahan se shuru kare)
+
+Empty states weak hain (new user ko guidance nahi milti)
+
+Help / documentation section nahi
+
+⚙️ 10. Infrastructure for Scale
+
+Abhi ek single server pe sab chal raha hai — WebSocket scaling ka issue aayega multiple users pe
+
+
+Background job queue nahi (strategy engine abhi in-memory hai, server restart pe sab reset)
+
+
+Database connection pooling properly configured nahi for multiple concurrent users
+
+Priority Order (Agar SaaS launch karna hai):
+
+Priority Kya karna hai
+🔴 Must-haveAuth system, Multi-tenancy (userId in DB), Per-user Dhan    token 
+🔴 Must-havePayment/subscription system
+🟡 ImportantAdmin dashboard, Email system, Feature gating
+🟡 ImportantLegal pages, SEBI disclaimer
+🟢 Good to haveOnboarding wizard, Analytics, Audit logs
+
+Sabse pehle in 3 cheezen solve karni padegi: Login system, multi-tenancy, aur payment gateway — baaki sab baad mein add ho sakta hai.
