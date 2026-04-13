@@ -49,56 +49,25 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const totalHoldings = holdingsResult.status === "fulfilled" && Array.isArray(holdingsResult.value)
       ? (holdingsResult.value as unknown[]).length : 0;
 
+    // All-Time P&L: sum (credit − debit) for genuine trading entries in the full ledger.
+    // Uses isNonTradingEntry() to exclude deposits, withdrawals, quarterly settlements,
+    // and platform fees — same logic as the period-pnl endpoint.
+    // NOTE: isNonTradingEntry is defined later in this file but hoisted at runtime.
     let totalPnl = 0;
     if (ledgerResult.status === "fulfilled") {
       const entries = Array.isArray(ledgerResult.value) ? (ledgerResult.value as Record<string, unknown>[]) : [];
-      if (entries.length > 0) {
-        // Classify each raw ledger entry individually.
-        // Formula: Net P&L = currentBalance + totalWithdrawn - totalDeposited
-        // (Excludes deposits & withdrawals — only actual trading P&L)
-        let totalDeposits = 0;
-        let totalWithdrawals = 0;
-
-        for (const e of entries) {
-          const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
-          // Skip synthetic entries added by Dhan API (not real transactions)
-          if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
-
-          // Dhan ledger uses separate `credit` and `debit` fields (not `amount`/`drcr`)
-          const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
-          const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
-          const isCredit = !isNaN(credit) && credit > 0;
-          const isDebit  = !isNaN(debit)  && debit  > 0;
-          if (!isCredit && !isDebit) continue; // skip zero/empty entries
-
-          // Identify fund transfers (deposits into account) by narration
-          const isDeposit =
-            narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
-            narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
-            narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
-            narr.includes("FUNDS ADDED") ||
-            (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
-
-          // Identify fund withdrawals (money taken out of account) by narration
-          const isWithdrawal =
-            narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
-            narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
-            narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
-            (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
-
-          if (isDeposit && isCredit) {
-            totalDeposits += credit;
-          } else if (isWithdrawal && isDebit) {
-            totalWithdrawals += debit;
-          }
-          // All other entries (trades, brokerage, STT, margin interest, etc.) are trading P&L
-          // — they are captured automatically via the formula: balance + withdrawn - deposited
-        }
-
-        // Net P&L = currentBalance + totalWithdrawn - totalDeposited
-        // This gives pure trading performance regardless of how much was deposited/withdrawn.
-        totalPnl = Math.round((availableBalance + totalWithdrawals - totalDeposits) * 100) / 100;
+      for (const e of entries) {
+        const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+        if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
+        if (isNonTradingEntry(narr)) continue;
+        const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
+        const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
+        const safeCredit = isNaN(credit) ? 0 : credit;
+        const safeDebit  = isNaN(debit)  ? 0 : debit;
+        if (safeCredit === 0 && safeDebit === 0) continue;
+        totalPnl += safeCredit - safeDebit;
       }
+      totalPnl = Math.round(totalPnl * 100) / 100;
     } else {
       req.log.warn({ err: (ledgerResult as PromiseRejectedResult).reason }, "Ledger fetch failed");
     }
@@ -160,40 +129,57 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   }
 });
 
-function classifyLedgerEntry(narration: string): "DEPOSIT" | "WITHDRAWAL" | "PNL" {
-  const n = narration.toUpperCase();
-  if (n.includes("FUND") && (n.includes("RECEIV") || n.includes("CREDIT") || n.includes("ADDED") || n.includes("DEPOSIT") || n.includes("TRANSFER IN"))) return "DEPOSIT";
-  if (n.includes("WITHDRAW") || n.includes("PAYOUT") || n.includes("TRANSFER OUT") || (n.includes("FUND") && n.includes("DEBIT"))) return "WITHDRAWAL";
-  return "PNL";
-}
-
 /**
- * Period P&L endpoint.
- * Uses direct sum of trade/settlement entries — deposits and withdrawals are
- * excluded so fund flows never inflate the P&L figure.
- * This value is NEVER stored in DB — always computed live from Dhan API.
+ * Returns true for ledger entries that represent fund flows (deposits/withdrawals)
+ * or non-trading platform charges that should NOT be counted as trading P&L.
+ *
+ * Based on actual Dhan ledger narration strings observed from the API:
+ *   "FUNDS DEPOSITED"      → bank deposit into trading account
+ *   "FUNDS WITHDRAWAL"     → money sent back to bank
+ *   "QUARTERLY SETTLEMENT" → SEBI-mandated periodic return of unused margin to client's bank
+ *   "DATA API CHARGES"     → Dhan Data API subscription fee (not a trading cost)
  */
-function isFundFlow(narr: string): boolean {
-  // Deposits — any "FUNDS DEPOSITED", "FUNDS RECEIVED", "ONLINE TRANSFER", etc.
-  const isDeposit =
-    narr.includes("DEPOSITED") ||
+function isNonTradingEntry(narr: string): boolean {
+  // === Fund deposits (money coming IN from bank) ===
+  if (
     narr.includes("FUNDS DEPOSIT") || narr.includes("FUND DEPOSIT") ||
+    narr.includes("DEPOSITED") ||
     narr.includes("FUNDS RECEIV")  || narr.includes("FUND RECEIV") ||
     narr.includes("FUNDS TRANSFER IN") || narr.includes("FUND CREDIT") ||
     narr.includes("FUNDS ADDED") || narr.includes("ONLINE TRANSFER") ||
     narr.includes("NEFT") || narr.includes("IMPS") || narr.includes("UPI") ||
-    (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")));
+    (narr.includes("FUND") && (narr.includes("RECEIV") || narr.includes("CREDIT") || narr.includes("ADDED") || narr.includes("DEPOSIT")))
+  ) return true;
 
-  // Withdrawals — any "FUNDS WITHDRAW", "PAYOUT", etc.
-  const isWithdrawal =
+  // === Fund withdrawals (money going OUT to bank) ===
+  if (
     narr.includes("FUNDS WITHDRAW") || narr.includes("FUND WITHDRAW") ||
     narr.includes("PAYOUT") || narr.includes("FUNDS PAYOUT") ||
     narr.includes("TRANSFER OUT") || narr.includes("FUND DEBIT") ||
-    (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"));
+    (narr.includes("WITHDRAW") && !narr.includes("DEPOSIT"))
+  ) return true;
 
-  return isDeposit || isWithdrawal;
+  // === SEBI-mandated quarterly unused-margin return to bank ===
+  // This is NOT a trading loss — it's your own money returned temporarily.
+  // Dhan debits the trading account and the broker re-deposits it later.
+  if (narr.includes("QUARTERLY SETTLEMENT")) return true;
+
+  // === Platform / subscription fees (not a trading P&L component) ===
+  if (
+    narr.includes("DATA API CHARGES") || narr.includes("DATA API") ||
+    narr.includes("DATA SUBSCRIPTION") || narr.includes("SUBSCRIPTION CHARGES")
+  ) return true;
+
+  return false;
 }
 
+/**
+ * Period P&L endpoint — uses Dhan ledger for the requested date window.
+ * Sums (credit − debit) for genuine trading entries only:
+ *   TRADES EXECUTED, brokerage, STT, exchange charges, margin interest, etc.
+ * Excludes: deposits, withdrawals, quarterly settlements, and platform fees.
+ * This value is NEVER stored in DB — always computed live from the Dhan ledger.
+ */
 router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
   try {
     const days = parseInt(String(req.query.days || "365"), 10);
@@ -203,30 +189,33 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
     from.setDate(from.getDate() - (days - 1));
     const fromStr = from.toISOString().split("T")[0];
 
-    // Use trade history (realizedProfit per executed trade) for pure trading P&L.
-    // This completely excludes brokerage charges, STT, exchange fees,
-    // Data API subscription costs, or any other non-trade debits from the ledger.
-    const tradesResult = await dhanClient.getAllTradeHistory(fromStr, toStr)
-      .catch(() => null);
-
-    if (!tradesResult) {
-      res.status(500).json({ error: "Trade history fetch failed" });
+    const ledgerResult = await dhanClient.getLedger(fromStr, toStr).catch(() => null);
+    if (!ledgerResult) {
+      res.status(500).json({ error: "Ledger fetch failed" });
       return;
     }
 
-    const trades = Array.isArray(tradesResult)
-      ? (tradesResult as Record<string, unknown>[])
+    const entries = Array.isArray(ledgerResult)
+      ? (ledgerResult as Record<string, unknown>[])
       : [];
 
     let periodPnl = 0;
-    for (const t of trades) {
-      const profit = parseFloat(String(t.realizedProfit ?? t.profit ?? "0"));
-      if (!isNaN(profit)) periodPnl += profit;
+    for (const e of entries) {
+      const narr = String(e.narration ?? e.particulars ?? "").toUpperCase().trim();
+      if (narr === "OPENING BALANCE" || narr === "CLOSING BALANCE") continue;
+      if (isNonTradingEntry(narr)) continue;
+
+      const credit = parseFloat(String(e.credit ?? "0").replace(/,/g, ""));
+      const debit  = parseFloat(String(e.debit  ?? "0").replace(/,/g, ""));
+      const safeCredit = isNaN(credit) ? 0 : credit;
+      const safeDebit  = isNaN(debit)  ? 0 : debit;
+      if (safeCredit === 0 && safeDebit === 0) continue;
+
+      periodPnl += safeCredit - safeDebit;
     }
 
     periodPnl = Math.round(periodPnl * 100) / 100;
-
-    res.json({ periodPnl, days, tradeCount: trades.length });
+    res.json({ periodPnl, days });
   } catch (e) {
     req.log.error({ err: e }, "Period P&L error");
     res.status(500).json({ error: "Failed to compute period P&L" });
