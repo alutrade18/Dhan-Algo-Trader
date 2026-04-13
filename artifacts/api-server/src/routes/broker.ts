@@ -137,10 +137,9 @@ router.post("/broker/renew-token", async (req, res): Promise<void> => {
     const data = await response.json() as { accessToken?: string; expiryTime?: string };
     if (data.accessToken) {
       dhanClient.configure(creds.clientId, data.accessToken);
-      const { eq: eqFn } = await import("drizzle-orm");
       const [settings] = await db.select().from(settingsTable).limit(1);
       if (settings) {
-        await db.update(settingsTable).set({ brokerAccessToken: encryptToken(data.accessToken) }).where(eqFn(settingsTable.id, settings.id));
+        await db.update(settingsTable).set({ brokerAccessToken: encryptToken(data.accessToken) }).where(eq(settingsTable.id, settings.id));
       }
       marketFeedWS.configure(creds.clientId, data.accessToken);
       orderUpdateWS.configure(creds.clientId, data.accessToken);
