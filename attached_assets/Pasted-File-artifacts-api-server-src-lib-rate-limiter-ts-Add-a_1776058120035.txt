@@ -1,0 +1,61 @@
+File: artifacts/api-server/src/lib/rate-limiter.ts
+
+Add a new special rate limiter just for Option Chain (1 request per 3 seconds):
+
+After the existing `orderModCounts` section at the bottom, add:
+
+```typescript
+// Option Chain: 1 unique request per 3 seconds per underlying+expiry combo
+const optionChainLastCall: Record<string, number> = {};
+
+export function checkOptionChainRateLimit(key: string): { allowed: boolean; waitMs: number } {
+  const now = Date.now();
+  const INTERVAL_MS = 3100; // 3.1 sec to be safe (Dhan says 3 sec)
+  const last = optionChainLastCall[key] ?? 0;
+  const elapsed = now - last;
+
+  if (elapsed < INTERVAL_MS) {
+    const waitMs = INTERVAL_MS - elapsed;
+    logger.warn({ key, waitMs }, "[RateLimit] Option Chain 3-sec throttle — too fast");
+    return { allowed: false, waitMs };
+  }
+
+  optionChainLastCall[key] = now;
+  return { allowed: true, waitMs: 0 };
+}
+```
+
+Also export a new API category for option chain in middleware:
+
+File: artifacts/api-server/src/middleware/rate-limit.ts
+
+Add at the bottom:
+
+```typescript
+import { checkOptionChainRateLimit } from "../lib/rate-limiter";
+
+export function optionChainRateLimitMiddleware(
+  req: import("express").Request,
+  res: import("express").Response,
+  next: import("express").NextFunction
+): void {
+  // Build a key from underlying + expiry so different underlyings don't block each other
+  const body = req.body as Record<string, unknown>;
+  const key = `${body.underSecurityId ?? ""}:${body.expiry ?? "any"}`;
+  const result = checkOptionChainRateLimit(key);
+
+  if (!result.allowed) {
+    const retryAfterSec = Math.ceil(result.waitMs / 1000);
+    res.setHeader("Retry-After", String(retryAfterSec));
+    res.setHeader("X-RateLimit-Category", "option-chain");
+    res.status(429).json({
+      errorCode: "DH-904",
+      errorMessage: `Option Chain rate limit: 1 request per 3 seconds per underlying. Retry after ${retryAfterSec}s.`,
+      retryAfterSeconds: retryAfterSec,
+      retryAfterMs: result.waitMs,
+    });
+    return;
+  }
+  next();
+}
+```
