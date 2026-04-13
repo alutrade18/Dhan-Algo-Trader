@@ -297,20 +297,20 @@ export default function RiskManager() {
       <div className="grid grid-cols-2 gap-4 items-stretch">
 
         {/* Risk Management */}
-        <div className="flex flex-col rounded-2xl border border-orange-500/20 bg-card overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-border/30 bg-orange-500/5 flex items-center justify-between">
+        <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+          <div className="px-5 py-3.5 border-b border-border/30 bg-muted/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-orange-500/15 flex items-center justify-center">
-                <ShieldAlert className="w-4 h-4 text-orange-400" />
+              <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+                <ShieldAlert className="w-4 h-4 text-primary" />
               </div>
               <p className="font-semibold text-sm">Risk Management</p>
             </div>
           </div>
           <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
             {settingsData?.maxDailyLoss != null && (
-              <div className="flex items-center justify-between rounded-xl bg-orange-500/8 border border-orange-500/20 px-4 py-3">
-                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><ShieldAlert className="w-3 h-3 text-orange-400" />Current limit</span>
-                <span className="text-lg font-bold text-orange-300 tabular-nums">₹{Number(settingsData.maxDailyLoss).toLocaleString("en-IN")}</span>
+              <div className="flex items-center justify-between rounded-xl bg-muted/20 border border-border/30 px-4 py-3">
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><ShieldAlert className="w-3 h-3 text-muted-foreground" />Current limit</span>
+                <span className="text-lg font-bold text-foreground tabular-nums">₹{Number(settingsData.maxDailyLoss).toLocaleString("en-IN")}</span>
               </div>
             )}
             <div className="space-y-1.5">
@@ -321,7 +321,7 @@ export default function RiskManager() {
               </div>
               {riskForm.formState.errors.maxDailyLoss && <p className="text-[10px] text-destructive">{riskForm.formState.errors.maxDailyLoss.message}</p>}
             </div>
-            <Button type="submit" size="sm" className="w-full h-10 gap-1.5 bg-orange-600 hover:bg-orange-700 text-white mt-auto" disabled={riskMutation.isPending}>
+            <Button type="submit" size="sm" className="w-full h-10 gap-1.5 mt-auto" disabled={riskMutation.isPending}>
               {riskMutation.isPending ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Save className="w-3.5 h-3.5" />Save Limit</>}
             </Button>
           </form>
@@ -329,21 +329,21 @@ export default function RiskManager() {
 
         {/* Auto Square-Off Timer */}
         <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-border/30 bg-blue-500/5 flex items-center justify-between">
+          <div className="px-5 py-3.5 border-b border-border/30 bg-muted/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center">
-                <Timer className="w-4 h-4 text-blue-400" />
+              <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+                <Timer className="w-4 h-4 text-primary" />
               </div>
               <p className="font-semibold text-sm">Auto Square-Off</p>
             </div>
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${autoSquareOffEnabled ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-muted/20 text-muted-foreground border-border/40"}`}>
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${autoSquareOffEnabled ? "bg-primary/15 text-primary border-primary/30" : "bg-muted/20 text-muted-foreground border-border/40"}`}>
               {autoSquareOffEnabled ? "ON" : "OFF"}
             </span>
           </div>
           <div className="flex-1 flex flex-col px-5 py-4 space-y-4">
             <div className="flex items-center justify-between rounded-xl bg-muted/20 border border-border/30 px-4 py-3">
               <div className="flex items-center gap-2.5">
-                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <Clock className="w-3.5 h-3.5 text-primary" />
                 <span className="text-sm font-medium">Enable Square-Off</span>
               </div>
               <Switch checked={autoSquareOffEnabled} onCheckedChange={setAutoSquareOffEnabled} />
@@ -357,7 +357,7 @@ export default function RiskManager() {
                 className="h-11 w-full rounded-xl border border-input bg-background/60 px-4 text-base font-mono font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring tabular-nums"
               />
             </div>
-            <Button size="sm" className="w-full h-10 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white mt-auto" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
+            <Button size="sm" className="w-full h-10 gap-1.5 mt-auto" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
               <Save className="w-3.5 h-3.5" />Save Timer
             </Button>
           </div>
@@ -378,7 +378,7 @@ export default function RiskManager() {
             </div>
             <div className="flex items-center gap-2.5">
               {settingsData?.hasKillSwitchPin && (
-                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full">
                   <Lock className="w-2.5 h-2.5" />PIN
                 </span>
               )}
@@ -387,8 +387,8 @@ export default function RiskManager() {
                   <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />ACTIVE
                 </span>
               ) : (
-                <span className="flex items-center gap-1.5 text-[10px] font-bold text-green-400 uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />INACTIVE
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-success uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success" />INACTIVE
                 </span>
               )}
             </div>
@@ -413,7 +413,7 @@ export default function RiskManager() {
                 <div className="space-y-2">
                   <Button
                     variant="outline"
-                    className={`w-full h-10 gap-2 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/8" : "opacity-40 cursor-not-allowed"}`}
+                    className={`w-full h-10 gap-2 ${canDeactivate ? "border-success/40 text-success hover:bg-success/8" : "opacity-40 cursor-not-allowed"}`}
                     disabled={killSwitchMutation.isPending || !canDeactivate}
                     onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
                   >
@@ -432,20 +432,20 @@ export default function RiskManager() {
 
         {/* Kill Switch PIN */}
         <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-border/30 bg-amber-500/5 flex items-center justify-between">
+          <div className="px-5 py-3.5 border-b border-border/30 bg-muted/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center">
-                <Lock className="w-4 h-4 text-amber-400" />
+              <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+                <Lock className="w-4 h-4 text-primary" />
               </div>
               <p className="font-semibold text-sm">Kill Switch PIN</p>
             </div>
-            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${settingsData?.hasKillSwitchPin ? "bg-amber-500/12 text-amber-400 border-amber-500/30" : "bg-muted/20 text-muted-foreground border-border/40"}`}>
+            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${settingsData?.hasKillSwitchPin ? "bg-primary/12 text-primary border-primary/30" : "bg-muted/20 text-muted-foreground border-border/40"}`}>
               {settingsData?.hasKillSwitchPin ? "SET" : "NOT SET"}
             </span>
           </div>
           <div className="flex-1 flex flex-col px-5 py-4 space-y-3">
             {settingsData?.hasKillSwitchPin && (
-              <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2.5">
+              <div className="flex items-center gap-2 text-xs text-primary bg-primary/8 border border-primary/20 rounded-xl px-3 py-2.5">
                 <Lock className="w-3 h-3 shrink-0" />Active — enter new PIN to change.
               </div>
             )}
@@ -470,7 +470,7 @@ export default function RiskManager() {
               {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-[10px] text-destructive font-medium">PINs do not match</p>}
             </div>
             <div className="mt-auto space-y-2">
-              <Button size="sm" className="w-full h-10 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+              <Button size="sm" className="w-full h-10 gap-1.5"
                 disabled={pinInput.length !== 4 || pinInput !== pinConfirm || genericSaveMutation.isPending}
                 onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: settingsData?.hasKillSwitchPin ? "PIN updated" : "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}
               >

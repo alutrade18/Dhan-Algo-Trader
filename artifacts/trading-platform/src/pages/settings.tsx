@@ -43,15 +43,15 @@ function TokenExpiryWarning() {
   const hoursLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
   if (hoursLeft > 4) return null;
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-amber-400/5 px-5 py-3 col-span-2">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-warning/40 bg-warning/8 px-5 py-3 col-span-2">
       <div className="flex items-center gap-2.5">
-        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-        <p className="text-xs font-medium text-amber-300">
+        <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+        <p className="text-xs font-medium text-warning">
           Access token expires in <span className="font-bold">~{Math.max(0, Math.floor(hoursLeft))}h {Math.floor((hoursLeft % 1) * 60)}m</span> — renew to stay connected.
         </p>
       </div>
       <button
-        className="text-xs font-semibold text-amber-400 border border-amber-500/50 px-3 py-1.5 rounded-lg hover:bg-amber-500/15 transition-colors whitespace-nowrap"
+        className="text-xs font-semibold text-warning border border-warning/50 px-3 py-1.5 rounded-lg hover:bg-warning/15 transition-colors whitespace-nowrap"
         onClick={async () => { const res = await fetch(`${BASE}api/broker/renew-token`, { method: "POST" }); const d = await res.json(); alert(d.success ? "Token renewed!" : "Renewal failed."); }}
       >
         Renew Now
@@ -166,40 +166,40 @@ export default function Settings() {
       <TokenExpiryWarning />
 
       {/* ── Broker Connection ── */}
-      <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-green-500/30 bg-card" : "border-border/50 bg-card"}`}>
+      <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-success/30 bg-card" : "border-border/50 bg-card"}`}>
 
-        {/* Status Banner */}
-        <div className={`px-5 py-3.5 flex items-center justify-between ${isConnected ? "bg-green-500/8 border-b border-green-500/20" : "bg-muted/10 border-b border-border/30"}`}>
+        {/* Header */}
+        <div className={`px-5 py-3.5 flex items-center justify-between border-b ${isConnected ? "bg-success/8 border-success/20" : "bg-muted/10 border-border/30"}`}>
           <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isConnected ? "bg-green-500/15" : "bg-muted/30"}`}>
-              {isConnected ? <Wifi className="w-4 h-4 text-green-400" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isConnected ? "bg-success/15" : "bg-muted/30"}`}>
+              {isConnected ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
             </div>
             <div>
               <p className="text-sm font-semibold">Broker Connection</p>
-              <p className={`text-[10px] font-medium ${isConnected ? "text-green-400" : "text-muted-foreground"}`}>
+              <p className={`text-[10px] font-medium ${isConnected ? "text-success" : "text-muted-foreground"}`}>
                 {isConnected ? "Connected" : "Not connected to Dhan"}
               </p>
             </div>
           </div>
           {isConnected && (
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wider">Live</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span className="text-[10px] font-semibold text-success uppercase tracking-wider">Live</span>
             </div>
           )}
         </div>
 
-        {/* Balance Stats — single inline row */}
+        {/* Balance row */}
         {isConnected && funds.availableBalance !== undefined && (
           <div className="px-5 py-2.5 flex items-center gap-1.5 border-b border-border/25 bg-muted/5 text-xs flex-wrap">
             <span className="text-muted-foreground">Available:</span>
-            <span className="font-semibold text-green-400 tabular-nums">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="font-semibold text-success tabular-nums">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-border/60 mx-1">·</span>
             <span className="text-muted-foreground">Margin Used:</span>
-            <span className="font-semibold text-amber-400 tabular-nums">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="font-semibold text-warning tabular-nums">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-border/60 mx-1">·</span>
             <span className="text-muted-foreground">Withdrawable:</span>
-            <span className="font-semibold text-blue-400 tabular-nums">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="font-semibold text-primary tabular-nums">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         )}
 
@@ -242,10 +242,10 @@ export default function Settings() {
       {/* ── Telegram Alerts ── */}
       <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
 
-        <div className="px-5 py-3.5 flex items-center justify-between border-b border-border/30 bg-violet-500/5">
+        <div className="px-5 py-3.5 flex items-center justify-between border-b border-border/30 bg-muted/5">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-violet-500/15 flex items-center justify-center">
-              <Send className="w-4 h-4 text-violet-400" />
+            <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+              <Send className="w-4 h-4 text-primary" />
             </div>
             <div>
               <p className="text-sm font-semibold">Telegram Alerts</p>
@@ -256,14 +256,13 @@ export default function Settings() {
           </div>
           {settingsData?.hasTelegramToken && (
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
-              <span className="text-[10px] font-semibold text-green-400">Active</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+              <span className="text-[10px] font-semibold text-success">Active</span>
             </div>
           )}
         </div>
 
         <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
-
           <div className="space-y-1.5">
             <SectionLabel>Bot Token</SectionLabel>
             <div className="relative">
@@ -280,7 +279,7 @@ export default function Settings() {
             {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>}
           </div>
           <div className="flex gap-2.5 mt-auto pt-1">
-            <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={telegramMutation.isPending}>
+            <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1" disabled={telegramMutation.isPending}>
               {telegramMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>
                 : <><Bell className="w-3.5 h-3.5" />{settingsData?.hasTelegramToken ? "Update Telegram" : "Save Telegram"}</>}
