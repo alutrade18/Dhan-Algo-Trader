@@ -118,15 +118,15 @@
   --warning:             34 97% 44%;     /* #D97706 */
   --warning-foreground:  0 0% 100%;
 
-  /* Sidebar — Deep Royal Purple */
-  --sidebar:             268 70% 14%;    /* #1A0540 deep royal purple */
-  --sidebar-foreground:  260 28% 84%;    /* #CCC4E6 light lavender */
-  --sidebar-border:      268 55% 20%;    /* #270A55 */
-  --sidebar-primary:     38 92% 54%;     /* #F5A623 bright gold */
-  --sidebar-primary-foreground: 268 70% 10%;
-  --sidebar-accent:      268 60% 20%;    /* #2E0A5C */
-  --sidebar-accent-foreground: 260 25% 88%; /* #DDD8F2 */
-  --sidebar-ring:        38 92% 54%;
+  /* Sidebar — Soft Light Purple (matches body) */
+  --sidebar:             262 42% 95%;    /* #F1EDFB soft lavender */
+  --sidebar-foreground:  268 55% 12%;    /* #1A0830 deep purple-black */
+  --sidebar-border:      258 28% 86%;    /* #D4CFED */
+  --sidebar-primary:     262 83% 58%;    /* #7C3AED vivid purple */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent:      262 55% 88%;    /* #DDD0F8 light purple tint */
+  --sidebar-accent-foreground: 262 83% 28%; /* #3D0EA3 deep purple text */
+  --sidebar-ring:        262 83% 58%;
 
   /* Charts */
   --chart-1:             262 83% 58%;
