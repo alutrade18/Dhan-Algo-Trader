@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -13,7 +12,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  RefreshCw,
   WifiOff,
   Search,
   X,
@@ -79,7 +77,7 @@ function computeMarketStatus(exchange: Exchange): {
     };
   }
   const open = 8 * 60 + 50; // 08:50
-  const close = exchange === "MCX" ? 23 * 60 + 59 : 18 * 60 + 40; // 23:59 or 18:40
+  const close = exchange === "MCX" ? 23 * 60 + 59 : 18 * 60 + 40;
   const closeLabel = exchange === "MCX" ? "11:59 PM" : "6:40 PM";
 
   if (mins < open) {
@@ -122,27 +120,6 @@ function formatOI(oi: number) {
   if (oi >= 100_000) return `${(oi / 100_000).toFixed(1)}L`;
   if (oi >= 1_000) return `${(oi / 1_000).toFixed(1)}K`;
   return String(oi);
-}
-
-function DeltaBadge({
-  current,
-  prev,
-}: {
-  current: number;
-  prev: number | undefined;
-}) {
-  if (prev === undefined || current === 0) return null;
-  const delta = current - prev;
-  if (Math.abs(delta) < 0.005) return null;
-  const up = delta > 0;
-  return (
-    <span
-      className={`text-[10px] font-mono ${up ? "text-emerald-400" : "text-red-400"}`}
-    >
-      {up ? "▲" : "▼"}
-      {Math.abs(delta).toFixed(2)}
-    </span>
-  );
 }
 
 function OIBar({
@@ -279,26 +256,26 @@ interface DbInstrument {
 }
 
 function mapDbToUnderlying(r: DbInstrument): IndexUnderlying {
-  // segment field from DB: "I" (index), "D" (derivatives), etc.
-  // Dhan uses "IDX_I" for index option chain / expiry calls
-  const exchSeg = r.exchId === "BSE" ? "IDX_I" : "IDX_I";
   const exch = (r.exchId === "BSE" ? "BSE" : r.exchId === "MCX" ? "MCX" : "NSE") as "NSE" | "BSE" | "MCX";
   return {
     label: r.displayName ?? r.symbolName,
     symbol: r.symbolName,
     dhanSecId: r.securityId,
     dbSecId: r.underlyingSecurityId ?? r.securityId,
-    segment: exchSeg,
+    segment: "IDX_I",
     exchange: exch,
   };
 }
+
+// ── Flash direction type ─────────────────────────────────────────────
+type Dir = 1 | -1 | 0;
+interface FlashEntry { call: Dir; put: Dir }
 
 // ── Main Component ──────────────────────────────────────────────────
 export default function OptionChain() {
   const [mode, setMode] = useState<Mode>("index");
   const [indexUnderlying, setIndexUnderlying] = useState<IndexUnderlying | null>(null);
-  const [stockUnderlying, setStockUnderlying] =
-    useState<StockUnderlying | null>(null);
+  const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
 
   // Load index underlyings from DB (instrument="INDEX")
@@ -313,10 +290,15 @@ export default function OptionChain() {
     staleTime: Infinity,
   });
 
-  // Auto-select first index once loaded
-  const activeIndex = indexUnderlying ?? indexList[0] ?? null;
+  // Auto-select NIFTY 50 (securityId=13) as default; fallback to first in list
+  useEffect(() => {
+    if (indexList.length === 0 || indexUnderlying !== null) return;
+    const nifty = indexList.find((u) => u.dhanSecId === 13 || u.symbol === "NIFTY");
+    setIndexUnderlying(nifty ?? indexList[0]);
+  }, [indexList, indexUnderlying]);
 
   // Active IDs / segment
+  const activeIndex = indexUnderlying;
   const activeDbSecId =
     mode === "index"
       ? (activeIndex?.dbSecId ?? null)
@@ -325,7 +307,6 @@ export default function OptionChain() {
     mode === "index"
       ? (activeIndex?.dhanSecId ?? null)
       : (stockUnderlying?.underlyingSecurityId ?? null);
-  const activeInstrument = mode === "index" ? "OPTIDX" : "OPTSTK";
   const activeSegment =
     mode === "index"
       ? (activeIndex?.segment ?? "IDX_I")
@@ -342,9 +323,7 @@ export default function OptionChain() {
   const marketStatus = useMarketStatus(activeExchange);
 
   // Expiry list via Dhan API
-  const { data: expiryList = [], isLoading: expiryLoading } = useQuery<
-    string[]
-  >({
+  const { data: expiryList = [], isLoading: expiryLoading } = useQuery<string[]>({
     queryKey: ["expiry-list-dhan", activeDhanSecId, activeSegment],
     queryFn: async () => {
       if (!activeDhanSecId) return [];
@@ -373,14 +352,8 @@ export default function OptionChain() {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
   }, [expiryList, expiry]);
 
-  // Option chain — gated by market hours; throttled server-side too
-  const {
-    data: chain,
-    isLoading: chainLoading,
-    refetch,
-    isFetching,
-    error: chainError,
-  } = useQuery({
+  // Option chain — auto-refreshes every 3s; no page dimming on background fetch
+  const { data: chain, isLoading: chainLoading, error: chainError } = useQuery({
     queryKey: ["option-chain", activeDhanSecId, activeSegment, expiry],
     queryFn: async () => {
       if (!expiry || !activeDhanSecId) return null;
@@ -397,15 +370,14 @@ export default function OptionChain() {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? "Failed to fetch option chain");
       }
-      return res.json() as Promise<{
-        data?: Record<string, unknown>;
-        ltp?: number;
-      }>;
+      return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
     enabled: !!expiry && !!activeDhanSecId && marketStatus.isOpen,
     refetchInterval: marketStatus.isOpen ? 3_000 : false,
     staleTime: 2_500,
     refetchOnWindowFocus: false,
+    // Keep previous data visible during background refetch — no dimming
+    placeholderData: (prev) => prev,
     retry: 0,
   });
 
@@ -422,11 +394,8 @@ export default function OptionChain() {
 
   let maxOI = 1;
   for (const strike of strikes) {
-    const key =
-      strikeKeys.find((k) => parseFloat(k) === strike) ?? String(strike);
-    const s = rawChain[key] as
-      | Record<string, Record<string, unknown>>
-      | undefined;
+    const key = strikeKeys.find((k) => parseFloat(k) === strike) ?? String(strike);
+    const s = rawChain[key] as Record<string, Record<string, unknown>> | undefined;
     const ce = s?.["ce"] ?? s?.["CE"] ?? {};
     const pe = s?.["pe"] ?? s?.["PE"] ?? {};
     const callOI = Number(ce.oi ?? ce.openInterest ?? 0);
@@ -438,15 +407,11 @@ export default function OptionChain() {
       callLTP: Number(ce.last_price ?? ce.ltp ?? 0),
       callOI,
       callVolume: Number(ce.volume ?? 0),
-      callIV: Number(
-        ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0,
-      ),
+      callIV: Number(ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0),
       putLTP: Number(pe.last_price ?? pe.ltp ?? 0),
       putOI,
       putVolume: Number(pe.volume ?? 0),
-      putIV: Number(
-        pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0,
-      ),
+      putIV: Number(pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0),
     });
   }
 
@@ -454,9 +419,7 @@ export default function OptionChain() {
   const atmStrike =
     underlyingLtp > 0 && strikes.length > 0
       ? strikes.reduce((prev, curr) =>
-          Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp)
-            ? curr
-            : prev,
+          Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev,
         )
       : 0;
 
@@ -469,10 +432,7 @@ export default function OptionChain() {
     const atmIdx = entries.findIndex((e) => e.strikePrice === atmStrike);
     if (atmIdx < 0 || underlyingLtp <= 0) {
       const mid = Math.floor(entries.length / 2);
-      return entries.slice(
-        Math.max(0, mid - 20),
-        Math.min(entries.length, mid + 21),
-      );
+      return entries.slice(Math.max(0, mid - 20), Math.min(entries.length, mid + 21));
     }
     return entries.slice(
       Math.max(0, atmIdx - 20),
@@ -480,38 +440,64 @@ export default function OptionChain() {
     );
   })();
 
-  // ── Live LTP change tracking ─────────────────────────────────────
-  // prevLTPRef holds LTP values from the PREVIOUS fetch cycle
-  const prevLTPRef = useRef<Map<number, { call: number; put: number }>>(
-    new Map(),
-  );
+  // ── Live LTP flash tracking ──────────────────────────────────────
+  // prevPricesRef: prices from previous fetch cycle
+  const prevPricesRef = useRef<Map<number, { call: number; put: number }>>(new Map());
+  // flashDirs: direction of last price change per strike (1=up, -1=down, 0=no change)
+  const [flashDirs, setFlashDirs] = useState<Map<number, FlashEntry>>(new Map());
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (entries.length === 0) return;
-    const newMap = new Map<number, { call: number; put: number }>();
-    entries.forEach((e) =>
-      newMap.set(e.strikePrice, { call: e.callLTP, put: e.putLTP }),
-    );
-    // Seed on first load; on subsequent fetches keep prev visible for 8s then update
-    if (prevLTPRef.current.size === 0) {
-      prevLTPRef.current = newMap;
-      return;
+
+    const newPrices = new Map<number, { call: number; put: number }>();
+    const newFlash = new Map<number, FlashEntry>();
+
+    entries.forEach((e) => {
+      newPrices.set(e.strikePrice, { call: e.callLTP, put: e.putLTP });
+      const prev = prevPricesRef.current.get(e.strikePrice);
+      if (prev) {
+        const callDir: Dir = e.callLTP > prev.call ? 1 : e.callLTP < prev.call ? -1 : 0;
+        const putDir: Dir = e.putLTP > prev.put ? 1 : e.putLTP < prev.put ? -1 : 0;
+        if (callDir !== 0 || putDir !== 0) {
+          newFlash.set(e.strikePrice, { call: callDir, put: putDir });
+        }
+      }
+    });
+
+    // Always update prev prices immediately for next cycle comparison
+    prevPricesRef.current = newPrices;
+
+    if (newFlash.size > 0) {
+      setFlashDirs(newFlash);
+      // Flash color shows for 2 seconds then fades to neutral
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setFlashDirs(new Map()), 2_000);
     }
-    const t = setTimeout(() => {
-      prevLTPRef.current = newMap;
-    }, 8_000);
-    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chain]);
+
+  // ── Auto-scroll table to ATM row ─────────────────────────────────
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const atmRowRef = useRef<HTMLTableRowElement>(null);
+
+  useEffect(() => {
+    if (!atmRowRef.current || !tableContainerRef.current) return;
+    const container = tableContainerRef.current;
+    const row = atmRowRef.current;
+    // Scroll table container (not page) so ATM row is centred
+    const rowMid = row.offsetTop + row.offsetHeight / 2;
+    container.scrollTop = rowMid - container.clientHeight / 2;
+  }, [displayEntries, atmStrike]);
 
   const isLoading = expiryLoading || chainLoading;
   const hasData = displayEntries.length > 0;
 
   return (
     <div className="space-y-4">
-      {/* ── Header row: status (left) + controls (right) ── */}
+      {/* ── Header row ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        {/* Left: market closed status — hidden when market is open */}
+        {/* Left: market closed notice */}
         {!marketStatus.isOpen && expiry && !chainError ? (
           <div className="flex items-start gap-2 min-w-0">
             <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -520,8 +506,7 @@ export default function OptionChain() {
                 Market is closed — live refresh paused
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                Manual Refresh works · Auto-refresh resumes at 8:50 AM IST on
-                next trading day.
+                Auto-refresh resumes at 8:50 AM IST on next trading day.
               </p>
             </div>
           </div>
@@ -529,8 +514,9 @@ export default function OptionChain() {
           <div />
         )}
 
-        {/* Right: controls — always visible */}
+        {/* Right: controls */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {/* Index / Stock toggle */}
           <div className="flex rounded-md overflow-hidden border border-border text-xs">
             <button
               className={`px-3 py-1.5 ${mode === "index" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -553,6 +539,7 @@ export default function OptionChain() {
             </button>
           </div>
 
+          {/* Index dropdown / Stock search */}
           {mode === "index" ? (
             <Select
               value={activeIndex ? String(activeIndex.dhanSecId) : ""}
@@ -582,39 +569,21 @@ export default function OptionChain() {
             />
           )}
 
+          {/* Expiry dropdown */}
           <Select
             value={expiry}
             onValueChange={setExpiry}
-            disabled={
-              expiryLoading || expiryList.length === 0 || !activeDbSecId
-            }
+            disabled={expiryLoading || expiryList.length === 0 || !activeDbSecId}
           >
             <SelectTrigger className="w-32 text-xs font-mono h-9">
-              <SelectValue
-                placeholder={expiryLoading ? "Loading…" : "Expiry"}
-              />
+              <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
             </SelectTrigger>
             <SelectContent>
               {expiryList.map((e) => (
-                <SelectItem key={e} value={e}>
-                  {e}
-                </SelectItem>
+                <SelectItem key={e} value={e}>{e}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 h-9"
-            onClick={() => void refetch()}
-            disabled={isFetching || !expiry || !activeDhanSecId}
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
         </div>
       </div>
 
@@ -625,10 +594,7 @@ export default function OptionChain() {
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">Spot:</span>
               <span className="font-mono font-bold text-foreground">
-                ₹
-                {underlyingLtp.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                })}
+                ₹{underlyingLtp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </span>
             </div>
           )}
@@ -642,9 +608,7 @@ export default function OptionChain() {
           )}
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">PCR:</span>
-            <span
-              className={`font-mono font-bold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}
-            >
+            <span className={`font-mono font-bold ${pcr > 1 ? "text-emerald-400" : "text-red-400"}`}>
               {pcr.toFixed(2)}
             </span>
             {pcr > 1.2 ? (
@@ -658,20 +622,13 @@ export default function OptionChain() {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">Total Call OI:</span>
-            <span className="font-mono text-red-400">
-              {formatOI(totalCallOI)}
-            </span>
+            <span className="font-mono text-red-400">{formatOI(totalCallOI)}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground">Total Put OI:</span>
-            <span className="font-mono text-emerald-400">
-              {formatOI(totalPutOI)}
-            </span>
+            <span className="font-mono text-emerald-400">{formatOI(totalPutOI)}</span>
           </div>
-          <Badge
-            variant="outline"
-            className="text-[10px] border-primary/40 text-primary"
-          >
+          <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
             {activeLabel} · {expiry}
           </Badge>
         </div>
@@ -709,8 +666,7 @@ export default function OptionChain() {
               <p className="text-xs text-muted-foreground">
                 {(chainError as Error).message?.includes("not Subscribed")
                   ? "Your Dhan account needs a Data API add-on. Enable it at dhan.co › Settings › Data APIs, then retry."
-                  : ((chainError as Error).message ??
-                    "Check Dhan broker connection and retry.")}
+                  : ((chainError as Error).message ?? "Check Dhan broker connection and retry.")}
               </p>
             </div>
           </CardContent>
@@ -725,10 +681,17 @@ export default function OptionChain() {
           </CardContent>
         </Card>
       ) : (
-        /* ── Option Chain Table ── */
-        <div className={`overflow-x-auto rounded-lg border border-border transition-opacity duration-200 ${isFetching ? "opacity-70" : "opacity-100"}`}>
+        /* ── Option Chain Table ──
+           overflow-y-auto + max-h = table scrolls independently (not the page)
+           No opacity change on background refetch = no dimming
+        */
+        <div
+          ref={tableContainerRef}
+          className="overflow-x-auto overflow-y-auto rounded-lg border border-border"
+          style={{ maxHeight: "62vh" }}
+        >
           <table className="w-full text-xs border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-10">
               {/* Section labels */}
               <tr className="border-b border-border">
                 <th
@@ -750,21 +713,13 @@ export default function OptionChain() {
               {/* Column headers */}
               <tr className="border-b border-border bg-muted/20 text-muted-foreground">
                 {["OI Bar", "OI", "Volume", "IV%", "LTP"].map((h) => (
-                  <th
-                    key={`ce-${h}`}
-                    className="px-2.5 py-1.5 text-right font-medium"
-                  >
+                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium">
                     {h}
                   </th>
                 ))}
-                <th className="px-3 py-1.5 text-center font-medium border-x border-border">
-                  ₹
-                </th>
+                <th className="px-3 py-1.5 text-center font-medium border-x border-border">₹</th>
                 {["LTP", "IV%", "Volume", "OI", "OI Bar"].map((h) => (
-                  <th
-                    key={`pe-${h}`}
-                    className="px-2.5 py-1.5 text-right font-medium"
-                  >
+                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium">
                     {h}
                   </th>
                 ))}
@@ -774,82 +729,61 @@ export default function OptionChain() {
             <tbody>
               {displayEntries.map((e) => {
                 const isATM = e.strikePrice === atmStrike;
-                const prev = prevLTPRef.current.get(e.strikePrice);
-                const callChange = prev ? e.callLTP - prev.call : 0;
-                const putChange = prev ? e.putLTP - prev.put : 0;
+                const flash = flashDirs.get(e.strikePrice);
+                const callDir = flash?.call ?? 0;
+                const putDir = flash?.put ?? 0;
 
                 return (
                   <tr
                     key={e.strikePrice}
-                    className={`
-                      border-b border-border/30 transition-colors
-                      ${
-                        isATM
-                          ? "bg-amber-400/10 hover:bg-amber-400/15"
-                          : "hover:bg-muted/15"
-                      }
-                    `}
+                    ref={isATM ? atmRowRef : undefined}
+                    className={`border-b border-border/30 transition-colors ${
+                      isATM
+                        ? "bg-amber-400/10 hover:bg-amber-400/15"
+                        : "hover:bg-muted/15"
+                    }`}
                   >
                     {/* ── CALL side ── */}
                     {/* OI Bar */}
-                    <td
-                      className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}
-                    >
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
                       <div className="flex justify-end">
                         <OIBar value={e.callOI} max={maxOI} side="ce" />
                       </div>
                     </td>
-                    {/* OI value */}
-                    <td
-                      className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}
-                    >
+                    {/* OI */}
+                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}>
                       <span className="text-red-400">{formatOI(e.callOI)}</span>
                     </td>
                     {/* Volume */}
-                    <td
-                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}
-                    >
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
                       {formatOI(e.callVolume)}
                     </td>
                     {/* IV */}
-                    <td
-                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}
-                    >
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
                       {e.callIV > 0 ? e.callIV.toFixed(1) : "—"}
                     </td>
-                    {/* LTP + change */}
-                    <td
-                      className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}
-                    >
-                      <div className="flex flex-col items-end">
-                        <span
-                          className={`font-mono font-semibold ${
-                            callChange > 0
-                              ? "text-emerald-400"
-                              : callChange < 0
-                                ? "text-red-400"
-                                : "text-foreground"
-                          }`}
-                        >
-                          ₹
-                          {e.callLTP.toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </span>
-                        <DeltaBadge current={e.callLTP} prev={prev?.call} />
-                      </div>
+                    {/* LTP — color flashes on price change */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                      <span
+                        className={`font-mono font-semibold transition-colors duration-300 ${
+                          callDir > 0
+                            ? "text-emerald-400"
+                            : callDir < 0
+                              ? "text-red-400"
+                              : "text-foreground"
+                        }`}
+                      >
+                        ₹{e.callLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
                     </td>
 
                     {/* ── STRIKE ── */}
                     <td
-                      className={`
-                      px-3 py-2 text-center font-mono font-bold border-x border-border whitespace-nowrap
-                      ${
+                      className={`px-3 py-2 text-center font-mono font-bold border-x border-border whitespace-nowrap ${
                         isATM
                           ? "bg-amber-400/15 text-amber-400 text-[13px]"
                           : "text-foreground/80"
-                      }
-                    `}
+                      }`}
                     >
                       {e.strikePrice.toLocaleString("en-IN")}
                       {isATM && (
@@ -860,52 +794,34 @@ export default function OptionChain() {
                     </td>
 
                     {/* ── PUT side ── */}
-                    {/* LTP + change */}
-                    <td
-                      className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}
-                    >
-                      <div className="flex flex-col items-end">
-                        <span
-                          className={`font-mono font-semibold ${
-                            putChange > 0
-                              ? "text-emerald-400"
-                              : putChange < 0
-                                ? "text-red-400"
-                                : "text-foreground"
-                          }`}
-                        >
-                          ₹
-                          {e.putLTP.toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </span>
-                        <DeltaBadge current={e.putLTP} prev={prev?.put} />
-                      </div>
+                    {/* LTP — color flashes on price change */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      <span
+                        className={`font-mono font-semibold transition-colors duration-300 ${
+                          putDir > 0
+                            ? "text-emerald-400"
+                            : putDir < 0
+                              ? "text-red-400"
+                              : "text-foreground"
+                        }`}
+                      >
+                        ₹{e.putLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
                     </td>
                     {/* IV */}
-                    <td
-                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}
-                    >
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
                       {e.putIV > 0 ? e.putIV.toFixed(1) : "—"}
                     </td>
                     {/* Volume */}
-                    <td
-                      className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}
-                    >
+                    <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
                       {formatOI(e.putVolume)}
                     </td>
-                    {/* OI value */}
-                    <td
-                      className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}
-                    >
-                      <span className="text-emerald-400">
-                        {formatOI(e.putOI)}
-                      </span>
+                    {/* OI */}
+                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      <span className="text-emerald-400">{formatOI(e.putOI)}</span>
                     </td>
                     {/* OI Bar */}
-                    <td
-                      className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}
-                    >
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
                       <div className="flex justify-start">
                         <OIBar value={e.putOI} max={maxOI} side="pe" />
                       </div>
@@ -934,9 +850,9 @@ export default function OptionChain() {
             ATM (At The Money)
           </span>
           <span className="flex items-center gap-1">
-            <span className="text-emerald-400 text-[10px]">▲0.50</span>/{" "}
-            <span className="text-red-400 text-[10px]">▼0.50</span>
-            Last LTP Change
+            <span className="text-emerald-400 text-[10px]">▲</span>
+            <span className="text-red-400 text-[10px]">▼</span>
+            LTP up / down from last update
           </span>
         </div>
       )}
