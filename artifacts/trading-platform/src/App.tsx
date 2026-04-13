@@ -17,8 +17,6 @@ import RiskManager from "@/pages/risk-manager";
 import SystemNotifications from "@/pages/system-notifications";
 import Logs from "@/pages/logs";
 import SuperOrders from "@/pages/super-orders";
-import ForeverOrders from "@/pages/forever-orders";
-import Conditional from "@/pages/conditional";
 import OptionChain from "@/pages/option-chain";
 import TradeHistory from "@/pages/trade-history";
 
@@ -39,8 +37,6 @@ function Router() {
         <Route path="/system-notifications" component={SystemNotifications} />
         <Route path="/logs" component={Logs} />
         <Route path="/super-orders" component={SuperOrders} />
-        <Route path="/forever-orders" component={ForeverOrders} />
-        <Route path="/conditional" component={Conditional} />
         <Route path="/option-chain" component={OptionChain} />
         <Route path="/trade-history" component={TradeHistory} />
         <Route component={NotFound} />

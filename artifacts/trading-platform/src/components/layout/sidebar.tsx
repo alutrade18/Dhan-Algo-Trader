@@ -11,8 +11,6 @@ import {
   X,
   ScrollText,
   Layers,
-  Clock,
-  Zap,
   LineChart,
   BookOpen,
   ShieldCheck,
@@ -29,8 +27,6 @@ const NAV_SECTIONS = [
       { href: "/orders", label: "Order Book", icon: List },
       { href: "/option-chain", label: "Option Chain", icon: LineChart },
       { href: "/super-orders", label: "Super Orders", icon: Layers },
-      { href: "/forever-orders", label: "Forever Orders", icon: Clock },
-      { href: "/conditional", label: "Conditional Triggers", icon: Zap },
     ],
   },
   {
