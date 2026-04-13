@@ -224,7 +224,7 @@ export default function Settings() {
               <span><span className="font-semibold">{connectResult.errorCode}:</span> {connectResult.errorMessage}</span>
             </div>
           )}
-          <div className="flex gap-2.5 pt-1">
+          <div className="flex gap-2.5 mt-auto pt-1">
             <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1" disabled={connectMutation.isPending}>
               {connectMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Connecting…</>
@@ -279,7 +279,7 @@ export default function Settings() {
             <Input type="text" className="h-10 font-mono bg-background/60" autoComplete="off" {...telegramForm.register("telegramChatId")} />
             {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>}
           </div>
-          <div className="flex gap-2.5 pt-1">
+          <div className="flex gap-2.5 mt-auto pt-1">
             <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={telegramMutation.isPending}>
               {telegramMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>

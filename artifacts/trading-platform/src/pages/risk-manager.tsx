@@ -294,10 +294,10 @@ export default function RiskManager() {
       )}
 
       {/* ── Row 1: Risk Management | Auto Square-Off ── */}
-      <div className="grid grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-2 gap-4 items-stretch">
 
         {/* Risk Management */}
-        <div className="rounded-2xl border border-orange-500/20 bg-card overflow-hidden shadow-sm">
+        <div className="flex flex-col rounded-2xl border border-orange-500/20 bg-card overflow-hidden shadow-sm">
           <div className="px-5 py-3.5 border-b border-border/30 bg-orange-500/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-orange-500/15 flex items-center justify-center">
@@ -306,7 +306,7 @@ export default function RiskManager() {
               <p className="font-semibold text-sm">Risk Management</p>
             </div>
           </div>
-          <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="px-5 py-4 space-y-4">
+          <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
             {settingsData?.maxDailyLoss != null && (
               <div className="flex items-center justify-between rounded-xl bg-orange-500/8 border border-orange-500/20 px-4 py-3">
                 <span className="text-xs text-muted-foreground flex items-center gap-1.5"><ShieldAlert className="w-3 h-3 text-orange-400" />Current limit</span>
@@ -321,14 +321,14 @@ export default function RiskManager() {
               </div>
               {riskForm.formState.errors.maxDailyLoss && <p className="text-[10px] text-destructive">{riskForm.formState.errors.maxDailyLoss.message}</p>}
             </div>
-            <Button type="submit" size="sm" className="w-full h-9 gap-1.5 bg-orange-600 hover:bg-orange-700 text-white" disabled={riskMutation.isPending}>
+            <Button type="submit" size="sm" className="w-full h-10 gap-1.5 bg-orange-600 hover:bg-orange-700 text-white mt-auto" disabled={riskMutation.isPending}>
               {riskMutation.isPending ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</> : <><Save className="w-3.5 h-3.5" />Save Limit</>}
             </Button>
           </form>
         </div>
 
         {/* Auto Square-Off Timer */}
-        <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+        <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
           <div className="px-5 py-3.5 border-b border-border/30 bg-blue-500/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center">
@@ -340,7 +340,7 @@ export default function RiskManager() {
               {autoSquareOffEnabled ? "ON" : "OFF"}
             </span>
           </div>
-          <div className="px-5 py-4 space-y-4">
+          <div className="flex-1 flex flex-col px-5 py-4 space-y-4">
             <div className="flex items-center justify-between rounded-xl bg-muted/20 border border-border/30 px-4 py-3">
               <div className="flex items-center gap-2.5">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
@@ -357,7 +357,7 @@ export default function RiskManager() {
                 className="h-11 w-full rounded-xl border border-input bg-background/60 px-4 text-base font-mono font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring tabular-nums"
               />
             </div>
-            <Button size="sm" className="w-full h-9 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
+            <Button size="sm" className="w-full h-10 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white mt-auto" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
               <Save className="w-3.5 h-3.5" />Save Timer
             </Button>
           </div>
@@ -469,19 +469,21 @@ export default function RiskManager() {
               />
               {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-[10px] text-destructive font-medium">PINs do not match</p>}
             </div>
-            <Button size="sm" className="w-full h-9 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
-              disabled={pinInput.length !== 4 || pinInput !== pinConfirm || genericSaveMutation.isPending}
-              onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: settingsData?.hasKillSwitchPin ? "PIN updated" : "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}
-            >
-              <Lock className="w-3.5 h-3.5" />{settingsData?.hasKillSwitchPin ? "Update PIN" : "Set PIN"}
-            </Button>
-            {settingsData?.hasKillSwitchPin && (
-              <Button size="sm" variant="outline" className="w-full h-9 gap-1.5 border-destructive/35 text-destructive hover:bg-destructive/8"
-                onClick={() => { setDeletePinStep("enter"); setShowDeleteModal(true); }}
+            <div className="mt-auto space-y-2">
+              <Button size="sm" className="w-full h-10 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={pinInput.length !== 4 || pinInput !== pinConfirm || genericSaveMutation.isPending}
+                onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: settingsData?.hasKillSwitchPin ? "PIN updated" : "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}
               >
-                <Trash2 className="w-3.5 h-3.5" />Delete PIN
+                <Lock className="w-3.5 h-3.5" />{settingsData?.hasKillSwitchPin ? "Update PIN" : "Set PIN"}
               </Button>
-            )}
+              {settingsData?.hasKillSwitchPin && (
+                <Button size="sm" variant="outline" className="w-full h-10 gap-1.5 border-destructive/35 text-destructive hover:bg-destructive/8"
+                  onClick={() => { setDeletePinStep("enter"); setShowDeleteModal(true); }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />Delete PIN
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
