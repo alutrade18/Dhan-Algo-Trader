@@ -79,8 +79,7 @@ function getAction(method: string, url: string): string {
   return `${method} /${parts.slice(0, 2).join("/")}`;
 }
 
-// Always skip polling + read-only data endpoints that fire every few seconds
-// (option chain, quotes, LTP) — they'd flood the logs.
+// Always skip high-frequency polling endpoints — they'd flood the logs.
 const ALWAYS_SKIP = [
   "/api/logs",
   "/api/health",
@@ -88,9 +87,9 @@ const ALWAYS_SKIP = [
   "/api/market/quote",
   "/api/market/ltp",
   "/api/market/option-chain",
-  "/api/dashboard/summary",   // polled every 30s — too noisy
-  "/api/funds",               // polled constantly
-  "/api/risk/killswitch",     // polled every 15s
+  "/api/dashboard/summary",
+  "/api/funds",
+  "/api/risk/killswitch",
 ];
 
 // For GET requests: only log if the response is an error (4xx/5xx).
@@ -104,6 +103,9 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   const category = getCategory(req.url);
   const action = getAction(req.method, req.url);
   const isReadOnly = MUTE_SUCCESS_METHODS.has(req.method);
+
+  // Capture route before it changes (strip query string)
+  const sourceRoute = `${req.method} ${req.url.split("?")[0]}`;
 
   const originalJson = res.json.bind(res);
   res.json = function (body: unknown) {
@@ -119,30 +121,46 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     const level = statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "info";
     const status = isError ? "failed" : "success";
 
-    const details: Record<string, unknown> = { duration: `${duration}ms` };
+    // ── source route: ALWAYS captured for all logs ───────────────────────────
+    const details: Record<string, unknown> = {
+      sourceRoute,
+      duration: `${duration}ms`,
+    };
 
-    // Capture error details from the response body (Dhan error format + generic)
+    // ── Error details — extract from response body ───────────────────────────
     if (isError && body && typeof body === "object") {
       const b = body as Record<string, unknown>;
-      if (b.errorCode)    details.errorCode    = b.errorCode;
-      if (b.errorMessage) details.errorMessage  = b.errorMessage;
-      if (b.error)        details.error         = b.error;
-      if (b.message)      details.message       = b.message;
+
+      // Primary error message (first non-null wins)
+      const errorMessage =
+        (b.errorMessage as string | undefined) ??
+        (b.error as string | undefined) ??
+        (b.message as string | undefined) ??
+        (statusCode >= 500 ? "Internal server error" : `HTTP ${statusCode}`);
+
+      details.errorMessage = errorMessage;
+
+      if (b.errorCode)   details.errorCode   = b.errorCode;
+      if (b.error)       details.error       = b.error;
+      if (b.message)     details.message     = b.message;
+      if (b.errorType)   details.errorType   = b.errorType;
+      if (b.remarks)     details.remarks     = b.remarks;
+      if (b.httpStatus)  details.httpStatus  = b.httpStatus;
     }
 
-    // Capture request payload for mutating calls (strip sensitive fields)
+    // ── Request payload for mutating calls (strip sensitive fields) ──────────
     if (!isReadOnly && req.body && typeof req.body === "object") {
       const safe = { ...req.body } as Record<string, unknown>;
       delete safe.accessToken;
       delete safe.password;
       delete safe.token;
       delete safe.killSwitchPin;
-      if (Object.keys(safe).length > 0) details.input = safe;
+      if (Object.keys(safe).length > 0) details.requestBody = safe;
     }
 
-    // For successful reads that aren't skipped, include the endpoint path
-    if (isReadOnly && isError) {
-      details.endpoint = `${req.method} ${req.url.split("?")[0]}`;
+    // ── Query params (useful for GET errors — search terms, filters etc.) ────
+    if (isError && Object.keys(req.query).length > 0) {
+      details.queryParams = req.query;
     }
 
     void logEvent({ level, category, action, details, status, statusCode });

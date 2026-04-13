@@ -23,6 +23,9 @@ import {
   XCircle,
   CheckCircle2,
   AlertTriangle,
+  MapPin,
+  Clock,
+  FileCode2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -67,9 +70,14 @@ function parseDhanError(details: string | null | undefined, statusCode: number |
   if (errorCode && DHAN_TRADING_ERRORS[errorCode]) return { code: errorCode, ...DHAN_TRADING_ERRORS[errorCode] };
   const numCode = statusCode ?? (typeof parsed.status === "number" ? parsed.status : undefined);
   if (numCode && DHAN_DATA_ERRORS[numCode]) return { code: String(numCode), type: "Data API Error", ...DHAN_DATA_ERRORS[numCode] };
-  const msg = (parsed.message ?? parsed.errorMessage ?? parsed.error) as string | undefined;
+  const msg = (parsed.errorMessage ?? parsed.message ?? parsed.error) as string | undefined;
   if (msg || statusCode) return { code: errorCode ?? String(numCode ?? statusCode ?? ""), type: "API Error", message: msg ?? `HTTP ${statusCode}`, color: "text-muted-foreground" };
   return null;
+}
+
+function parseDetails(details: string | null | undefined): Record<string, unknown> | null {
+  if (!details) return null;
+  try { return JSON.parse(details) as Record<string, unknown>; } catch { return null; }
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -96,6 +104,13 @@ const CATEGORY_STYLES: Record<string, string> = {
   risk: "bg-red-500/10 text-red-400", api: "bg-muted text-muted-foreground",
   system: "bg-muted/60 text-muted-foreground",
 };
+const METHOD_STYLES: Record<string, string> = {
+  GET:    "text-blue-400",
+  POST:   "text-emerald-400",
+  PUT:    "text-yellow-400",
+  PATCH:  "text-orange-400",
+  DELETE: "text-red-400",
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function fmtIST(iso: string) {
@@ -107,12 +122,38 @@ function fmtIST(iso: string) {
 function getLs(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
 function setLs(key: string, val: string) { try { localStorage.setItem(key, val); } catch {} }
 
+function SourceRouteBadge({ route }: { route: string | undefined }) {
+  if (!route) return null;
+  const [method, ...pathParts] = route.split(" ");
+  const path = pathParts.join(" ");
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-[10px] bg-muted/60 border border-border/50 rounded px-1.5 py-0.5 max-w-[220px] truncate">
+      <span className={cn("font-bold", METHOD_STYLES[method] ?? "text-muted-foreground")}>{method}</span>
+      <span className="text-muted-foreground truncate">{path}</span>
+    </span>
+  );
+}
+
 // ── Failed App Log Row ───────────────────────────────────────────────────────
 function FailedAppLogRow({ log }: { log: AppLog }) {
   const [expanded, setExpanded] = useState(false);
   const dhanErr = parseDhanError(log.details, log.statusCode);
-  let parsed: Record<string, unknown> | null = null;
-  if (log.details) { try { parsed = JSON.parse(log.details); } catch {} }
+  const parsed = parseDetails(log.details);
+  const sourceRoute = parsed?.sourceRoute as string | undefined;
+  const errorMessage = parsed?.errorMessage as string | undefined;
+  const duration = parsed?.duration as string | undefined;
+  const requestBody = parsed?.requestBody as Record<string, unknown> | undefined;
+  const queryParams = parsed?.queryParams as Record<string, unknown> | undefined;
+
+  // Build a clean details object (exclude fields shown elsewhere)
+  const rawDetails: Record<string, unknown> = {};
+  if (parsed) {
+    for (const [k, v] of Object.entries(parsed)) {
+      if (!["sourceRoute", "duration", "errorMessage", "requestBody", "queryParams"].includes(k)) {
+        rawDetails[k] = v;
+      }
+    }
+  }
 
   return (
     <>
@@ -131,39 +172,105 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
             {log.category}
           </Badge>
         </td>
-        <td className="px-2 py-2 font-medium max-w-[180px] truncate">{log.action}</td>
+        <td className="px-2 py-2 max-w-[160px]">
+          <div className="font-medium truncate text-[11px]">{log.action}</div>
+          <SourceRouteBadge route={sourceRoute} />
+        </td>
         <td className="px-2 py-2 min-w-[200px]">
           {dhanErr ? (
             <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {dhanErr.code && <span className="font-mono text-[9px] bg-destructive/10 text-destructive border border-destructive/30 rounded px-1">{dhanErr.code}</span>}
                 <span className={cn("text-[10px] font-semibold", dhanErr.color)}>{dhanErr.type}</span>
               </div>
-              <p className="text-[10px] text-muted-foreground leading-snug max-w-[300px] truncate">{dhanErr.message}</p>
+              <p className="text-[10px] text-muted-foreground leading-snug max-w-[280px] truncate">{dhanErr.message}</p>
             </div>
+          ) : errorMessage ? (
+            <p className="text-[10px] text-destructive/80 leading-snug max-w-[280px] truncate" title={errorMessage}>{errorMessage}</p>
           ) : (
-            <span className="text-[10px] text-muted-foreground italic">{log.statusCode ? `HTTP ${log.statusCode}` : "No error code"}</span>
+            <span className="text-[10px] text-muted-foreground italic">{log.statusCode ? `HTTP ${log.statusCode}` : "No details"}</span>
           )}
         </td>
         <td className="px-2 py-1.5 w-5 text-muted-foreground">{expanded ? <ChevronDown className="h-3 w-3 text-destructive" /> : <ChevronRight className="h-3 w-3" />}</td>
       </tr>
       {expanded && (
         <tr className="border-b border-border/40 bg-destructive/5">
-          <td colSpan={6} className="px-4 py-3 space-y-2">
+          <td colSpan={6} className="px-4 py-3 space-y-3">
+
+            {/* ── Source + timing ── */}
+            <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+              {sourceRoute && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3 h-3 text-primary/60" />
+                  <span className="font-semibold text-foreground/70">Source Route:</span>
+                  <SourceRouteBadge route={sourceRoute} />
+                </span>
+              )}
+              {duration && (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  <span className="font-semibold text-foreground/70">Duration:</span>
+                  <span className="font-mono">{duration}</span>
+                </span>
+              )}
+              {log.statusCode && (
+                <span className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground/70">HTTP Status:</span>
+                  <span className={cn("font-mono font-bold", log.statusCode >= 500 ? "text-destructive" : "text-yellow-400")}>{log.statusCode}</span>
+                </span>
+              )}
+            </div>
+
+            {/* ── Dhan error explanation ── */}
             {dhanErr && (
               <div className="rounded border border-destructive/30 bg-destructive/8 p-2.5">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
                   <span className="text-xs font-semibold text-destructive">{dhanErr.code ? `${dhanErr.code} · ` : ""}{dhanErr.type}</span>
                 </div>
                 <p className="text-xs text-foreground/80 leading-relaxed">{dhanErr.message}</p>
               </div>
             )}
-            {(parsed || log.details) && (
+
+            {/* ── Actual error message ── */}
+            {errorMessage && !dhanErr && (
+              <div className="rounded border border-destructive/30 bg-destructive/8 p-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                  <span className="text-xs font-semibold text-destructive">Error Message</span>
+                </div>
+                <p className="text-xs text-foreground/80 font-mono leading-relaxed break-all">{errorMessage}</p>
+              </div>
+            )}
+
+            {/* ── Request body ── */}
+            {requestBody && Object.keys(requestBody).length > 0 && (
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">Raw Response</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+                  <FileCode2 className="w-3 h-3" /> Request Body
+                </p>
                 <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all font-mono leading-relaxed bg-muted/30 rounded p-2 border border-border/40">
-                  {parsed ? JSON.stringify(parsed, null, 2) : log.details}
+                  {JSON.stringify(requestBody, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* ── Query params ── */}
+            {queryParams && Object.keys(queryParams).length > 0 && (
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">Query Params</p>
+                <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all font-mono leading-relaxed bg-muted/30 rounded p-2 border border-border/40">
+                  {JSON.stringify(queryParams, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* ── Raw error response ── */}
+            {Object.keys(rawDetails).length > 0 && (
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">Raw Error Response</p>
+                <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all font-mono leading-relaxed bg-muted/30 rounded p-2 border border-border/40">
+                  {JSON.stringify(rawDetails, null, 2)}
                 </pre>
               </div>
             )}
@@ -177,9 +284,13 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
 // ── Success Log Row ──────────────────────────────────────────────────────────
 function SuccessLogRow({ log }: { log: AppLog }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = !!log.details;
-  let parsed: Record<string, unknown> | null = null;
-  if (hasDetails) { try { parsed = JSON.parse(log.details!); } catch {} }
+  const parsed = parseDetails(log.details);
+  const sourceRoute = parsed?.sourceRoute as string | undefined;
+  const duration = parsed?.duration as string | undefined;
+  const requestBody = parsed?.requestBody as Record<string, unknown> | undefined;
+
+  const hasDetails = !!(sourceRoute || duration || requestBody);
+
   return (
     <>
       <tr
@@ -197,11 +308,15 @@ function SuccessLogRow({ log }: { log: AppLog }) {
             {log.category}
           </Badge>
         </td>
-        <td className="px-2 py-2 font-medium max-w-[420px] truncate text-foreground">{log.action}</td>
+        <td className="px-2 py-2 max-w-[200px]">
+          <div className="font-medium text-foreground text-[11px] truncate">{log.action}</div>
+          <SourceRouteBadge route={sourceRoute} />
+        </td>
         <td className="px-2 py-2">
           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
             <CheckCircle2 className="w-3 h-3" /> success
           </span>
+          {duration && <span className="ml-2 text-[10px] text-muted-foreground font-mono">{duration}</span>}
         </td>
         <td className="px-2 py-1.5 w-5 text-muted-foreground">
           {hasDetails && (expanded ? <ChevronDown className="h-3 w-3 text-emerald-400" /> : <ChevronRight className="h-3 w-3" />)}
@@ -209,10 +324,33 @@ function SuccessLogRow({ log }: { log: AppLog }) {
       </tr>
       {expanded && hasDetails && (
         <tr className="border-b border-border/40 bg-emerald-500/5">
-          <td colSpan={6} className="px-4 py-2">
-            <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all font-mono leading-relaxed">
-              {parsed ? JSON.stringify(parsed, null, 2) : log.details}
-            </pre>
+          <td colSpan={6} className="px-4 py-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+              {sourceRoute && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3 h-3 text-primary/60" />
+                  <span className="font-semibold text-foreground/70">Source Route:</span>
+                  <SourceRouteBadge route={sourceRoute} />
+                </span>
+              )}
+              {duration && (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  <span className="font-semibold text-foreground/70">Duration:</span>
+                  <span className="font-mono">{duration}</span>
+                </span>
+              )}
+            </div>
+            {requestBody && Object.keys(requestBody).length > 0 && (
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
+                  <FileCode2 className="w-3 h-3" /> Request Body
+                </p>
+                <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-all font-mono leading-relaxed bg-muted/30 rounded p-2 border border-border/40">
+                  {JSON.stringify(requestBody, null, 2)}
+                </pre>
+              </div>
+            )}
           </td>
         </tr>
       )}
@@ -354,7 +492,6 @@ export default function Logs() {
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <TabsList className="h-8 shrink-0">
 
-            {/* Failed Logs */}
             <TabsTrigger value="failed" className="text-xs px-3 gap-1.5">
               <XCircle className="w-3 h-3 text-destructive" />
               Failed Logs
@@ -365,7 +502,6 @@ export default function Logs() {
               )}
             </TabsTrigger>
 
-            {/* Success Logs */}
             <TabsTrigger value="success" className="text-xs px-3 gap-1.5">
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
               Success Logs
@@ -376,14 +512,12 @@ export default function Logs() {
               )}
             </TabsTrigger>
 
-            {/* Audit Logs */}
             <TabsTrigger value="audit" className="text-xs px-3 gap-1.5">
               <History className="w-3 h-3" />
               Audit Logs
             </TabsTrigger>
           </TabsList>
 
-          {/* Delete button — Success Logs only */}
           {activeTab === "success" && (
             <Button
               variant="outline" size="sm"
@@ -405,10 +539,13 @@ export default function Logs() {
                   <span className="font-semibold text-destructive">{failedTotal.toLocaleString()}</span>
                   {" "}failed / error {failedTotal === 1 ? "entry" : "entries"}
                 </span>
-                <span className="ml-auto text-[10px]">Live · auto-refreshes every 3s</span>
+                <span className="ml-auto text-[10px] flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-primary/50" />
+                  Source route shown per entry · auto-refreshes every 3s
+                </span>
               </div>
               <LogTable
-                headers={["Time (IST)", "Level", "Category", "Action / Symbol", "Dhan Error Reason / Details", ""]}
+                headers={["Time (IST)", "Level", "Category", "Action / Source Route", "Error Details", ""]}
                 isLoading={failedLoading}
                 isEmpty={failedLogs.length === 0}
                 emptyText="No failures yet — all API calls are succeeding."
@@ -439,7 +576,7 @@ export default function Logs() {
                 <span className="ml-auto text-[10px]">Live · auto-refreshes every 3s</span>
               </div>
               <LogTable
-                headers={["Time (IST)", "Level", "Category", "Action", "Status", ""]}
+                headers={["Time (IST)", "Level", "Category", "Action / Source Route", "Status / Duration", ""]}
                 isLoading={successLoading}
                 isEmpty={successLogs.length === 0}
                 emptyText="No success logs yet."
@@ -461,32 +598,22 @@ export default function Logs() {
         <TabsContent value="audit" className="mt-0">
           <Card>
             <CardContent className="px-3 pb-3 pt-3">
-              <div className="flex items-center gap-2 mb-2.5 text-xs text-muted-foreground">
-                <History className="w-3.5 h-3.5" />
-                <span>
-                  <span className="font-semibold text-foreground">{auditLogs.length.toLocaleString()}</span>
-                  {" "}{auditLogs.length === 1 ? "change" : "changes"} · last 50 records
-                </span>
-                <span className="ml-auto text-[10px]">Auto-refreshes every 30s</span>
-              </div>
               <LogTable
                 headers={["Time (IST)", "Action", "Field", "Old Value", "New Value", "Description"]}
                 isLoading={auditLoading}
                 isEmpty={auditLogs.length === 0}
-                emptyText="No settings changes recorded yet. Save any setting to start the audit trail."
+                emptyText="No settings changes recorded yet."
                 colSpan={6}
                 tableH={TABLE_H}
               >
-                {auditLogs.map((log) => (
-                  <tr key={log.id} className="border-b border-border/40 hover:bg-muted/20 text-xs">
-                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap">{fmtIST(log.changedAt)}</td>
-                    <td className="px-2 py-2">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">{log.action}</Badge>
-                    </td>
-                    <td className="px-2 py-2 font-medium text-foreground">{log.field ?? "—"}</td>
-                    <td className="px-2 py-2 text-muted-foreground font-mono text-[10px] max-w-[140px] truncate" title={log.oldValue ?? ""}>{log.oldValue ?? "—"}</td>
-                    <td className="px-2 py-2 text-foreground font-mono text-[10px] max-w-[140px] truncate" title={log.newValue ?? ""}>{log.newValue ?? "—"}</td>
-                    <td className="px-2 py-2 text-muted-foreground max-w-[200px] truncate">{log.description ?? "—"}</td>
+                {auditLogs.map((entry) => (
+                  <tr key={entry.id} className="border-b border-border/40 hover:bg-muted/30 text-xs">
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap font-mono text-[10px]">{fmtIST(entry.changedAt)}</td>
+                    <td className="px-2 py-2 font-medium">{entry.action}</td>
+                    <td className="px-2 py-2 font-mono text-[10px] text-primary">{entry.field ?? "—"}</td>
+                    <td className="px-2 py-2 font-mono text-[10px] text-muted-foreground max-w-[140px] truncate">{entry.oldValue ?? "—"}</td>
+                    <td className="px-2 py-2 font-mono text-[10px] text-foreground max-w-[140px] truncate">{entry.newValue ?? "—"}</td>
+                    <td className="px-2 py-2 text-[10px] text-muted-foreground">{entry.description ?? "—"}</td>
                   </tr>
                 ))}
               </LogTable>
@@ -495,23 +622,18 @@ export default function Logs() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Confirm clear Success view ── */}
+      {/* Confirm clear dialog */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className="max-w-sm">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear Success Logs view?</AlertDialogTitle>
+            <AlertDialogTitle>Clear success log view?</AlertDialogTitle>
             <AlertDialogDescription>
-              Hides all current <strong>Success Logs</strong> from this view. All logs are permanently stored in the database and are never deleted.
+              This hides logs from view only — all entries remain permanently in the database for auditing.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleClearSuccess}
-            >
-              Clear View
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleClearSuccess}>Clear View</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
