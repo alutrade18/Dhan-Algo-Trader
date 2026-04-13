@@ -256,17 +256,28 @@ export default function Settings() {
           <form onSubmit={brokerForm.handleSubmit(d => connectMutation.mutate(d))} className="px-5 py-4">
             <div className="grid grid-cols-2 gap-6 mb-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client ID</label>
-                <Input placeholder="Enter your Dhan Client ID" className="h-9" {...brokerForm.register("clientId")} />
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Client ID
+                  {isConnected && maskedClientId && <span className="ml-1.5 normal-case font-normal text-green-500/80">· {maskedClientId} saved</span>}
+                </label>
+                <Input
+                  placeholder={isConnected && maskedClientId ? maskedClientId : "Enter your Dhan Client ID"}
+                  className="h-9"
+                  {...brokerForm.register("clientId")}
+                />
                 {brokerForm.formState.errors.clientId && <p className="text-[10px] text-destructive">{brokerForm.formState.errors.clientId.message}</p>}
+                {isConnected && <p className="text-[10px] text-muted-foreground">Leave blank to keep your existing Client ID</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Access Token <span className="normal-case text-muted-foreground/60 font-normal">(expires every 24h)</span></label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Access Token <span className="normal-case text-muted-foreground/60 font-normal">(expires every 24h)</span>
+                </label>
                 <div className="relative">
-                  <Input type={showToken ? "text" : "password"} placeholder="Paste your Access Token here" className="h-9 pr-9" autoComplete="current-password" {...brokerForm.register("accessToken")} />
+                  <Input type={showToken ? "text" : "password"} placeholder={isConnected ? "Paste new token to reconnect" : "Paste your Access Token here"} className="h-9 pr-9" autoComplete="current-password" {...brokerForm.register("accessToken")} />
                   <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowToken(!showToken)}>{showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}</button>
                 </div>
                 {brokerForm.formState.errors.accessToken && <p className="text-[10px] text-destructive">{brokerForm.formState.errors.accessToken.message}</p>}
+                {isConnected && <p className="text-[10px] text-muted-foreground">Only fill this if your token has expired</p>}
               </div>
             </div>
             {connectResult && !connectResult.success && (
