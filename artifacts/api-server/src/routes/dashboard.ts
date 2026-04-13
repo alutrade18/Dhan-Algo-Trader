@@ -191,7 +191,9 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
 
     const ledgerResult = await dhanClient.getLedger(fromStr, toStr).catch(() => null);
     if (!ledgerResult) {
-      res.status(500).json({ error: "Ledger fetch failed" });
+      // Ledger API unavailable (e.g. outside market hours, rate limit, or token issue).
+      // Return graceful 200 with null so the chart shows "unavailable" instead of error banner.
+      res.json({ periodPnl: null, days, unavailable: true });
       return;
     }
 

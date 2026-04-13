@@ -140,17 +140,19 @@ router.post("/super-orders", async (req, res): Promise<void> => {
       return;
     }
 
+    // BUG FIX: Dhan API v2 requires snake_case field names. camelCase is silently ignored.
+    // Also map "INTRADAY" → "INTRA" (Dhan's required enum value for intraday product type).
     const dhanPayload: Record<string, unknown> = {
-      securityId: security_id,
-      exchangeSegment: exchange_segment,
-      transactionType: transaction_type,
-      orderType: order_type ?? "LIMIT",
-      productType: product_type,
+      security_id,
+      exchange_segment,
+      transaction_type,
+      order_type: order_type ?? "LIMIT",
+      product_type: product_type === "INTRADAY" ? "INTRA" : product_type,
       quantity,
       price: order_type === "MARKET" ? 0 : price,
       validity: "DAY",
-      disclosedQuantity: 0,
-      afterMarketOrder: false,
+      disclosed_quantity: 0,
+      after_market_order: false,
     };
 
     const dhanResp = await dhanClient.placeOrder(dhanPayload) as {

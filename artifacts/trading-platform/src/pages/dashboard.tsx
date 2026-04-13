@@ -383,7 +383,8 @@ export default function Dashboard() {
           ? 365
           : null;
   const { data: periodPnlData, isLoading: isPeriodPnlLoading } = useQuery<{
-    periodPnl: number;
+    periodPnl: number | null;
+    unavailable?: boolean;
   }>({
     queryKey: ["period-pnl", presetDays],
     queryFn: async () => {
@@ -419,7 +420,7 @@ export default function Dashboard() {
     activeQuery.mode === "30d" ||
     activeQuery.mode === "365d";
   const displayPnl =
-    isPeriodMode && periodPnlData !== undefined
+    isPeriodMode && periodPnlData !== undefined && periodPnlData.periodPnl !== null
       ? periodPnlData.periodPnl
       : (summary?.totalPnl ?? 0);
   const displayLabel =
