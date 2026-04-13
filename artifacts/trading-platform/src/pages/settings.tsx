@@ -38,29 +38,27 @@ interface SettingsData {
 }
 interface KillSwitchStatus { killSwitchStatus?: string; isActive?: boolean; canDeactivateToday?: boolean; deactivationsUsed?: number }
 
-function SectionHeader({ color, icon, title, subtitle, badge }: { color: string; icon: React.ReactNode; title: string; subtitle?: string; badge?: React.ReactNode }) {
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm ${className}`}>{children}</div>;
+}
+
+function CardHeader({ icon, iconBg, title, badge }: { icon: React.ReactNode; iconBg: string; title: string; badge?: React.ReactNode }) {
   return (
-    <div className={`flex items-start justify-between gap-3 px-5 py-3.5 border-b border-border/40 ${color}`}>
-      <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 shrink-0">{icon}</div>
-        <div>
-          <p className="font-semibold text-sm">{title}</p>
-          {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{subtitle}</p>}
-        </div>
+    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/40">
+      <div className="flex items-center gap-3">
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>{icon}</div>
+        <span className="font-semibold text-sm tracking-tight">{title}</span>
       </div>
       {badge}
     </div>
   );
 }
 
-function FR({ label, hint, ctrl, last = false }: { label: string; hint?: string; ctrl: React.ReactNode; last?: boolean }) {
+function Field({ label, children, noBorder }: { label: string; children: React.ReactNode; noBorder?: boolean }) {
   return (
-    <div className={`flex items-start justify-between gap-3 py-3 ${!last ? "border-b border-border/25" : ""}`}>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
-        {hint && <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{hint}</p>}
-      </div>
-      <div className="shrink-0">{ctrl}</div>
+    <div className={`flex items-center justify-between gap-4 py-3 ${noBorder ? "" : "border-b border-border/25"}`}>
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
@@ -73,7 +71,7 @@ function TokenExpiryWarning() {
   const hoursLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
   if (hoursLeft > 4) return null;
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 col-span-3">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 col-span-3">
       <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" /><p className="text-xs text-amber-400">Token expires in ~{Math.max(0, Math.floor(hoursLeft))}h {Math.floor((hoursLeft % 1) * 60)}m. Renew now.</p></div>
       <button className="text-xs text-amber-400 border border-amber-500/40 px-2.5 py-1 rounded-md hover:bg-amber-500/20 transition-colors whitespace-nowrap" onClick={async () => { const res = await fetch(`${BASE}api/broker/renew-token`, { method: "POST" }); const d = await res.json(); alert(d.success ? "Token renewed!" : "Renewal failed."); }}>Renew Token</button>
     </div>
@@ -110,7 +108,6 @@ export default function Settings() {
     setDefaultQuantity(settingsData.defaultQuantity != null ? String(settingsData.defaultQuantity) : "");
   }, [settingsData?.id]);
 
-  // Auto-refresh broker funds every 4s (no manual refresh button)
   const { data: brokerStatus } = useQuery<FundDetails & { connected: boolean }>({
     queryKey: ["broker-status"], enabled: isConnected, refetchInterval: 4_000, staleTime: 0, gcTime: 0,
     queryFn: async () => { const r = await fetch(`${BASE}api/broker/status`); if (!r.ok) return { connected: false }; return r.json(); },
@@ -126,7 +123,6 @@ export default function Settings() {
   const brokerForm = useForm<z.infer<typeof brokerSchema>>({ resolver: zodResolver(brokerSchema), defaultValues: { clientId: "", accessToken: "" } });
   const telegramForm = useForm<z.infer<typeof telegramSchema>>({ resolver: zodResolver(telegramSchema), defaultValues: { telegramBotToken: "", telegramChatId: "" } });
 
-  // Show masked credentials in input boxes when connected
   useEffect(() => {
     if (isConnected) {
       if (maskedClientId) brokerForm.setValue("clientId", maskedClientId, { shouldValidate: false });
@@ -216,17 +212,26 @@ export default function Settings() {
   }
 
   if (isLoading) {
-    return <div className="grid grid-cols-3 gap-4 w-full">{[...Array(5)].map((_, i) => <Skeleton key={i} className={`h-44 rounded-xl ${i === 0 || i === 4 ? "col-span-3" : "col-span-1"}`} />)}</div>;
+    return (
+      <div className="space-y-4 w-full">
+        <Skeleton className="h-36 rounded-2xl w-full" />
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-24 rounded-2xl w-full" />
+      </div>
+    );
   }
 
   const funds: FundDetails = connectResult?.success ? connectResult : (brokerStatus?.connected ? brokerStatus : {});
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+
       {/* PIN Dialog */}
       {pinDialogFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-background border border-border rounded-xl p-6 w-80 space-y-4 shadow-2xl">
+          <div className="bg-background border border-border rounded-2xl p-6 w-80 space-y-4 shadow-2xl">
             <div className="flex items-center gap-2"><Lock className="w-5 h-5 text-amber-400" /><h3 className="font-semibold">Kill Switch PIN Required</h3></div>
             <p className="text-xs text-muted-foreground">Enter your 4-digit PIN to {pinDialogFor === "ACTIVATE" ? "activate" : "deactivate"} the kill switch.</p>
             <Input type="password" placeholder="••••" maxLength={4} value={pinVerifyInput} onChange={e => setPinVerifyInput(e.target.value)} onKeyDown={e => e.key === "Enter" && void verifyPinAndProceed()} className="text-center text-xl tracking-widest font-mono" />
@@ -241,143 +246,209 @@ export default function Settings() {
       <div className="grid grid-cols-3 gap-4 items-start">
         <TokenExpiryWarning />
 
-        {/* ══ ROW 1 — Broker Connection (full width) ══ */}
-        <div className="col-span-3 rounded-xl border border-primary/25 bg-card overflow-hidden">
-          <SectionHeader
-            color="bg-blue-500/5"
-            icon={isConnected ? <Wifi className="w-4 h-4 text-blue-400" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+        {/* ── Broker Connection (full width) ── */}
+        <Card className={`col-span-3 ${isConnected ? "border-green-500/20" : "border-border/50"}`}>
+          <CardHeader
+            icon={isConnected ? <Wifi className="w-3.5 h-3.5 text-green-400" /> : <WifiOff className="w-3.5 h-3.5 text-muted-foreground" />}
+            iconBg={isConnected ? "bg-green-500/15" : "bg-muted/20"}
             title="Broker Connection"
-            badge={isConnected ? (
-              <div className="flex items-center gap-4 text-xs flex-wrap">
-                <Badge variant="outline" className="text-green-400 border-green-500/30 bg-green-500/10 gap-1.5"><CheckCircle2 className="w-3 h-3" />Connected</Badge>
-                <span className="font-mono text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{funds.dhanClientId ?? maskedClientId}</span>
-                {funds.availableBalance !== undefined && <>
-                  <span className="text-muted-foreground">Bal <span className="text-green-400 font-semibold">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-                  <span className="text-muted-foreground">Margin <span className="font-semibold">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-                  <span className="text-muted-foreground">Withdrawable <span className="font-semibold">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
-                </>}
-              </div>
-            ) : <Badge variant="outline" className="text-destructive border-destructive/30">Disconnected</Badge>}
+            badge={
+              isConnected ? (
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                  <Badge className="h-5 gap-1.5 bg-green-500/15 text-green-400 border border-green-500/25 shadow-none">
+                    <CheckCircle2 className="w-3 h-3" />Connected
+                  </Badge>
+                  <span className="font-mono text-muted-foreground flex items-center gap-1 text-[11px]">
+                    <User className="w-3 h-3" />{funds.dhanClientId ?? maskedClientId}
+                  </span>
+                  {funds.availableBalance !== undefined && (
+                    <>
+                      <span className="text-muted-foreground text-[11px]">Bal <span className="text-foreground font-semibold">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                      <span className="text-muted-foreground text-[11px]">Margin <span className="text-foreground font-semibold">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                      <span className="text-muted-foreground text-[11px]">Withdrawable <span className="text-foreground font-semibold">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <Badge variant="outline" className="text-[10px] h-5 text-destructive border-destructive/30">Disconnected</Badge>
+              )
+            }
           />
           <form onSubmit={brokerForm.handleSubmit(d => connectMutation.mutate(d))} className="px-5 py-4">
-            <div className="grid grid-cols-2 gap-6 mb-4">
+            <div className="grid grid-cols-2 gap-5 mb-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client ID</label>
-                <Input
-                  placeholder=""
-                  className="h-9"
-                  {...brokerForm.register("clientId")}
-                />
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Client ID</label>
+                <Input placeholder="" className="h-10" {...brokerForm.register("clientId")} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Access Token</label>
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Access Token</label>
                 <div className="relative">
-                  <Input type={showToken ? "text" : "password"} placeholder="" className="h-9 pr-9" autoComplete="current-password" {...brokerForm.register("accessToken")} />
-                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowToken(!showToken)}>{showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}</button>
+                  <Input type={showToken ? "text" : "password"} placeholder="" className="h-10 pr-10" autoComplete="current-password" {...brokerForm.register("accessToken")} />
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setShowToken(!showToken)}>
+                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
             </div>
             {connectResult && !connectResult.success && (
-              <div className="flex items-center gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-xs mb-4">
+              <div className="flex items-center gap-2 p-3 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-xs mb-4">
                 <XCircle className="w-3.5 h-3.5 shrink-0" />{connectResult.errorCode}: {connectResult.errorMessage}
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Button type="submit" size="sm" disabled={connectMutation.isPending} className="h-8">{connectMutation.isPending ? "Connecting…" : "Save & Connect"}</Button>
-              {isConnected && <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 border-destructive/40 text-destructive hover:bg-destructive/10" disabled={disconnectMutation.isPending} onClick={() => disconnectMutation.mutate()}><LogOut className="w-3.5 h-3.5" />{disconnectMutation.isPending ? "Disconnecting…" : "Disconnect"}</Button>}
-            </div>
-          </form>
-        </div>
-
-        {/* ══ ROW 2 — Telegram | Kill Switch | Kill Switch PIN (3 equal cols) ══ */}
-
-        {/* Telegram Alerts */}
-        <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-violet-500/5" icon={<Bell className="w-4 h-4 text-violet-400" />} title="Telegram Alerts" />
-          <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="px-5 py-4">
-            <FR label="Bot Token" ctrl={
-              <div className="relative w-full max-w-[200px]">
-                <Input type={showBotToken ? "text" : "password"} className="h-8 text-xs font-mono pr-8 w-full" autoComplete="off" {...telegramForm.register("telegramBotToken")} />
-                <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowBotToken(!showBotToken)}>{showBotToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}</button>
-              </div>
-            } />
-            {telegramForm.formState.errors.telegramBotToken && <p className="text-[10px] text-destructive -mt-2 mb-2">{telegramForm.formState.errors.telegramBotToken.message}</p>}
-            <FR label="Chat ID" last ctrl={
-              <Input type="text" className="h-8 text-xs font-mono w-full max-w-[200px]" autoComplete="off" {...telegramForm.register("telegramChatId")} />
-            } />
-            {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive mt-1 mb-1">{telegramForm.formState.errors.telegramChatId.message}</p>}
-            <div className="flex items-center gap-2 pt-3">
-              <Button type="submit" size="sm" className="gap-1.5 h-8" disabled={telegramMutation.isPending}><Bell className="w-3 h-3" />{telegramMutation.isPending ? "Saving…" : "Save"}</Button>
-              {(settingsData?.telegramBotToken || settingsData?.telegramChatId) && (
-                <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-destructive border-destructive/30" disabled={telegramResetMutation.isPending} onClick={() => { if (confirm("Remove saved Telegram credentials?")) telegramResetMutation.mutate(); }}><XCircle className="w-3 h-3" />Reset</Button>
+              <Button type="submit" size="sm" className="h-9 px-5" disabled={connectMutation.isPending}>
+                {connectMutation.isPending ? "Connecting…" : "Save & Connect"}
+              </Button>
+              {isConnected && (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-9 border-destructive/40 text-destructive hover:bg-destructive/10" disabled={disconnectMutation.isPending} onClick={() => disconnectMutation.mutate()}>
+                  <LogOut className="w-3.5 h-3.5" />{disconnectMutation.isPending ? "Disconnecting…" : "Disconnect"}
+                </Button>
               )}
-              {settingsData?.telegramChatId && <span className="text-xs text-green-400 ml-auto">✓ Active</span>}
             </div>
           </form>
-        </div>
+        </Card>
 
-        {/* Emergency Kill Switch */}
-        <div className={`col-span-1 rounded-xl border bg-card overflow-hidden ${killSwitchActive ? "border-destructive/50" : "border-border/60"}`}>
-          <SectionHeader
-            color={killSwitchActive ? "bg-destructive/10" : "bg-muted/10"}
-            icon={<Power className={`w-4 h-4 ${killSwitchActive ? "text-destructive" : "text-muted-foreground"}`} />}
+        {/* ── Telegram Alerts ── */}
+        <Card className="col-span-1">
+          <CardHeader
+            icon={<Bell className="w-3.5 h-3.5 text-violet-400" />}
+            iconBg="bg-violet-500/15"
+            title="Telegram Alerts"
+            badge={settingsData?.telegramChatId ? <span className="text-[10px] font-semibold text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Active</span> : undefined}
+          />
+          <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="px-5 pt-3 pb-5 space-y-0">
+            <Field label="Bot Token">
+              <div className="relative">
+                <Input type={showBotToken ? "text" : "password"} className="h-8 text-xs font-mono pr-8 w-44" autoComplete="off" {...telegramForm.register("telegramBotToken")} />
+                <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowBotToken(!showBotToken)}>
+                  {showBotToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                </button>
+              </div>
+            </Field>
+            {telegramForm.formState.errors.telegramBotToken && <p className="text-[10px] text-destructive -mt-2 mb-1">{telegramForm.formState.errors.telegramBotToken.message}</p>}
+            <Field label="Chat ID" noBorder>
+              <Input type="text" className="h-8 text-xs font-mono w-44" autoComplete="off" {...telegramForm.register("telegramChatId")} />
+            </Field>
+            {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive mt-1">{telegramForm.formState.errors.telegramChatId.message}</p>}
+            <div className="flex items-center gap-2 pt-4">
+              <Button type="submit" size="sm" className="h-9 flex-1 gap-1.5" disabled={telegramMutation.isPending}>
+                <Bell className="w-3.5 h-3.5" />{telegramMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+              {(settingsData?.telegramBotToken || settingsData?.telegramChatId) && (
+                <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10" disabled={telegramResetMutation.isPending} onClick={() => { if (confirm("Remove saved Telegram credentials?")) telegramResetMutation.mutate(); }}>
+                  <XCircle className="w-3.5 h-3.5" />Reset
+                </Button>
+              )}
+            </div>
+          </form>
+        </Card>
+
+        {/* ── Emergency Kill Switch ── */}
+        <Card className={`col-span-1 ${killSwitchActive ? "border-destructive/40" : ""}`}>
+          <CardHeader
+            icon={<Power className={`w-3.5 h-3.5 ${killSwitchActive ? "text-destructive" : "text-muted-foreground"}`} />}
+            iconBg={killSwitchActive ? "bg-destructive/20" : "bg-muted/20"}
             title="Emergency Kill Switch"
             badge={
               <div className="flex items-center gap-1.5">
-                {settingsData?.hasKillSwitchPin && <Badge variant="outline" className="text-[10px] text-amber-400 border-amber-500/30 gap-1"><Lock className="w-2.5 h-2.5" />PIN</Badge>}
-                {killSwitchActive ? <Badge variant="destructive" className="text-[10px]">ACTIVE</Badge> : <Badge variant="outline" className="text-[10px] text-green-400 border-green-500/30">INACTIVE</Badge>}
+                {settingsData?.hasKillSwitchPin && (
+                  <Badge variant="outline" className="text-[10px] h-5 text-amber-400 border-amber-500/30 gap-1">
+                    <Lock className="w-2.5 h-2.5" />PIN
+                  </Badge>
+                )}
+                {killSwitchActive
+                  ? <Badge className="text-[10px] h-5 bg-destructive/20 text-destructive border border-destructive/30 shadow-none">ACTIVE</Badge>
+                  : <Badge variant="outline" className="text-[10px] h-5 text-green-400 border-green-500/30">INACTIVE</Badge>
+                }
               </div>
             }
           />
-          <div className="px-5 py-4">
+          <div className="px-5 py-5 flex flex-col items-center justify-center min-h-[120px]">
             {!isConnected ? (
-              <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground"><WifiOff className="w-3.5 h-3.5" />Connect broker first.</div>
-            ) : (
-              <div className="flex gap-2">
-                {killSwitchActive
-                  ? <Button variant="outline" size="sm" className={`gap-1.5 h-8 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/10" : "opacity-50"}`} disabled={killSwitchMutation.isPending || !canDeactivate} onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}><Power className="w-3 h-3" />{killSwitchMutation.isPending ? "…" : "Deactivate"}</Button>
-                  : <Button variant="destructive" size="sm" className="gap-1.5 h-8" disabled={killSwitchMutation.isPending} onClick={() => handleKillSwitchAction("ACTIVATE")}><Power className="w-3 h-3" />{killSwitchMutation.isPending ? "…" : "Activate Kill Switch"}</Button>}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <WifiOff className="w-3.5 h-3.5" />Connect broker first.
               </div>
+            ) : killSwitchActive ? (
+              <div className="w-full space-y-2">
+                <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium">
+                  <Power className="w-3.5 h-3.5" />All trading blocked
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`w-full h-9 gap-1.5 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/10" : "opacity-40 cursor-not-allowed"}`}
+                  disabled={killSwitchMutation.isPending || !canDeactivate}
+                  onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
+                >
+                  <Power className="w-3.5 h-3.5" />{killSwitchMutation.isPending ? "…" : "Deactivate"}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full h-10 gap-1.5 text-sm"
+                disabled={killSwitchMutation.isPending}
+                onClick={() => handleKillSwitchAction("ACTIVATE")}
+              >
+                <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "…" : "Activate Kill Switch"}
+              </Button>
             )}
           </div>
-        </div>
+        </Card>
 
-        {/* Kill Switch PIN */}
-        <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-amber-500/5" icon={<Lock className="w-4 h-4 text-amber-400" />} title="Kill Switch PIN" subtitle="4-digit PIN required to toggle the kill switch" />
-          <div className="px-5 py-4">
+        {/* ── Kill Switch PIN ── */}
+        <Card className="col-span-1">
+          <CardHeader
+            icon={<Lock className="w-3.5 h-3.5 text-amber-400" />}
+            iconBg="bg-amber-500/15"
+            title="Kill Switch PIN"
+            badge={settingsData?.hasKillSwitchPin ? <Badge variant="outline" className="text-[10px] h-5 text-amber-400 border-amber-500/30 gap-1"><Lock className="w-2.5 h-2.5" />Set</Badge> : undefined}
+          />
+          <div className="px-5 pt-3 pb-5">
             {settingsData?.hasKillSwitchPin && (
               <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-3">
-                <Lock className="w-3 h-3 shrink-0" />PIN is set. Enter a new PIN below to change it.
+                <Lock className="w-3 h-3 shrink-0" />PIN active — enter new to change.
               </div>
             )}
-            <FR label="New PIN" ctrl={
+            <Field label="New PIN">
               <div className="relative">
                 <Input type={showPin ? "text" : "password"} placeholder="••••" maxLength={4} className="h-8 text-sm text-center font-mono tracking-widest pr-8 w-28" value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-                <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPin(!showPin)}>{showPin ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}</button>
+                <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPin(!showPin)}>
+                  {showPin ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                </button>
               </div>
-            } />
-            <FR label="Confirm PIN" hint={pinInput && pinConfirm && pinInput !== pinConfirm ? "❌ PINs do not match" : undefined} last ctrl={
+            </Field>
+            <Field label="Confirm PIN" noBorder>
               <Input type="password" placeholder="••••" maxLength={4} className={`h-8 text-sm text-center font-mono tracking-widest w-28 ${pinInput && pinConfirm && pinInput !== pinConfirm ? "border-destructive" : ""}`} value={pinConfirm} onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-            } />
-            <div className="flex gap-2 pt-3">
-              <Button size="sm" className="gap-1.5 h-8" disabled={pinInput.length !== 4 || pinInput !== pinConfirm} onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}><Lock className="w-3 h-3" />Set PIN</Button>
+            </Field>
+            {pinInput && pinConfirm && pinInput !== pinConfirm && <p className="text-[10px] text-destructive mt-1">PINs do not match</p>}
+            <div className="flex gap-2 pt-4">
+              <Button size="sm" className="h-9 flex-1 gap-1.5" disabled={pinInput.length !== 4 || pinInput !== pinConfirm} onClick={() => { void genericSaveMutation.mutateAsync({ killSwitchPin: pinInput }).then(() => { toast({ title: "PIN set" }); setPinInput(""); setPinConfirm(""); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}>
+                <Lock className="w-3.5 h-3.5" />Set PIN
+              </Button>
               {settingsData?.hasKillSwitchPin && (
-                <Button size="sm" variant="outline" className="gap-1.5 h-8 text-destructive border-destructive/30" onClick={() => { if (confirm("Remove kill switch PIN?")) void genericSaveMutation.mutateAsync({ clearKillSwitchPin: true }).then(() => { toast({ title: "PIN removed" }); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}><Trash2 className="w-3 h-3" />Remove</Button>
+                <Button size="sm" variant="outline" className="h-9 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => { if (confirm("Remove kill switch PIN?")) void genericSaveMutation.mutateAsync({ clearKillSwitchPin: true }).then(() => { toast({ title: "PIN removed" }); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); }); }}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
               )}
             </div>
           </div>
-        </div>
+        </Card>
 
-        {/* ══ ROW 3 — Trading Defaults (full width, horizontal layout) ══ */}
-        <div className="col-span-3 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-teal-500/5" icon={<Settings2 className="w-4 h-4 text-teal-400" />} title="Trading Defaults" />
+        {/* ── Trading Defaults (full width) ── */}
+        <Card className="col-span-3">
+          <CardHeader
+            icon={<Settings2 className="w-3.5 h-3.5 text-teal-400" />}
+            iconBg="bg-teal-500/15"
+            title="Trading Defaults"
+          />
           <div className="px-5 py-4">
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-4 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Default Product Type</label>
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Default Product Type</label>
                 <Select value={defaultProductType} onValueChange={setDefaultProductType}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="INTRA">INTRADAY</SelectItem>
                     <SelectItem value="CNC">CNC (Delivery)</SelectItem>
@@ -387,9 +458,9 @@ export default function Settings() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Default Order Type</label>
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Default Order Type</label>
                 <Select value={defaultOrderType} onValueChange={setDefaultOrderType}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MARKET">MARKET</SelectItem>
                     <SelectItem value="LIMIT">LIMIT</SelectItem>
@@ -399,17 +470,18 @@ export default function Settings() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Default Quantity</label>
-                <Input type="number" min={1} placeholder="e.g. 1" className="h-9" value={defaultQuantity} onChange={e => setDefaultQuantity(e.target.value)} />
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Default Quantity</label>
+                <Input type="number" min={1} className="h-10" value={defaultQuantity} onChange={e => setDefaultQuantity(e.target.value)} />
               </div>
-              <div className="flex items-end pb-[2px]">
-                <Button size="sm" className="gap-1.5 h-9 w-full" onClick={() => { void genericSaveMutation.mutateAsync({ defaultProductType, defaultOrderType, defaultQuantity: defaultQuantity ? Number(defaultQuantity) : null }).then(() => toast({ title: "Trading defaults saved" })); }}>
+              <div className="flex items-end">
+                <Button size="sm" className="h-10 w-full gap-1.5" onClick={() => { void genericSaveMutation.mutateAsync({ defaultProductType, defaultOrderType, defaultQuantity: defaultQuantity ? Number(defaultQuantity) : null }).then(() => toast({ title: "Trading defaults saved" })); }}>
                   <Save className="w-3.5 h-3.5" />Save Trading Defaults
                 </Button>
               </div>
             </div>
           </div>
-        </div>
+        </Card>
+
       </div>
     </div>
   );

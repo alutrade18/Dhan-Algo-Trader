@@ -26,26 +26,27 @@ interface SettingsData {
 }
 interface PnlExitStatus { pnlExitStatus?: string; profit?: string; loss?: string; productType?: string[]; enable_kill_switch?: boolean }
 
-function SectionHeader({ color, icon, title, badge }: { color: string; icon: React.ReactNode; title: string; badge?: React.ReactNode }) {
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm ${className}`}>{children}</div>;
+}
+
+function CardHeader({ icon, iconBg, title, badge }: { icon: React.ReactNode; iconBg: string; title: string; badge?: React.ReactNode }) {
   return (
-    <div className={`flex items-start justify-between gap-3 px-5 py-3.5 border-b border-border/40 ${color}`}>
-      <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 shrink-0">{icon}</div>
-        <div><p className="font-semibold text-sm">{title}</p></div>
+    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/40">
+      <div className="flex items-center gap-3">
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>{icon}</div>
+        <span className="font-semibold text-sm tracking-tight">{title}</span>
       </div>
       {badge}
     </div>
   );
 }
 
-function FR({ label, hint, ctrl, last = false }: { label: string; hint?: string; ctrl: React.ReactNode; last?: boolean }) {
+function Field({ label, children, noBorder }: { label: string; children: React.ReactNode; noBorder?: boolean }) {
   return (
-    <div className={`flex items-start justify-between gap-3 py-3 ${!last ? "border-b border-border/25" : ""}`}>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
-        {hint && <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{hint}</p>}
-      </div>
-      <div className="shrink-0">{ctrl}</div>
+    <div className={`flex items-center justify-between gap-4 py-3 ${noBorder ? "" : "border-b border-border/25"}`}>
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
@@ -139,41 +140,53 @@ export default function RiskManager() {
   });
 
   if (isLoading) {
-    return <div className="grid grid-cols-3 gap-4 w-full">{[...Array(5)].map((_, i) => <Skeleton key={i} className={`h-44 rounded-xl ${i === 4 ? "col-span-3" : "col-span-1"}`} />)}</div>;
+    return (
+      <div className="grid grid-cols-3 gap-4 w-full">
+        {[...Array(5)].map((_, i) => <Skeleton key={i} className={`h-52 rounded-2xl ${i === 4 ? "col-span-3" : "col-span-1"}`} />)}
+      </div>
+    );
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+
+      {/* Row 1 */}
       <div className="grid grid-cols-3 gap-4 items-start">
 
-        {/* ══ ROW 1 — Risk Management | P&L Based Exit | Auto Square-Off ══ */}
-
         {/* Risk Management */}
-        <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-orange-500/5" icon={<ShieldAlert className="w-4 h-4 text-orange-400" />} title="Risk Management" />
-          <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="px-5 py-4">
-            <div className="space-y-1.5 mb-4">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Daily Loss Limit (₹)</label>
-              <Input type="number" min={0} step={500} placeholder="e.g. 5000" className="h-9" {...riskForm.register("maxDailyLoss")} />
+        <Card>
+          <CardHeader
+            icon={<ShieldAlert className="w-3.5 h-3.5 text-orange-400" />}
+            iconBg="bg-orange-500/15"
+            title="Risk Management"
+          />
+          <form onSubmit={riskForm.handleSubmit(v => riskMutation.mutate(v.maxDailyLoss))} className="px-5 pt-4 pb-5 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Daily Loss Limit (₹)</label>
+              <Input type="number" min={0} step={500} className="h-10 text-base font-medium" {...riskForm.register("maxDailyLoss")} />
               {riskForm.formState.errors.maxDailyLoss && <p className="text-[10px] text-destructive">{riskForm.formState.errors.maxDailyLoss.message}</p>}
             </div>
-            <Button type="submit" size="sm" className="gap-1.5 h-8 w-full" disabled={riskMutation.isPending}><Save className="w-3 h-3" />{riskMutation.isPending ? "Saving…" : "Save Loss Limit"}</Button>
+            <Button type="submit" size="sm" className="w-full h-9" disabled={riskMutation.isPending}>
+              <Save className="w-3.5 h-3.5 mr-1.5" />{riskMutation.isPending ? "Saving…" : "Save Loss Limit"}
+            </Button>
           </form>
-        </div>
+        </Card>
 
         {/* P&L Based Exit */}
-        <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader
-            color={pnlActive ? "bg-primary/5" : "bg-muted/10"}
-            icon={<TrendingUp className="w-4 h-4 text-primary" />}
+        <Card className={pnlActive ? "border-primary/40" : ""}>
+          <CardHeader
+            icon={<TrendingUp className="w-3.5 h-3.5 text-primary" />}
+            iconBg={pnlActive ? "bg-primary/20" : "bg-primary/10"}
             title="P&L Based Exit"
-            badge={pnlActive ? <Badge variant="outline" className="text-[10px] text-primary border-primary/40">ACTIVE</Badge> : undefined}
+            badge={pnlActive ? <Badge className="text-[10px] h-5 bg-primary/20 text-primary border border-primary/30 shadow-none">ACTIVE</Badge> : undefined}
           />
-          <div className="px-5 py-4">
+          <div className="px-5 pt-3 pb-5">
             {!isConnected ? (
-              <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground"><WifiOff className="w-3.5 h-3.5" />Connect broker first.</div>
+              <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+                <WifiOff className="w-3.5 h-3.5" />Connect broker first.
+              </div>
             ) : (
-              <form onSubmit={pnlForm.handleSubmit(v => pnlExitMutation.mutate(v))}>
+              <form onSubmit={pnlForm.handleSubmit(v => pnlExitMutation.mutate(v))} className="space-y-0">
                 {pnlActive && pnlStatus?.pnlExitStatus === "ACTIVE" && (
                   <div className="flex gap-4 text-xs bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3">
                     <span>Target <span className="text-green-400 font-semibold">₹{pnlStatus.profit}</span></span>
@@ -181,19 +194,19 @@ export default function RiskManager() {
                     <span>KS <span className="font-semibold">{pnlStatus.enable_kill_switch ? "Yes" : "No"}</span></span>
                   </div>
                 )}
-                <FR label="Profit Target (₹)" ctrl={
-                  <div className="w-32">
-                    <Input type="number" min={1} placeholder="e.g. 1500" className="h-8 text-sm" {...pnlForm.register("profitValue")} />
+                <Field label="Profit Target (₹)">
+                  <div>
+                    <Input type="number" min={1} className="h-8 text-sm w-28" {...pnlForm.register("profitValue")} />
                     {pnlForm.formState.errors.profitValue && <p className="text-[10px] text-destructive mt-0.5">Required</p>}
                   </div>
-                } />
-                <FR label="Loss Limit (₹)" ctrl={
-                  <div className="w-32">
-                    <Input type="number" min={1} placeholder="e.g. 500" className="h-8 text-sm" {...pnlForm.register("lossValue")} />
+                </Field>
+                <Field label="Loss Limit (₹)">
+                  <div>
+                    <Input type="number" min={1} className="h-8 text-sm w-28" {...pnlForm.register("lossValue")} />
                     {pnlForm.formState.errors.lossValue && <p className="text-[10px] text-destructive mt-0.5">Required</p>}
                   </div>
-                } />
-                <FR label="Product Types" ctrl={
+                </Field>
+                <Field label="Product Types">
                   <div className="flex flex-col gap-1.5">
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox checked={pnlProductTypes.includes("INTRADAY")} onCheckedChange={() => setPnlProductTypes(prev => prev.includes("INTRADAY") ? prev.filter(t => t !== "INTRADAY") : [...prev, "INTRADAY"])} />
@@ -204,105 +217,139 @@ export default function RiskManager() {
                       DELIVERY (CNC)
                     </label>
                   </div>
-                } />
-                <FR label="Also activate kill switch" last ctrl={
+                </Field>
+                <Field label="Also activate kill switch" noBorder>
                   <Checkbox checked={pnlForm.watch("enableKillSwitch")} onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)} />
-                } />
-                <div className="flex gap-2 pt-3">
-                  <Button type="submit" size="sm" className="gap-1.5 h-8 flex-1" disabled={pnlExitMutation.isPending || !pnlProductTypes.length}>
-                    <TrendingUp className="w-3 h-3" />{pnlExitMutation.isPending ? "Activating…" : pnlActive ? "Update" : "Activate"}
+                </Field>
+                <div className="flex gap-2 pt-4">
+                  <Button type="submit" size="sm" className="h-9 flex-1 gap-1.5" disabled={pnlExitMutation.isPending || !pnlProductTypes.length}>
+                    <TrendingUp className="w-3.5 h-3.5" />{pnlExitMutation.isPending ? "Activating…" : pnlActive ? "Update" : "Activate"}
                   </Button>
                   {pnlActive && (
-                    <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" disabled={stopPnlExitMutation.isPending} onClick={() => stopPnlExitMutation.mutate()}>
-                      <TrendingDown className="w-3 h-3" />{stopPnlExitMutation.isPending ? "…" : "Stop"}
+                    <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" disabled={stopPnlExitMutation.isPending} onClick={() => stopPnlExitMutation.mutate()}>
+                      <TrendingDown className="w-3.5 h-3.5" />{stopPnlExitMutation.isPending ? "…" : "Stop"}
                     </Button>
                   )}
                 </div>
               </form>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Auto Square-Off Timer */}
-        <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-blue-500/5" icon={<Clock className="w-4 h-4 text-blue-400" />} title="Auto Square-Off Timer" />
-          <div className="px-5 py-4">
-            <FR label="Enable Auto Square-Off" ctrl={
+        <Card>
+          <CardHeader
+            icon={<Clock className="w-3.5 h-3.5 text-blue-400" />}
+            iconBg="bg-blue-500/15"
+            title="Auto Square-Off Timer"
+            badge={
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${autoSquareOffEnabled ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-muted/30 text-muted-foreground border-border/50"}`}>
+                {autoSquareOffEnabled ? "ON" : "OFF"}
+              </span>
+            }
+          />
+          <div className="px-5 pt-3 pb-5 space-y-4">
+            <Field label="Enable Auto Square-Off">
               <Switch checked={autoSquareOffEnabled} onCheckedChange={setAutoSquareOffEnabled} />
-            } />
-            <FR label="Square-Off Time (IST)" last ctrl={
-              <input type="time" value={autoSquareOffTime} onChange={e => setAutoSquareOffTime(e.target.value)} className="h-8 w-32 rounded-md border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-            } />
-            <div className="pt-3">
-              <Button size="sm" className="gap-1.5 h-8 w-full" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
-                <Save className="w-3 h-3" />Save Timer
-              </Button>
+            </Field>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Square-Off Time (IST)</label>
+              <input
+                type="time"
+                value={autoSquareOffTime}
+                onChange={e => setAutoSquareOffTime(e.target.value)}
+                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             </div>
+            <Button size="sm" className="w-full h-9" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
+              <Save className="w-3.5 h-3.5 mr-1.5" />Save Timer
+            </Button>
           </div>
-        </div>
+        </Card>
+      </div>
 
-        {/* ══ ROW 2 — Trading Guards (2-col) | Blacklist (1-col) ══ */}
+      {/* Row 2 */}
+      <div className="grid grid-cols-3 gap-4 items-start">
 
         {/* Trading Guards */}
-        <div className="col-span-2 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-orange-500/5" icon={<ShieldAlert className="w-4 h-4 text-orange-400" />} title="Trading Guards" />
-          <div className="px-5 py-4">
-            <div className="grid grid-cols-3 gap-5 mb-4">
+        <Card className="col-span-2">
+          <CardHeader
+            icon={<ShieldAlert className="w-3.5 h-3.5 text-orange-400" />}
+            iconBg="bg-orange-500/15"
+            title="Trading Guards"
+          />
+          <div className="px-5 pt-4 pb-5 space-y-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Max Trades Per Day</label>
-                <Input type="number" min={1} step={1} placeholder="e.g. 10" className="h-9" value={maxTradesPerDay} onChange={e => setMaxTradesPerDay(e.target.value)} />
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Max Trades / Day</label>
+                <Input type="number" min={1} step={1} className="h-10" value={maxTradesPerDay} onChange={e => setMaxTradesPerDay(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Max Position Size</label>
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Max Position Size</label>
                 <div className="flex gap-2">
-                  <Input type="number" min={1} placeholder="Value" className="h-9 flex-1" value={maxPosValue} onChange={e => setMaxPosValue(e.target.value)} />
+                  <Input type="number" min={1} className="h-10 flex-1 min-w-0" value={maxPosValue} onChange={e => setMaxPosValue(e.target.value)} />
                   <Select value={maxPosType} onValueChange={setMaxPosType}>
-                    <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-24 h-10 shrink-0"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="FIXED">₹ Fixed</SelectItem>
-                      <SelectItem value="PERCENT">% Capital</SelectItem>
+                      <SelectItem value="PERCENT">% Cap</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Trading Hours (IST)</label>
-                <div className="flex items-center gap-2">
-                  <input type="time" value={tradingStart} onChange={e => setTradingStart(e.target.value)} className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                  <span className="text-xs text-muted-foreground shrink-0">–</span>
-                  <input type="time" value={tradingEnd} onChange={e => setTradingEnd(e.target.value)} className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Trading Hours (IST)</label>
+                <div className="flex items-center gap-1.5">
+                  <input type="time" value={tradingStart} onChange={e => setTradingStart(e.target.value)} className="h-10 flex-1 min-w-0 rounded-lg border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  <span className="text-muted-foreground text-xs shrink-0">–</span>
+                  <input type="time" value={tradingEnd} onChange={e => setTradingEnd(e.target.value)} className="h-10 flex-1 min-w-0 rounded-lg border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                 </div>
               </div>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => { void genericSaveMutation.mutateAsync({ maxTradesPerDay: maxTradesPerDay ? Number(maxTradesPerDay) : null, maxPositionSizeValue: maxPosValue ? Number(maxPosValue) : null, maxPositionSizeType: maxPosType, tradingHoursStart: tradingStart, tradingHoursEnd: tradingEnd }).then(() => toast({ title: "Trading guards saved" })); }}>
-              <Save className="w-3 h-3" />Save Guards
+            <Button size="sm" className="h-9 gap-1.5" onClick={() => { void genericSaveMutation.mutateAsync({ maxTradesPerDay: maxTradesPerDay ? Number(maxTradesPerDay) : null, maxPositionSizeValue: maxPosValue ? Number(maxPosValue) : null, maxPositionSizeType: maxPosType, tradingHoursStart: tradingStart, tradingHoursEnd: tradingEnd }).then(() => toast({ title: "Trading guards saved" })); }}>
+              <Save className="w-3.5 h-3.5" />Save Guards
             </Button>
           </div>
-        </div>
+        </Card>
 
         {/* Instrument Blacklist */}
-        <div className="col-span-1 rounded-xl border border-border/60 bg-card overflow-hidden">
-          <SectionHeader color="bg-red-500/5" icon={<Ban className="w-4 h-4 text-red-400" />} title="Instrument Blacklist" />
-          <div className="px-5 py-4 space-y-3">
+        <Card>
+          <CardHeader
+            icon={<Ban className="w-3.5 h-3.5 text-red-400" />}
+            iconBg="bg-red-500/15"
+            title="Instrument Blacklist"
+            badge={blacklist.length > 0 ? <Badge variant="outline" className="text-[10px] h-5 text-red-400 border-red-500/30">{blacklist.length}</Badge> : undefined}
+          />
+          <div className="px-5 pt-4 pb-5 space-y-3">
             <div className="flex gap-2">
-              <Input placeholder="" className="h-8 text-sm font-mono flex-1" value={blacklistInput} onChange={e => setBlacklistInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && blacklistInput.trim()) { const sym = blacklistInput.trim().toUpperCase(); if (!blacklist.includes(sym)) setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }} />
-              <Button type="button" size="sm" variant="outline" className="h-8 gap-1 shrink-0" onClick={() => { const sym = blacklistInput.trim().toUpperCase(); if (sym && !blacklist.includes(sym)) { setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }}><Plus className="w-3.5 h-3.5" />Add</Button>
+              <Input
+                placeholder=""
+                className="h-9 text-sm font-mono flex-1"
+                value={blacklistInput}
+                onChange={e => setBlacklistInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && blacklistInput.trim()) { const sym = blacklistInput.trim().toUpperCase(); if (!blacklist.includes(sym)) setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }}
+              />
+              <Button type="button" size="sm" variant="outline" className="h-9 gap-1 px-3 shrink-0" onClick={() => { const sym = blacklistInput.trim().toUpperCase(); if (sym && !blacklist.includes(sym)) { setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }}>
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
             </div>
             {blacklist.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+              <div className="flex flex-wrap gap-1.5">
                 {blacklist.map(sym => (
-                  <span key={sym} className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-md px-2 py-1 font-mono">
+                  <span key={sym} className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-md px-2 py-0.5 font-mono">
                     {sym}
-                    <button onClick={() => setBlacklist(prev => prev.filter(s => s !== sym))} className="hover:text-red-300 ml-0.5"><XCircle className="w-3 h-3" /></button>
+                    <button onClick={() => setBlacklist(prev => prev.filter(s => s !== sym))} className="hover:text-red-300 ml-0.5">
+                      <XCircle className="w-3 h-3" />
+                    </button>
                   </span>
                 ))}
               </div>
             )}
-            <Button size="sm" className="gap-1.5 h-8 w-full" onClick={() => { void genericSaveMutation.mutateAsync({ instrumentBlacklist: blacklist }).then(() => toast({ title: `Blacklist saved — ${blacklist.length} symbol(s)` })); }}>
-              <Save className="w-3 h-3" />Save Blacklist
+            <Button size="sm" className="w-full h-9 gap-1.5" onClick={() => { void genericSaveMutation.mutateAsync({ instrumentBlacklist: blacklist }).then(() => toast({ title: `Blacklist saved — ${blacklist.length} symbol(s)` })); }}>
+              <Save className="w-3.5 h-3.5" />Save Blacklist
             </Button>
           </div>
-        </div>
+        </Card>
 
       </div>
     </div>
