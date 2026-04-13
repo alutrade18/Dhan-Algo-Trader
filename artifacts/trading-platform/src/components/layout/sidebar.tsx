@@ -65,9 +65,10 @@ function BullIcon({ className }: { className?: string }) {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  brokerConnected?: boolean | null;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, brokerConnected }: SidebarProps) {
   const [location] = useLocation();
 
   return (
@@ -89,8 +90,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       >
         <div className="h-14 px-4 flex items-center justify-between border-b border-sidebar-border shrink-0">
           <div className="flex items-center gap-2">
-            <div className="bg-primary text-primary-foreground p-1.5 rounded-md">
+            <div className="relative bg-primary text-primary-foreground p-1.5 rounded-md">
               <BullIcon className="w-5 h-5" />
+              {brokerConnected != null && (
+                <span
+                  className={cn(
+                    "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar ring-1 ring-sidebar",
+                    brokerConnected
+                      ? "bg-green-500"
+                      : "bg-yellow-400"
+                  )}
+                  title={brokerConnected ? "Broker connected" : "Broker not connected"}
+                />
+              )}
             </div>
             <span className="font-bold text-lg tracking-tight text-sidebar-foreground">Rajesh Algo</span>
           </div>

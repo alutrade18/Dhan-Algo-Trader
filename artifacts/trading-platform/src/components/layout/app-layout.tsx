@@ -5,7 +5,7 @@ import { useHealthCheck, useGetFundLimits, getHealthCheckQueryKey, getGetFundLim
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, PlayCircle, ShieldAlert } from "lucide-react";
+import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -71,7 +71,7 @@ function formatCurrency(val?: number | null) {
 const BASE = import.meta.env.BASE_URL;
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
@@ -104,6 +104,18 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
   const { data: funds, isLoading: isFundsLoading, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: 15000 } });
+
+  const { data: brokerStatus, isLoading: isBrokerStatusLoading } = useQuery<{ connected: boolean; maskedClientId?: string | null }>({
+    queryKey: ["broker-status"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/broker/status`, { cache: "no-store" });
+      if (!res.ok) return { connected: false };
+      return res.json();
+    },
+    refetchInterval: 30000,
+    staleTime: 0,
+  });
+
   const { resolvedTheme, toggleTheme } = useTheme();
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
@@ -123,6 +135,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const marketOpen = market.isOpen;
   const brokerConnected = health?.brokerConnected ?? false;
   const systemOnline = marketOpen && brokerConnected;
+
+  const isBrokerConnected = isBrokerStatusLoading ? null : (brokerStatus?.connected ?? false);
+  const showBrokerBanner = isBrokerConnected === false && location !== "/settings";
 
   const fundsData = funds as (typeof funds & { availableBalance?: number | null }) | undefined;
   const availableBalance = fundsData?.availableBalance;
@@ -217,7 +232,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} brokerConnected={isBrokerConnected} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 border-b border-sidebar-border bg-sidebar flex items-center justify-between px-3 md:px-6 shrink-0 gap-2">
@@ -371,6 +386,24 @@ export function AppLayout({ children }: AppLayoutProps) {
             <button className="text-xs text-yellow-500 underline underline-offset-2 hover:no-underline" onClick={() => setRateLimitMsg(null)}>
               Dismiss
             </button>
+          </div>
+        )}
+        {showBrokerBanner && (
+          <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Wifi className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+              <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium truncate">
+                Broker not connected — enter your Dhan Client ID and Access Token to start trading
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-3 text-xs shrink-0 border-yellow-500/40 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/60"
+              onClick={() => navigate("/settings")}
+            >
+              Connect
+            </Button>
           </div>
         )}
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
