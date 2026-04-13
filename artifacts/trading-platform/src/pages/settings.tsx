@@ -30,15 +30,6 @@ interface SettingsData {
   telegramBotToken: string; telegramChatId: string;
 }
 
-function StatPill({ label, value, accent }: { label: string; value: string; accent: string }) {
-  return (
-    <div className={`flex flex-col items-center px-4 py-2 rounded-xl border ${accent}`}>
-      <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</span>
-      <span className="text-sm font-bold tabular-nums mt-0.5">{value}</span>
-    </div>
-  );
-}
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</p>;
 }
@@ -156,11 +147,11 @@ export default function Settings() {
   const funds: FundDetails = connectResult?.success ? connectResult : (brokerStatus?.connected ? brokerStatus : {});
 
   return (
-    <div className="grid grid-cols-2 gap-4 w-full items-start">
+    <div className="grid grid-cols-2 gap-4 w-full items-stretch">
       <TokenExpiryWarning />
 
       {/* ── Broker Connection ── */}
-      <div className={`rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-green-500/30 bg-card" : "border-border/50 bg-card"}`}>
+      <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-green-500/30 bg-card" : "border-border/50 bg-card"}`}>
 
         {/* Status Banner */}
         <div className={`px-5 py-3.5 flex items-center justify-between ${isConnected ? "bg-green-500/8 border-b border-green-500/20" : "bg-muted/10 border-b border-border/30"}`}>
@@ -171,7 +162,7 @@ export default function Settings() {
             <div>
               <p className="text-sm font-semibold">Broker Connection</p>
               <p className={`text-[10px] font-medium ${isConnected ? "text-green-400" : "text-muted-foreground"}`}>
-                {isConnected ? `Connected · ${funds.dhanClientId ?? maskedClientId}` : "Not connected to Dhan"}
+                {isConnected ? "Connected · Dhan Broker API" : "Not connected to Dhan"}
               </p>
             </div>
           </div>
@@ -183,17 +174,22 @@ export default function Settings() {
           )}
         </div>
 
-        {/* Balance Stats */}
+        {/* Balance Stats — single inline row */}
         {isConnected && funds.availableBalance !== undefined && (
-          <div className="px-5 py-3 flex items-center gap-3 border-b border-border/25 bg-muted/5 flex-wrap">
-            <StatPill label="Available" value={`₹${(funds.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} accent="border-green-500/20 bg-green-500/5 text-green-300" />
-            <StatPill label="Margin Used" value={`₹${(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} accent="border-amber-500/20 bg-amber-500/5 text-amber-300" />
-            <StatPill label="Withdrawable" value={`₹${(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} accent="border-blue-500/20 bg-blue-500/5 text-blue-300" />
+          <div className="px-5 py-2.5 flex items-center gap-1.5 border-b border-border/25 bg-muted/5 text-xs flex-wrap">
+            <span className="text-muted-foreground">Available:</span>
+            <span className="font-semibold text-green-400 tabular-nums">₹{(funds.availableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="text-border/60 mx-1">·</span>
+            <span className="text-muted-foreground">Margin Used:</span>
+            <span className="font-semibold text-amber-400 tabular-nums">₹{(funds.utilizedAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            <span className="text-border/60 mx-1">·</span>
+            <span className="text-muted-foreground">Withdrawable:</span>
+            <span className="font-semibold text-blue-400 tabular-nums">₹{(funds.withdrawableBalance ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={brokerForm.handleSubmit(d => connectMutation.mutate(d))} className="px-5 py-4 space-y-4">
+        <form onSubmit={brokerForm.handleSubmit(d => connectMutation.mutate(d))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
           <div className="space-y-1.5">
             <SectionLabel>Client ID</SectionLabel>
             <Input className="h-10 bg-background/60" {...brokerForm.register("clientId")} />
@@ -229,7 +225,7 @@ export default function Settings() {
       </div>
 
       {/* ── Telegram Alerts ── */}
-      <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+      <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
 
         <div className="px-5 py-3.5 flex items-center justify-between border-b border-border/30 bg-violet-500/5">
           <div className="flex items-center gap-3">
@@ -251,7 +247,7 @@ export default function Settings() {
           )}
         </div>
 
-        <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="px-5 py-4 space-y-4">
+        <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
           <div className="space-y-1.5">
             <SectionLabel>Bot Token</SectionLabel>
             <div className="relative">

@@ -365,10 +365,10 @@ export default function RiskManager() {
       </div>
 
       {/* ── Row 2: Emergency Kill Switch | Kill Switch PIN ── */}
-      <div className="grid grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-2 gap-4 items-stretch">
 
         {/* Emergency Kill Switch */}
-        <div className={`rounded-2xl border overflow-hidden shadow-sm transition-all ${killSwitchActive ? "border-destructive/50 bg-destructive/5" : "border-border/50 bg-card"}`}>
+        <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-all ${killSwitchActive ? "border-destructive/50 bg-destructive/5" : "border-border/50 bg-card"}`}>
           <div className={`px-5 py-3.5 border-b flex items-center justify-between ${killSwitchActive ? "border-destructive/30 bg-destructive/10" : "border-border/30 bg-muted/5"}`}>
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${killSwitchActive ? "bg-destructive/25" : "bg-muted/25"}`}>
@@ -393,43 +393,58 @@ export default function RiskManager() {
               )}
             </div>
           </div>
-          <div className="px-5 py-5">
-            {!isConnected ? (
-              <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                <WifiOff className="w-4 h-4 shrink-0" />Connect broker first to use kill switch.
-              </div>
-            ) : killSwitchActive ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 py-3.5 px-4 rounded-2xl bg-destructive/12 border border-destructive/30">
-                  <Power className="w-4 h-4 text-destructive shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-destructive">All orders blocked</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">No new orders until deactivated.</p>
-                  </div>
+          <div className="flex-1 flex flex-col px-5 py-5 gap-4">
+
+            {/* Status placeholder — real-time from API */}
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${killSwitchActive ? "bg-destructive/10 border-destructive/30" : "bg-muted/15 border-border/30"}`}>
+              <Power className={`w-4 h-4 shrink-0 ${killSwitchActive ? "text-destructive" : "text-muted-foreground/50"}`} />
+              <span className={`text-sm font-semibold ${killSwitchActive ? "text-destructive" : "text-muted-foreground"}`}>
+                {!isConnected ? "Broker not connected" : killSwitchActive ? "Kill Switch Activated" : "Not Activated"}
+              </span>
+            </div>
+
+            {/* Reset quota info — from API */}
+            {isConnected && (
+              <div className="flex items-center justify-between rounded-xl bg-muted/15 border border-border/30 px-4 py-2.5">
+                <span className="text-xs text-muted-foreground">Daily Deactivation Resets</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold tabular-nums ${canDeactivate ? "text-green-400" : "text-destructive"}`}>
+                    {canDeactivate ? "1 Available" : "0 Remaining"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">/ 1 total</span>
                 </div>
-                <Button
-                  variant="outline"
-                  className={`w-full h-10 gap-2 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/8" : "opacity-40 cursor-not-allowed"}`}
-                  disabled={killSwitchMutation.isPending || !canDeactivate}
-                  onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
-                >
-                  <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Deactivating…" : "Deactivate Kill Switch"}
-                </Button>
-                {!canDeactivate && <p className="text-[11px] text-muted-foreground text-center">Daily limit reached · Resets at midnight IST</p>}
               </div>
-            ) : (
-              <div className="space-y-3.5">
-                <p className="text-xs text-muted-foreground leading-relaxed">Instantly halts all new order placement across every strategy. Use only in emergencies.</p>
+            )}
+
+            {/* Action buttons */}
+            <div className="mt-auto">
+              {!isConnected ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <WifiOff className="w-3.5 h-3.5 shrink-0" />Connect broker first to use kill switch.
+                </div>
+              ) : killSwitchActive ? (
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    className={`w-full h-10 gap-2 ${canDeactivate ? "border-green-500/40 text-green-400 hover:bg-green-500/8" : "opacity-40 cursor-not-allowed"}`}
+                    disabled={killSwitchMutation.isPending || !canDeactivate}
+                    onClick={() => canDeactivate && handleKillSwitchAction("DEACTIVATE")}
+                  >
+                    <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Deactivating…" : "Deactivate Kill Switch"}
+                  </Button>
+                  {!canDeactivate && <p className="text-[11px] text-muted-foreground text-center">Resets at midnight IST</p>}
+                </div>
+              ) : (
                 <Button variant="destructive" className="w-full h-10 gap-2 font-semibold" disabled={killSwitchMutation.isPending} onClick={() => handleKillSwitchAction("ACTIVATE")}>
                   <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Activating…" : "Activate Kill Switch"}
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
         {/* Kill Switch PIN */}
-        <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+        <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
           <div className="px-5 py-3.5 border-b border-border/30 bg-amber-500/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center">
@@ -441,7 +456,7 @@ export default function RiskManager() {
               {settingsData?.hasKillSwitchPin ? "SET" : "NOT SET"}
             </span>
           </div>
-          <div className="px-5 py-4 space-y-3">
+          <div className="flex-1 flex flex-col px-5 py-4 space-y-3">
             {settingsData?.hasKillSwitchPin && (
               <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2.5">
                 <Lock className="w-3 h-3 shrink-0" />Active — enter new PIN to change.
