@@ -4,6 +4,8 @@ import { dhanClient } from "./dhan-client";
 import { sendTelegramAlert } from "./telegram";
 import { logger } from "./logger";
 
+const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
+
 let monitorInterval: ReturnType<typeof setInterval> | null = null;
 
 const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "TARGET_HIT", "STOP_LOSS_HIT"];
@@ -89,7 +91,7 @@ async function checkSuperOrders(): Promise<void> {
             logger.error({ err: exitErr, orderId: order.id }, "SuperOrderMonitor: failed to place exit order");
           }
 
-          void sendTelegramAlert(alertMsg + `\n\n_Rajesh Algo — Super Order Monitor_`);
+          void sendTelegramAlert(alertMsg + `\n\n_${APP_NAME} — Super Order Monitor_`);
           logger.info({ orderId: order.id, triggered, ltp }, "SuperOrderMonitor: exit triggered");
         }
       } catch (ltpErr) {

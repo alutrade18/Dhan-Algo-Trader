@@ -6,6 +6,8 @@ import { dhanClient } from "../lib/dhan-client";
 import { sendTelegramAlert } from "../lib/telegram";
 import { decryptToken } from "../lib/crypto-utils";
 
+const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
+
 function hashPin(pin: string): string {
   const salt = process.env.PIN_SALT ?? "rajesh-algo-pin-salt";
   return crypto.createHash("sha256").update(pin + salt).digest("hex");
@@ -21,7 +23,7 @@ async function sendTelegramPing(botToken: string, chatId: string): Promise<void>
     });
     const message = [
       "━━━━━━━━━━━━━━━━━━━━━━━",
-      "🤖  *RAJESH ALGO TRADING*",
+      `🤖  *${APP_NAME.toUpperCase()}*`,
       "━━━━━━━━━━━━━━━━━━━━━━━",
       "",
       "✅  *Bot Connected Successfully*",
@@ -31,7 +33,7 @@ async function sendTelegramPing(botToken: string, chatId: string): Promise<void>
       `🕐  *Connected at:* ${now} IST`,
       "",
       "━━━━━━━━━━━━━━━━━━━━━━━",
-      "_Rajesh Algo Platform — Powered by Dhan_",
+      `_${APP_NAME} Platform — Powered by Dhan_`,
     ].join("\n");
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

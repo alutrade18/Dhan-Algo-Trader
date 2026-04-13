@@ -1,5 +1,7 @@
 import { db, settingsTable } from "@workspace/db";
 
+const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
+
 async function getTelegramConfig(): Promise<{ botToken: string; chatId: string } | null> {
   try {
     const [settings] = await db.select().from(settingsTable);
@@ -21,7 +23,7 @@ export async function sendTelegramAlert(message: string): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: config.chatId,
-        text: `🤖 *Rajesh Algo*\n${message}`,
+        text: `🤖 *${APP_NAME}*\n${message}`,
         parse_mode: "Markdown",
       }),
     });

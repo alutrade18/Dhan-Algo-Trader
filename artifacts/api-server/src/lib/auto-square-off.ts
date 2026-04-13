@@ -2,6 +2,8 @@ import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "./dhan-client";
 import { sendTelegramAlert } from "./telegram";
 
+const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
+
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 let lastSquareOffDate = "";
 
@@ -53,7 +55,7 @@ async function checkAndSquareOff(): Promise<void> {
     const prefs = settings.notificationPreferences as { autoSquareOff?: boolean } | null;
     if (prefs?.autoSquareOff !== false) {
       void sendTelegramAlert(
-        `⏰ *Auto Square-Off Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_Rajesh Algo — Auto Square-Off_`
+        `⏰ *Auto Square-Off Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_${APP_NAME} — Auto Square-Off_`
       );
     }
   } catch (e) {
