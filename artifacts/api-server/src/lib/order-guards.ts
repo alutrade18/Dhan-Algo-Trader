@@ -11,6 +11,12 @@ async function getSettings() {
   return s ?? null;
 }
 
+function todayIST(): string {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
+}
+
 /** Check if an instrument symbol/tradingSymbol is blacklisted */
 export async function checkInstrumentBlacklist(tradingSymbol: string): Promise<OrderGuardResult> {
   const settings = await getSettings();
@@ -32,8 +38,7 @@ export async function checkMaxTradesPerDay(): Promise<OrderGuardResult> {
     const orders = await dhanClient.getOrders() as unknown[];
     const todayOrders = (orders as Array<{ updateTime?: string; orderStatus?: string }>).filter(o => {
       const t = o.updateTime ?? "";
-      const today = new Date().toISOString().slice(0, 10);
-      return t.startsWith(today) && ["TRADED", "PART_TRADED"].includes(o.orderStatus ?? "");
+      return t.startsWith(todayIST()) && ["TRADED", "PART_TRADED"].includes(o.orderStatus ?? "");
     });
     if (todayOrders.length >= settings.maxTradesPerDay) {
       return {
