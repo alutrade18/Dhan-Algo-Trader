@@ -92,7 +92,7 @@ class MarketFeedWS extends EventEmitter {
   private parsePacket(buf: Buffer) {
     if (buf.length < 8) return;
     const responseCode = buf.readUInt8(0);
-    const exchId = buf.readUInt8(4);
+    const exchId = buf.readUInt8(1);
     const securityId = buf.readInt32LE(4);
     const exchSeg = EXCHANGE_MAP[exchId] ?? "UNKNOWN";
 
