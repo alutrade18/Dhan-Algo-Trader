@@ -692,34 +692,34 @@ export default function OptionChain() {
         >
           <table className="w-full text-xs border-collapse">
             <thead className="sticky top-0 z-10">
-              {/* Section labels */}
+              {/* Section labels — solid background so scrolled rows don't bleed through */}
               <tr className="border-b border-border">
                 <th
                   colSpan={5}
-                  className="py-2 text-center text-[11px] font-semibold tracking-wide text-red-400 bg-red-400/5 border-r border-border"
+                  className="py-2 text-center text-[11px] font-semibold tracking-wide text-red-400 bg-card border-r border-border"
                 >
                   CALLS (CE) &nbsp;·&nbsp;
                 </th>
-                <th className="py-2 px-3 text-center text-[11px] font-semibold text-amber-400 bg-amber-400/5 whitespace-nowrap border-x border-border">
+                <th className="py-2 px-3 text-center text-[11px] font-semibold text-amber-400 bg-card whitespace-nowrap border-x border-border">
                   STRIKE
                 </th>
                 <th
                   colSpan={5}
-                  className="py-2 text-center text-[11px] font-semibold tracking-wide text-emerald-400 bg-emerald-400/5 border-l border-border"
+                  className="py-2 text-center text-[11px] font-semibold tracking-wide text-emerald-400 bg-card border-l border-border"
                 >
                   PUTS (PE) &nbsp;·&nbsp;
                 </th>
               </tr>
-              {/* Column headers */}
-              <tr className="border-b border-border bg-muted/20 text-muted-foreground">
+              {/* Column headers — solid background */}
+              <tr className="border-b border-border text-muted-foreground">
                 {["OI Bar", "OI", "Volume", "IV%", "LTP"].map((h) => (
-                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium">
+                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium bg-muted">
                     {h}
                   </th>
                 ))}
-                <th className="px-3 py-1.5 text-center font-medium border-x border-border">₹</th>
+                <th className="px-3 py-1.5 text-center font-medium bg-muted border-x border-border">₹</th>
                 {["LTP", "IV%", "Volume", "OI", "OI Bar"].map((h) => (
-                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium">
+                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium bg-muted">
                     {h}
                   </th>
                 ))}
