@@ -6,13 +6,12 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut, User,
-  Bell, Power, Settings2, Lock, Trash2, Save, AlertTriangle,
+  Bell, Power, Lock, Trash2, AlertTriangle,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -33,8 +32,7 @@ interface ConnectResult extends FundDetails { success: boolean; errorCode?: stri
 interface SettingsData {
   id: number; dhanClientId: string; dhanAccessToken: string; apiConnected: boolean;
   maxDailyLoss: number | null; killSwitchEnabled: boolean;
-  telegramBotToken: string; telegramChatId: string;
-  defaultProductType: string; defaultOrderType: string; defaultQuantity: number | null; hasKillSwitchPin: boolean;
+  telegramBotToken: string; telegramChatId: string; hasKillSwitchPin: boolean;
 }
 interface KillSwitchStatus { killSwitchStatus?: string; isActive?: boolean; canDeactivateToday?: boolean; deactivationsUsed?: number }
 
@@ -87,9 +85,6 @@ export default function Settings() {
   const [showToken, setShowToken] = useState(false);
   const [showBotToken, setShowBotToken] = useState(false);
   const [optimisticKsActive, setOptimisticKsActive] = useState<boolean | null>(null);
-  const [defaultProductType, setDefaultProductType] = useState("INTRA");
-  const [defaultOrderType, setDefaultOrderType] = useState("MARKET");
-  const [defaultQuantity, setDefaultQuantity] = useState<string>("");
   const [pinInput, setPinInput] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [showPin, setShowPin] = useState(false);
@@ -100,13 +95,6 @@ export default function Settings() {
   const isConnected = settingsData?.apiConnected ?? false;
   const maskedClientId = settingsData?.dhanClientId ?? "";
   const maskedAccessToken = settingsData?.dhanAccessToken ?? "";
-
-  useEffect(() => {
-    if (!settingsData) return;
-    setDefaultProductType(settingsData.defaultProductType ?? "INTRA");
-    setDefaultOrderType(settingsData.defaultOrderType ?? "MARKET");
-    setDefaultQuantity(settingsData.defaultQuantity != null ? String(settingsData.defaultQuantity) : "");
-  }, [settingsData?.id]);
 
   const { data: brokerStatus } = useQuery<FundDetails & { connected: boolean }>({
     queryKey: ["broker-status"], enabled: isConnected, refetchInterval: 4_000, staleTime: 0, gcTime: 0,
@@ -432,52 +420,6 @@ export default function Settings() {
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               )}
-            </div>
-          </div>
-        </Card>
-
-        {/* ── Trading Defaults (full width) ── */}
-        <Card className="col-span-3">
-          <CardHeader
-            icon={<Settings2 className="w-3.5 h-3.5 text-teal-400" />}
-            iconBg="bg-teal-500/15"
-            title="Trading Defaults"
-          />
-          <div className="px-5 py-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Default Product Type</label>
-                <Select value={defaultProductType} onValueChange={setDefaultProductType}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="INTRA">INTRADAY</SelectItem>
-                    <SelectItem value="CNC">CNC (Delivery)</SelectItem>
-                    <SelectItem value="MARGIN">MARGIN</SelectItem>
-                    <SelectItem value="MTF">MTF</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Default Order Type</label>
-                <Select value={defaultOrderType} onValueChange={setDefaultOrderType}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MARKET">MARKET</SelectItem>
-                    <SelectItem value="LIMIT">LIMIT</SelectItem>
-                    <SelectItem value="SL">STOP LOSS (SL)</SelectItem>
-                    <SelectItem value="SLM">STOP LOSS MARKET</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Default Quantity</label>
-                <Input type="number" min={1} className="h-10" value={defaultQuantity} onChange={e => setDefaultQuantity(e.target.value)} />
-              </div>
-              <div className="flex items-end">
-                <Button size="sm" className="h-10 w-full gap-1.5" onClick={() => { void genericSaveMutation.mutateAsync({ defaultProductType, defaultOrderType, defaultQuantity: defaultQuantity ? Number(defaultQuantity) : null }).then(() => toast({ title: "Trading defaults saved" })); }}>
-                  <Save className="w-3.5 h-3.5" />Save Trading Defaults
-                </Button>
-              </div>
             </div>
           </div>
         </Card>

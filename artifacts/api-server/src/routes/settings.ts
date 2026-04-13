@@ -76,15 +76,7 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     dhanClientId: s.brokerClientId ? "****" + s.brokerClientId.slice(-4) : "",
     dhanAccessToken: s.brokerAccessToken ? "****" + decryptToken(s.brokerAccessToken).slice(-4) : "",
     apiConnected: dhanClient.isConfigured(),
-    defaultProductType: s.defaultProductType,
-    defaultOrderType: s.defaultOrderType,
-    defaultExchange: s.defaultExchange,
-    defaultQuantity: s.defaultQuantity ?? null,
-    maxOrderValue: s.maxOrderValue ? Number(s.maxOrderValue) : null,
     maxDailyLoss: s.maxDailyLoss !== null && s.maxDailyLoss !== undefined ? Number(s.maxDailyLoss) : 5000,
-    maxDailyProfit: s.maxDailyProfit ? Number(s.maxDailyProfit) : null,
-    enableAutoTrading: s.enableAutoTrading,
-    riskPerTrade: s.riskPerTrade ? Number(s.riskPerTrade) : null,
     theme: s.theme,
     telegramBotToken: s.telegramBotToken || "",
     telegramChatId: s.telegramChatId || "",
@@ -94,10 +86,6 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     updatedAt: s.updatedAt?.toISOString(),
     autoSquareOffEnabled: s.autoSquareOffEnabled,
     autoSquareOffTime: s.autoSquareOffTime,
-    maxTradesPerDay: s.maxTradesPerDay ?? null,
-    maxPositionSizeValue: s.maxPositionSizeValue ? Number(s.maxPositionSizeValue) : null,
-    maxPositionSizeType: s.maxPositionSizeType,
-    instrumentBlacklist: (s.instrumentBlacklist as string[] | null) ?? [],
     dashboardWidgets: s.dashboardWidgets ?? {
       todayPnl: true,
       totalPnl: true,
@@ -106,8 +94,6 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
       equityCurve: true,
     },
     refreshIntervalSeconds: s.refreshIntervalSeconds ?? 15,
-    tradingHoursStart: s.tradingHoursStart ?? "09:00",
-    tradingHoursEnd: s.tradingHoursEnd ?? "15:30",
   };
 }
 
@@ -138,50 +124,17 @@ router.put("/settings", async (req, res): Promise<void> => {
     if (oldStr !== newStr) auditEntries.push({ field, old: oldStr, new: newStr });
   }
 
-  set("defaultProductType", "defaultProductType");
-  set("defaultOrderType", "defaultOrderType");
-  set("defaultExchange", "defaultExchange");
-  set("defaultQuantity", "defaultQuantity", v => v != null ? Number(v) : null);
-  set("enableAutoTrading", "enableAutoTrading", v => Boolean(v));
   set("theme", "theme");
   set("autoSquareOffEnabled", "autoSquareOffEnabled", v => Boolean(v));
   set("autoSquareOffTime", "autoSquareOffTime");
-  set("maxTradesPerDay", "maxTradesPerDay", v => v != null ? Number(v) : null);
-  set("maxPositionSizeType", "maxPositionSizeType");
   set("refreshIntervalSeconds", "refreshIntervalSeconds", v => Number(v));
-  set("tradingHoursStart", "tradingHoursStart");
-  set("tradingHoursEnd", "tradingHoursEnd");
 
-  if (body.maxOrderValue !== undefined) {
-    const val = body.maxOrderValue != null ? Number(body.maxOrderValue).toString() : null;
-    if (val !== (existing.maxOrderValue ?? null)?.toString()) {
-      auditEntries.push({ field: "maxOrderValue", old: existing.maxOrderValue?.toString() ?? null, new: val });
-    }
-    updateData.maxOrderValue = val;
-  }
   if (body.maxDailyLoss !== undefined && body.maxDailyLoss !== null) {
     const val = Number(body.maxDailyLoss);
     if (!isNaN(val) && val >= 0) {
       if (String(val) !== (existing.maxDailyLoss ?? "")) auditEntries.push({ field: "maxDailyLoss", old: existing.maxDailyLoss?.toString() ?? null, new: String(val) });
       updateData.maxDailyLoss = val.toString();
     }
-  }
-  if (body.maxDailyProfit !== undefined) {
-    const val = body.maxDailyProfit != null ? Number(body.maxDailyProfit).toString() : null;
-    updateData.maxDailyProfit = val;
-  }
-  if (body.maxPositionSizeValue !== undefined) {
-    const val = body.maxPositionSizeValue != null ? Number(body.maxPositionSizeValue).toString() : null;
-    updateData.maxPositionSizeValue = val;
-    auditEntries.push({ field: "maxPositionSizeValue", old: existing.maxPositionSizeValue?.toString() ?? null, new: val });
-  }
-  if (body.riskPerTrade !== undefined) {
-    updateData.riskPerTrade = body.riskPerTrade != null ? Number(body.riskPerTrade).toString() : null;
-  }
-  if (body.instrumentBlacklist !== undefined && Array.isArray(body.instrumentBlacklist)) {
-    const newList = (body.instrumentBlacklist as string[]).map(s => String(s).toUpperCase().trim());
-    updateData.instrumentBlacklist = newList;
-    auditEntries.push({ field: "instrumentBlacklist", old: JSON.stringify(existing.instrumentBlacklist), new: JSON.stringify(newList) });
   }
   if (body.dashboardWidgets !== undefined && typeof body.dashboardWidgets === "object") {
     updateData.dashboardWidgets = body.dashboardWidgets;

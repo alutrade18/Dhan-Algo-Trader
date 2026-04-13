@@ -8,11 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { ShieldAlert, TrendingUp, TrendingDown, Clock, Ban, Save, XCircle, Plus, WifiOff } from "lucide-react";
+import { ShieldAlert, TrendingUp, TrendingDown, Clock, Save, WifiOff } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 const riskSchema = z.object({ maxDailyLoss: z.coerce.number().min(0) });
@@ -21,8 +20,6 @@ const pnlExitSchema = z.object({ profitValue: z.coerce.number().min(1), lossValu
 interface SettingsData {
   id: number; apiConnected: boolean; maxDailyLoss: number | null;
   autoSquareOffEnabled: boolean; autoSquareOffTime: string;
-  maxTradesPerDay: number | null; maxPositionSizeValue: number | null; maxPositionSizeType: string;
-  instrumentBlacklist: string[]; tradingHoursStart: string; tradingHoursEnd: string;
 }
 interface PnlExitStatus { pnlExitStatus?: string; profit?: string; loss?: string; productType?: string[]; enable_kill_switch?: boolean }
 
@@ -61,13 +58,6 @@ export default function RiskManager() {
 
   const [autoSquareOffEnabled, setAutoSquareOffEnabled] = useState(false);
   const [autoSquareOffTime, setAutoSquareOffTime] = useState("15:14");
-  const [maxTradesPerDay, setMaxTradesPerDay] = useState<string>("");
-  const [maxPosValue, setMaxPosValue] = useState<string>("");
-  const [maxPosType, setMaxPosType] = useState<string>("FIXED");
-  const [tradingStart, setTradingStart] = useState("09:00");
-  const [tradingEnd, setTradingEnd] = useState("15:30");
-  const [blacklistInput, setBlacklistInput] = useState("");
-  const [blacklist, setBlacklist] = useState<string[]>([]);
   const [pnlProductTypes, setPnlProductTypes] = useState<string[]>(["INTRADAY"]);
   const [pnlActive, setPnlActive] = useState(false);
   const [pnlLoaded, setPnlLoaded] = useState(false);
@@ -76,12 +66,6 @@ export default function RiskManager() {
     if (!settingsData) return;
     setAutoSquareOffEnabled(settingsData.autoSquareOffEnabled ?? false);
     setAutoSquareOffTime(settingsData.autoSquareOffTime ?? "15:14");
-    setMaxTradesPerDay(settingsData.maxTradesPerDay != null ? String(settingsData.maxTradesPerDay) : "");
-    setMaxPosValue(settingsData.maxPositionSizeValue != null ? String(settingsData.maxPositionSizeValue) : "");
-    setMaxPosType(settingsData.maxPositionSizeType ?? "FIXED");
-    setTradingStart(settingsData.tradingHoursStart ?? "09:00");
-    setTradingEnd(settingsData.tradingHoursEnd ?? "15:30");
-    setBlacklist(settingsData.instrumentBlacklist ?? []);
   }, [settingsData?.id]);
 
   const riskForm = useForm<z.infer<typeof riskSchema>>({ resolver: zodResolver(riskSchema), defaultValues: { maxDailyLoss: 5000 } });
@@ -142,15 +126,13 @@ export default function RiskManager() {
   if (isLoading) {
     return (
       <div className="grid grid-cols-3 gap-4 w-full">
-        {[...Array(5)].map((_, i) => <Skeleton key={i} className={`h-52 rounded-2xl ${i === 4 ? "col-span-3" : "col-span-1"}`} />)}
+        {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-4">
-
-      {/* Row 1 */}
+    <div className="w-full">
       <div className="grid grid-cols-3 gap-4 items-start">
 
         {/* Risk Management */}
@@ -263,90 +245,6 @@ export default function RiskManager() {
             </div>
             <Button size="sm" className="w-full h-9" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
               <Save className="w-3.5 h-3.5 mr-1.5" />Save Timer
-            </Button>
-          </div>
-        </Card>
-      </div>
-
-      {/* Row 2 */}
-      <div className="grid grid-cols-3 gap-4 items-start">
-
-        {/* Trading Guards */}
-        <Card className="col-span-2">
-          <CardHeader
-            icon={<ShieldAlert className="w-3.5 h-3.5 text-orange-400" />}
-            iconBg="bg-orange-500/15"
-            title="Trading Guards"
-          />
-          <div className="px-5 pt-4 pb-5 space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Max Trades / Day</label>
-                <Input type="number" min={1} step={1} className="h-10" value={maxTradesPerDay} onChange={e => setMaxTradesPerDay(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Max Position Size</label>
-                <div className="flex gap-2">
-                  <Input type="number" min={1} className="h-10 flex-1 min-w-0" value={maxPosValue} onChange={e => setMaxPosValue(e.target.value)} />
-                  <Select value={maxPosType} onValueChange={setMaxPosType}>
-                    <SelectTrigger className="w-24 h-10 shrink-0"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="FIXED">₹ Fixed</SelectItem>
-                      <SelectItem value="PERCENT">% Cap</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Trading Hours (IST)</label>
-                <div className="flex items-center gap-1.5">
-                  <input type="time" value={tradingStart} onChange={e => setTradingStart(e.target.value)} className="h-10 flex-1 min-w-0 rounded-lg border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                  <span className="text-muted-foreground text-xs shrink-0">–</span>
-                  <input type="time" value={tradingEnd} onChange={e => setTradingEnd(e.target.value)} className="h-10 flex-1 min-w-0 rounded-lg border border-input bg-background px-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-                </div>
-              </div>
-            </div>
-            <Button size="sm" className="h-9 gap-1.5" onClick={() => { void genericSaveMutation.mutateAsync({ maxTradesPerDay: maxTradesPerDay ? Number(maxTradesPerDay) : null, maxPositionSizeValue: maxPosValue ? Number(maxPosValue) : null, maxPositionSizeType: maxPosType, tradingHoursStart: tradingStart, tradingHoursEnd: tradingEnd }).then(() => toast({ title: "Trading guards saved" })); }}>
-              <Save className="w-3.5 h-3.5" />Save Guards
-            </Button>
-          </div>
-        </Card>
-
-        {/* Instrument Blacklist */}
-        <Card>
-          <CardHeader
-            icon={<Ban className="w-3.5 h-3.5 text-red-400" />}
-            iconBg="bg-red-500/15"
-            title="Instrument Blacklist"
-            badge={blacklist.length > 0 ? <Badge variant="outline" className="text-[10px] h-5 text-red-400 border-red-500/30">{blacklist.length}</Badge> : undefined}
-          />
-          <div className="px-5 pt-4 pb-5 space-y-3">
-            <div className="flex gap-2">
-              <Input
-                placeholder=""
-                className="h-9 text-sm font-mono flex-1"
-                value={blacklistInput}
-                onChange={e => setBlacklistInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && blacklistInput.trim()) { const sym = blacklistInput.trim().toUpperCase(); if (!blacklist.includes(sym)) setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }}
-              />
-              <Button type="button" size="sm" variant="outline" className="h-9 gap-1 px-3 shrink-0" onClick={() => { const sym = blacklistInput.trim().toUpperCase(); if (sym && !blacklist.includes(sym)) { setBlacklist(prev => [...prev, sym]); setBlacklistInput(""); } }}>
-                <Plus className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-            {blacklist.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {blacklist.map(sym => (
-                  <span key={sym} className="inline-flex items-center gap-1 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-md px-2 py-0.5 font-mono">
-                    {sym}
-                    <button onClick={() => setBlacklist(prev => prev.filter(s => s !== sym))} className="hover:text-red-300 ml-0.5">
-                      <XCircle className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <Button size="sm" className="w-full h-9 gap-1.5" onClick={() => { void genericSaveMutation.mutateAsync({ instrumentBlacklist: blacklist }).then(() => toast({ title: `Blacklist saved — ${blacklist.length} symbol(s)` })); }}>
-              <Save className="w-3.5 h-3.5" />Save Blacklist
             </Button>
           </div>
         </Card>
