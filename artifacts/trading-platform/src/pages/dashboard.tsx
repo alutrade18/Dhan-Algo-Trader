@@ -153,12 +153,23 @@ const PRESETS: {
 
 const AUTO_RESET_MS = 0.2 * 60 * 1000; // 1 minute
 
-const Y_MAX = 1_500_000;
-const Y_STEP = 150_000;
-const Y_TICKS = Array.from(
-  { length: Y_MAX / Y_STEP + 1 },
-  (_, i) => i * Y_STEP,
-);
+/** Compute a "nice" Y-axis ceiling for the equity curve given the max runbal. */
+function computeYScale(maxVal: number): { yMax: number; yTicks: number[] } {
+  if (maxVal <= 0) return { yMax: 10_000, yTicks: [0, 2_000, 4_000, 6_000, 8_000, 10_000] };
+  // Pick a step size that gives ~8-10 ticks
+  const rawStep = maxVal / 8;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const niceSteps = [1, 2, 2.5, 5, 10];
+  const step =
+    niceSteps.map((n) => n * magnitude).find((s) => s >= rawStep) ??
+    10 * magnitude;
+  const yMax = Math.ceil((maxVal * 1.1) / step) * step;
+  const count = Math.round(yMax / step);
+  return {
+    yMax,
+    yTicks: Array.from({ length: count + 1 }, (_, i) => i * step),
+  };
+}
 
 function CustomDot(props: Record<string, unknown>) {
   const { cx, cy, payload } = props as {
@@ -436,6 +447,12 @@ export default function Dashboard() {
         year: "2-digit",
       }),
     }));
+
+  const maxRunbal = equityData.reduce(
+    (m, p) => Math.max(m, p.runbal ?? 0),
+    0,
+  );
+  const { yMax: Y_MAX, yTicks: Y_TICKS } = computeYScale(maxRunbal);
 
   function handlePreset(preset: (typeof PRESETS)[0]) {
     if (preset.mode === "alltime") {

@@ -222,6 +222,103 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
   }
 });
 
+/** Classify a ledger entry narration as DEPOSIT, WITHDRAWAL, or PNL. */
+function classifyLedgerEntry(narration: string): "DEPOSIT" | "WITHDRAWAL" | "PNL" {
+  const n = narration.toUpperCase();
+  if (
+    (n.includes("FUND") && (n.includes("DEPOSIT") || n.includes("RECEIV") || n.includes("CREDIT") || n.includes("ADDED") || n.includes("TRANSFER IN"))) ||
+    n === "FUNDS DEPOSITED"
+  ) return "DEPOSIT";
+  if (
+    n.includes("WITHDRAW") || n.includes("PAYOUT") || n.includes("TRANSFER OUT") ||
+    (n.includes("FUND") && n.includes("DEBIT"))
+  ) return "WITHDRAWAL";
+  return "PNL";
+}
+
+/**
+ * Converts raw Dhan ledger entries into equity curve data points.
+ *
+ * Key behaviours:
+ *  1. OPENING BALANCE and CLOSING BALANCE rows are skipped — they are synthetic
+ *     Dhan API entries with runbal=0 that would corrupt the running-balance delta.
+ *  2. The Dhan ledger API returns entries in REVERSE chronological order.
+ *     For each calendar date we keep only the FIRST runbal we encounter (= the
+ *     latest/end-of-day balance for that date) and never overwrite it with older
+ *     intra-day entries.
+ *  3. Entries dated at the Unix epoch ("Jan 01, 1970") are ignored — they are
+ *     another Dhan artefact for the OPENING BALANCE sentinel.
+ *  4. pnl = runbal delta vs. previous trading day.
+ *  5. cumulative is accumulated only for PNL-type days (deposits/withdrawals are
+ *     charted separately and excluded from the cumulative P&L line).
+ */
+function buildEquityCurvePoints(
+  raw: unknown,
+): Array<{ date: string; pnl: number; cumulative: number; runbal?: number; type?: string; label?: string }> {
+  const entries = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+
+  type DayInfo = { runbal: number; types: string[]; narration: string };
+  const dailyMap = new Map<string, DayInfo>();
+
+  for (const e of entries) {
+    const narration = String(e.narration ?? e.particulars ?? "").trim();
+    const narrUpper = narration.toUpperCase();
+
+    // Skip synthetic Dhan balance rows — they have runbal=0 and corrupt the chart
+    if (narrUpper === "OPENING BALANCE" || narrUpper === "CLOSING BALANCE") continue;
+
+    const voucher = String(e.voucherdate ?? "");
+    if (!voucher) continue;
+    const parsed = new Date(voucher);
+    if (isNaN(parsed.getTime())) continue;
+
+    // Skip the Unix-epoch sentinel sometimes emitted as OPENING BALANCE date
+    const dateKey = parsed.toISOString().split("T")[0];
+    if (dateKey === "1970-01-01") continue;
+
+    const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
+    if (isNaN(bal) || bal === 0) continue;
+
+    const type = classifyLedgerEntry(narration);
+
+    if (!dailyMap.has(dateKey)) {
+      // First entry for this date = most recent intraday entry (reverse-order data)
+      // = correct end-of-day balance. Do NOT overwrite with older entries.
+      dailyMap.set(dateKey, { runbal: bal, types: [type], narration });
+    } else {
+      // Accumulate event types for colour coding but preserve the first runbal
+      const existing = dailyMap.get(dateKey)!;
+      existing.types.push(type);
+    }
+  }
+
+  const sortedDates = Array.from(dailyMap.keys()).sort();
+  const points: Array<{ date: string; pnl: number; cumulative: number; runbal?: number; type?: string; label?: string }> = [];
+
+  let prevBal = 0;
+  let tradingCumulative = 0;
+
+  for (const d of sortedDates) {
+    const info = dailyMap.get(d)!;
+    const pnl = Math.round((info.runbal - prevBal) * 100) / 100;
+    const dominantType = info.types.includes("DEPOSIT") ? "DEPOSIT"
+      : info.types.includes("WITHDRAWAL") ? "WITHDRAWAL" : "PNL";
+
+    if (dominantType === "PNL") tradingCumulative += pnl;
+    points.push({
+      date: d,
+      pnl,
+      cumulative: Math.round(tradingCumulative * 100) / 100,
+      runbal: info.runbal,
+      type: dominantType,
+      label: info.narration,
+    });
+    prevBal = info.runbal;
+  }
+
+  return points;
+}
+
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
     const source = String(req.query.source ?? "local");
@@ -250,52 +347,11 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
 
         try {
           const raw = await dhanClient.getAllLedger(allTimeStartStr, todayStr);
-          const entries = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
-
-          type DayInfo = { runbal: number; types: string[]; narration: string };
-          const dailyMap = new Map<string, DayInfo>();
-
-          for (const e of entries) {
-            const voucher = String(e.voucherdate ?? "");
-            if (!voucher) continue;
-            const parsed = new Date(voucher);
-            if (isNaN(parsed.getTime())) continue;
-            const dateKey = parsed.toISOString().split("T")[0];
-            const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
-            if (isNaN(bal)) continue;
-            const narration = String(e.narration ?? e.particulars ?? "").trim();
-            const type = classifyLedgerEntry(narration);
-
-            if (!dailyMap.has(dateKey)) {
-              dailyMap.set(dateKey, { runbal: bal, types: [type], narration });
-            } else {
-              const existing = dailyMap.get(dateKey)!;
-              existing.runbal = bal;
-              existing.types.push(type);
-              existing.narration = narration;
-            }
-          }
-
-          const sortedDates = Array.from(dailyMap.keys()).sort();
-          const pts: typeof points = [];
-          let prevBal = 0;
-          for (const d of sortedDates) {
-            const info = dailyMap.get(d)!;
-            const pnl = Math.round((info.runbal - prevBal) * 100) / 100;
-            const types = info.types;
-            const dominantType = types.includes("DEPOSIT") ? "DEPOSIT"
-              : types.includes("WITHDRAWAL") ? "WITHDRAWAL" : "PNL";
-            pts.push({ date: d, pnl, cumulative: 0, runbal: info.runbal, type: dominantType, label: info.narration });
-            prevBal = info.runbal;
-          }
-          let tradingCumulative = 0;
-          for (const p of pts) {
-            if (p.type === "PNL") tradingCumulative += p.pnl;
-            p.cumulative = Math.round(tradingCumulative * 100) / 100;
-          }
+          const pts = buildEquityCurvePoints(raw);
           res.json(pts);
           return;
-        } catch {
+        } catch (err) {
+          req.log.error({ err }, "equity-curve allTime ledger error");
           res.json([]);
           return;
         }
@@ -320,61 +376,10 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
     if (useLedger) {
       try {
         const raw = await dhanClient.getLedger(fromStr, toStr);
-        const entries = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
-
-        type DayInfo = { runbal: number; types: string[]; narration: string };
-        const dailyMap = new Map<string, DayInfo>();
-
-        for (const e of entries) {
-          const voucher = String(e.voucherdate ?? "");
-          if (!voucher) continue;
-          const parsed = new Date(voucher);
-          if (isNaN(parsed.getTime())) continue;
-          const dateKey = parsed.toISOString().split("T")[0];
-          const bal = parseFloat(String(e.runbal ?? "0").replace(/,/g, ""));
-          if (isNaN(bal)) continue;
-          const narration = String(e.narration ?? e.particulars ?? "").trim();
-          const type = classifyLedgerEntry(narration);
-
-          if (!dailyMap.has(dateKey)) {
-            dailyMap.set(dateKey, { runbal: bal, types: [type], narration });
-          } else {
-            const existing = dailyMap.get(dateKey)!;
-            existing.runbal = bal;
-            existing.types.push(type);
-            existing.narration = narration;
-          }
-        }
-
-        const sortedDates = Array.from(dailyMap.keys()).sort();
-        if (sortedDates.length === 0) { res.json([]); return; }
-
-        let prevBal = 0;
-        for (const d of sortedDates) {
-          const info = dailyMap.get(d)!;
-          const pnl = Math.round((info.runbal - prevBal) * 100) / 100;
-          const types = info.types;
-          const dominantType = types.includes("DEPOSIT") ? "DEPOSIT"
-            : types.includes("WITHDRAWAL") ? "WITHDRAWAL" : "PNL";
-          points.push({
-            date: d,
-            pnl,
-            cumulative: 0,
-            runbal: info.runbal,
-            type: dominantType,
-            label: info.narration,
-          });
-          prevBal = info.runbal;
-        }
-
-        let tradingCumulative = 0;
-        for (const p of points) {
-          if (p.type === "PNL") tradingCumulative += p.pnl;
-          p.cumulative = Math.round(tradingCumulative * 100) / 100;
-        }
-        res.json(points);
+        res.json(buildEquityCurvePoints(raw));
         return;
-      } catch {
+      } catch (err) {
+        req.log.error({ err }, "equity-curve ledger error");
         res.json([]);
         return;
       }
