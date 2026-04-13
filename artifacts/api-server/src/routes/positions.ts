@@ -42,17 +42,18 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
     transactionType: "BUY" | "SELL";
   };
   try {
+    // BUG FIX #1: Dhan API v2 requires snake_case field names.
+    // Using camelCase (transactionType, exchangeSegment, etc.) caused silent order failures.
     const result = await dhanClient.placeOrder({
-      dhanClientId: dhanClient.getCredentials().clientId,
-      transactionType,
-      exchangeSegment,
-      productType,
-      orderType: "MARKET",
+      security_id: securityId,
+      exchange_segment: exchangeSegment,
+      transaction_type: transactionType,
+      product_type: productType,
+      order_type: "MARKET",
       validity: "DAY",
-      securityId,
       quantity,
       price: 0,
-      afterMarketOrder: false,
+      after_market_order: false,
     });
     res.json(result);
   } catch (e) {

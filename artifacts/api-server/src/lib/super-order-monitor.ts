@@ -69,30 +69,39 @@ async function checkSuperOrders(): Promise<void> {
         }
 
         if (triggered) {
-          await db
-            .update(superOrdersTable)
-            .set({ status: triggered })
-            .where(eq(superOrdersTable.id, order.id));
+          // Map stored productType to Dhan API value ("INTRADAY" → "INTRA")
+          const dhanProductType = order.productType === "INTRADAY" ? "INTRA" : order.productType;
 
           try {
+            // BUG FIX #1: Place exit order FIRST using snake_case field names (Dhan API v2 requirement).
+            // BUG FIX #2: Only mark DB status terminal AFTER the exit order is successfully placed.
+            //             Previously the DB was updated first — if the order then failed, the order
+            //             would be stuck in a terminal state and never retried.
             await dhanClient.placeOrder({
-              securityId: order.securityId,
-              exchangeSegment: order.exchangeSegment,
-              transactionType: exitType,
-              orderType: "MARKET",
-              productType: order.productType,
+              security_id: order.securityId,
+              exchange_segment: order.exchangeSegment,
+              transaction_type: exitType,
+              order_type: "MARKET",
+              product_type: dhanProductType,
               quantity: order.quantity,
               price: 0,
               validity: "DAY",
-              disclosedQuantity: 0,
-              afterMarketOrder: false,
+              disclosed_quantity: 0,
+              after_market_order: false,
             });
-          } catch (exitErr) {
-            logger.error({ err: exitErr, orderId: order.id }, "SuperOrderMonitor: failed to place exit order");
-          }
 
-          void sendTelegramAlert(alertMsg + `\n\n_${APP_NAME} — Super Order Monitor_`);
-          logger.info({ orderId: order.id, triggered, ltp }, "SuperOrderMonitor: exit triggered");
+            // Exit order placed successfully — now safe to mark as terminal in DB
+            await db
+              .update(superOrdersTable)
+              .set({ status: triggered })
+              .where(eq(superOrdersTable.id, order.id));
+
+            void sendTelegramAlert(alertMsg + `\n\n_${APP_NAME} — Super Order Monitor_`);
+            logger.info({ orderId: order.id, triggered, ltp }, "SuperOrderMonitor: exit triggered");
+          } catch (exitErr) {
+            // Exit order failed — DB status intentionally NOT updated so monitor retries next cycle
+            logger.error({ err: exitErr, orderId: order.id }, "SuperOrderMonitor: failed to place exit order — will retry next cycle");
+          }
         }
       } catch (ltpErr) {
         logger.warn({ err: ltpErr, orderId: order.id }, "SuperOrderMonitor: failed to get LTP");
