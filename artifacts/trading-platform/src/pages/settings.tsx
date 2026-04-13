@@ -31,7 +31,7 @@ const telegramSchema = z.object({
 interface FundDetails { dhanClientId?: string; availableBalance?: number; sodLimit?: number; utilizedAmount?: number; withdrawableBalance?: number }
 interface ConnectResult extends FundDetails { success: boolean; errorCode?: string; errorMessage?: string }
 interface SettingsData {
-  id: number; dhanClientId: string; apiConnected: boolean;
+  id: number; dhanClientId: string; dhanAccessToken: string; apiConnected: boolean;
   maxDailyLoss: number | null; killSwitchEnabled: boolean;
   telegramBotToken: string; telegramChatId: string;
   defaultProductType: string; defaultOrderType: string; defaultQuantity: number | null; hasKillSwitchPin: boolean;
@@ -98,6 +98,7 @@ export default function Settings() {
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
   const maskedClientId = settingsData?.dhanClientId ?? "";
+  const maskedAccessToken = settingsData?.dhanAccessToken ?? "";
 
   useEffect(() => {
     if (!settingsData) return;
@@ -271,6 +272,7 @@ export default function Settings() {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Access Token <span className="normal-case text-muted-foreground/60 font-normal">(expires every 24h)</span>
+                  {isConnected && maskedAccessToken && <span className="ml-1.5 normal-case font-normal text-green-500/80">· {maskedAccessToken} saved</span>}
                 </label>
                 <div className="relative">
                   <Input type={showToken ? "text" : "password"} placeholder={isConnected ? "Paste new token to reconnect" : "Paste your Access Token here"} className="h-9 pr-9" autoComplete="current-password" {...brokerForm.register("accessToken")} />

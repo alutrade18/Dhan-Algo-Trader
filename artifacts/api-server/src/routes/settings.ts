@@ -65,6 +65,7 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
   return {
     id: s.id,
     dhanClientId: s.brokerClientId ? "****" + s.brokerClientId.slice(-4) : "",
+    dhanAccessToken: s.brokerAccessToken ? "****" + s.brokerAccessToken.slice(-4) : "",
     apiConnected: dhanClient.isConfigured(),
     defaultProductType: s.defaultProductType,
     defaultOrderType: s.defaultOrderType,
