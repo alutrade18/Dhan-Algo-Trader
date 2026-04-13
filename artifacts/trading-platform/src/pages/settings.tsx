@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
-  Bell, AlertTriangle, DollarSign, Send,
+  Bell, AlertTriangle, Send,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -213,7 +213,7 @@ export default function Settings() {
             <Button type="submit" size="sm" className="h-9 px-6 gap-1.5 flex-1" disabled={connectMutation.isPending}>
               {connectMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Connecting…</>
-                : <><DollarSign className="w-3.5 h-3.5" />{isConnected ? "Reconnect" : "Save & Connect"}</>}
+                : <><Wifi className="w-3.5 h-3.5" />{isConnected ? "Reconnect" : "Save & Connect"}</>}
             </Button>
             {isConnected && (
               <Button type="button" variant="outline" size="sm" className="gap-1.5 h-9 border-destructive/40 text-destructive hover:bg-destructive/8" disabled={disconnectMutation.isPending} onClick={() => disconnectMutation.mutate()}>
