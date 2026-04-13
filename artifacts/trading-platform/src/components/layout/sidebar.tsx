@@ -34,17 +34,17 @@ const NAV_SECTIONS = [
     label: "AUTOMATION",
     items: [
       { href: "/strategies", label: "Strategies", icon: TerminalSquare },
-      { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
       { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
+      { href: "/paper-trading", label: "Paper Trading", icon: PlayCircle },
     ],
   },
   {
     label: "SYSTEM",
     items: [
-      { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/risk-manager", label: "Risk Manager", icon: ShieldCheck },
-      { href: "/system-notifications", label: "Notifications", icon: BellRing },
       { href: "/logs", label: "Logs", icon: ScrollText },
+      { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/system-notifications", label: "Notifications", icon: BellRing },
+      { href: "/risk-manager", label: "Risk Manager", icon: ShieldCheck },
     ],
   },
 ];
