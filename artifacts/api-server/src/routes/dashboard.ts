@@ -130,7 +130,9 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const winRate = totalTradesFromLogs > 0 ? (wins / totalTradesFromLogs) * 100 : 0;
 
     const settings = settingsResult.status === "fulfilled" ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null; id?: number }[])[0] : null;
-    const maxDailyLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
+    // maxDailyLoss = 0 means "not configured" — treat as null so it never false-triggers
+    const rawMaxDailyLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
+    const maxDailyLoss = rawMaxDailyLoss !== null && rawMaxDailyLoss > 0 ? rawMaxDailyLoss : null;
 
     // Use REAL-TIME kill switch status from Dhan API
     const ksData = killSwitchResult.status === "fulfilled"

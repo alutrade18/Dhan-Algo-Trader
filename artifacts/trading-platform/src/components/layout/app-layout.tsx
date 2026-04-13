@@ -204,7 +204,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     onError: () => toast({ title: "Error", description: "Failed to activate emergency stop", variant: "destructive" }),
   });
 
-  const dhanKillActive = ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE";
+  // isActive is set by our backend from the real-time Dhan API response
+  // Also check killSwitchStatus directly as Dhan returns "ACTIVATE" (not "ACTIVE")
+  const dhanKillActive =
+    ksStatus?.isActive === true ||
+    ksStatus?.killSwitchStatus === "ACTIVATE" ||
+    ksStatus?.killSwitchStatus === "ACTIVE";
   const isDashboard = location === "/";
 
   const pageTitle = PAGE_TITLES[location] ?? "Dashboard";

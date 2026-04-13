@@ -389,9 +389,11 @@ export default function Dashboard() {
   // Kill switch: ONLY trust real-time Dhan API (from dedicated /risk/killswitch endpoint)
   const dhanKillActive =
     ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE";
-  // Daily loss trigger: compute directly from raw figures — never from stale DB flag
+  // Daily loss trigger: compute directly from raw figures.
+  // Guard: maxDailyLoss must be > 0 to be meaningful — 0 means "not configured".
   const dailyLossTriggered =
     summary?.maxDailyLoss != null &&
+    summary.maxDailyLoss > 0 &&
     summary?.dailyLossAmount != null &&
     summary.dailyLossAmount >= summary.maxDailyLoss;
   const killTriggered = dhanKillActive || dailyLossTriggered;
