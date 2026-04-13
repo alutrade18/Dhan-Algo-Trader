@@ -11,12 +11,11 @@ async function getSettings() {
   return s ?? null;
 }
 
-/** Check if daily P&L limits (loss or profit target) have been reached */
-export async function checkDailyPnlLimits(): Promise<OrderGuardResult> {
+/** Check if the daily loss limit has been reached */
+export async function checkDailyLossLimit(): Promise<OrderGuardResult> {
   const settings = await getSettings();
   const maxLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
-  const maxProfit = settings?.maxDailyProfit ? Number(settings.maxDailyProfit) : null;
-  if (!maxLoss && !maxProfit) return { allowed: true };
+  if (!maxLoss) return { allowed: true };
 
   try {
     const positions = await dhanClient.getPositions() as Array<Record<string, unknown>>;
@@ -24,16 +23,10 @@ export async function checkDailyPnlLimits(): Promise<OrderGuardResult> {
       ? positions.reduce((s, p) => s + Number(p.realizedProfit || 0) + Number(p.unrealizedProfit || 0), 0)
       : 0;
 
-    if (maxLoss && todayPnl <= -maxLoss) {
+    if (todayPnl <= -maxLoss) {
       return {
         allowed: false,
         reason: `Daily loss limit of ₹${maxLoss.toLocaleString("en-IN")} reached. Today's P&L: ₹${todayPnl.toFixed(2)}`,
-      };
-    }
-    if (maxProfit && todayPnl >= maxProfit) {
-      return {
-        allowed: false,
-        reason: `Daily profit target of ₹${maxProfit.toLocaleString("en-IN")} reached. Today's P&L: ₹${todayPnl.toFixed(2)}`,
       };
     }
   } catch {
@@ -48,8 +41,8 @@ export async function runOrderGuards(_params: {
   price?: number;
   quantity?: number;
 }): Promise<OrderGuardResult> {
-  const pnlCheck = await checkDailyPnlLimits();
-  if (!pnlCheck.allowed) return pnlCheck;
+  const lossCheck = await checkDailyLossLimit();
+  if (!lossCheck.allowed) return lossCheck;
 
   return { allowed: true };
 }

@@ -5,31 +5,24 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
-  ShieldAlert, TrendingUp, TrendingDown, Clock, Save, WifiOff,
+  ShieldAlert, Clock, Save, WifiOff,
   Power, Lock, Eye, EyeOff, Trash2, CheckCircle2, AlertTriangle,
-  IndianRupee, Target, Zap, Timer,
+  IndianRupee, Timer,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 const riskSchema = z.object({ maxDailyLoss: z.coerce.number().min(0) });
-const pnlExitSchema = z.object({
-  profitValue: z.coerce.number().min(0),
-  lossValue: z.coerce.number().min(0),
-  enableKillSwitch: z.boolean().default(false),
-});
 
 interface SettingsData {
   id: number; apiConnected: boolean; maxDailyLoss: number | null;
   autoSquareOffEnabled: boolean; autoSquareOffTime: string;
   hasKillSwitchPin: boolean;
 }
-interface PnlExitStatus { pnlExitStatus?: string; profit?: string; loss?: string; enable_kill_switch?: boolean }
 interface KillSwitchStatus { killSwitchStatus?: string; isActive?: boolean; canDeactivateToday?: boolean; deactivationsUsed?: number }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -46,8 +39,6 @@ export default function RiskManager() {
 
   const [autoSquareOffEnabled, setAutoSquareOffEnabled] = useState(false);
   const [autoSquareOffTime, setAutoSquareOffTime] = useState("15:14");
-  const [pnlActive, setPnlActive] = useState(false);
-  const [pnlLoaded, setPnlLoaded] = useState(false);
 
   const [optimisticKsActive, setOptimisticKsActive] = useState<boolean | null>(null);
   const [pinDialogFor, setPinDialogFor] = useState<string | null>(null);
@@ -71,16 +62,11 @@ export default function RiskManager() {
   }, [settingsData?.id]);
 
   const riskForm = useForm<z.infer<typeof riskSchema>>({ resolver: zodResolver(riskSchema), defaultValues: { maxDailyLoss: 0 } });
-  const pnlForm = useForm<z.infer<typeof pnlExitSchema>>({ resolver: zodResolver(pnlExitSchema), defaultValues: { profitValue: 0, lossValue: 0, enableKillSwitch: false } });
 
   useEffect(() => {
     if (settingsData) riskForm.reset({ maxDailyLoss: settingsData.maxDailyLoss ?? 0 });
   }, [settingsData?.id]);
 
-  const { data: pnlStatus, refetch: refetchPnl } = useQuery<PnlExitStatus>({
-    queryKey: ["pnl-exit-status"], enabled: isConnected, staleTime: 0, gcTime: 0, refetchInterval: 15_000,
-    queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/pnl-exit`, { cache: "no-store" }); if (!r.ok) return {}; return r.json(); },
-  });
   const { data: ksStatus, refetch: refetchKs } = useQuery<KillSwitchStatus>({
     queryKey: ["killswitch-status"], enabled: isConnected, refetchInterval: 15000, staleTime: 0, gcTime: 0,
     queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/killswitch`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }); if (!r.ok) return {}; return r.json(); },
@@ -89,17 +75,6 @@ export default function RiskManager() {
   const killSwitchActive = optimisticKsActive !== null ? optimisticKsActive
     : (ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE");
   const canDeactivate = ksStatus?.canDeactivateToday !== false;
-
-  useEffect(() => {
-    if (pnlStatus && !pnlLoaded) {
-      const isActive = pnlStatus.pnlExitStatus === "ACTIVE";
-      setPnlActive(isActive);
-      if (isActive) {
-        pnlForm.reset({ profitValue: pnlStatus.profit ? Number(pnlStatus.profit) : undefined, lossValue: pnlStatus.loss ? Number(pnlStatus.loss) : undefined, enableKillSwitch: pnlStatus.enable_kill_switch ?? false });
-      }
-      setPnlLoaded(true);
-    }
-  }, [pnlStatus]);
 
   async function saveSettings(data: Record<string, unknown>) {
     const res = await fetch(`${BASE}api/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -116,20 +91,6 @@ export default function RiskManager() {
     mutationFn: saveSettings,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/settings"] }),
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
-  });
-  const pnlExitMutation = useMutation({
-    mutationFn: async (values: z.infer<typeof pnlExitSchema>) => {
-      const res = await fetch(`${BASE}api/risk/pnl-exit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profitValue: values.profitValue, lossValue: values.lossValue, enableKillSwitch: values.enableKillSwitch }) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})) as { error?: string; errorMessage?: string }; throw new Error(err.errorMessage ?? err.error ?? "Request rejected by broker"); }
-      return res.json();
-    },
-    onSuccess: (_data, values) => { setPnlActive(true); void refetchPnl(); toast({ title: "P&L Exit Activated", description: `INTRADAY — exit at ₹${values.profitValue} profit or ₹${values.lossValue} loss.` }); },
-    onError: (err: Error) => toast({ title: "Failed to set P&L exit", description: err.message, variant: "destructive" }),
-  });
-  const stopPnlExitMutation = useMutation({
-    mutationFn: async () => { const r = await fetch(`${BASE}api/risk/pnl-exit`, { method: "DELETE" }); if (!r.ok) throw new Error("Failed"); return r.json(); },
-    onSuccess: () => { setPnlActive(false); setPnlLoaded(false); void refetchPnl(); toast({ title: "P&L Exit Stopped" }); },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
   const killSwitchMutation = useMutation({
     mutationFn: async (status: "ACTIVATE" | "DEACTIVATE") => {
@@ -485,98 +446,6 @@ export default function RiskManager() {
               )}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Row 3: P&L Based Exit — Full Width ── */}
-      <div className={`rounded-2xl border bg-card overflow-hidden shadow-sm transition-colors ${pnlActive ? "border-primary/40" : "border-border/50"}`}>
-        <div className={`px-5 py-3.5 border-b border-border/30 flex items-center justify-between ${pnlActive ? "bg-primary/8" : "bg-muted/5"}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${pnlActive ? "bg-primary/20" : "bg-muted/20"}`}>
-              <Target className={`w-4 h-4 ${pnlActive ? "text-primary" : "text-muted-foreground"}`} />
-            </div>
-            <p className="font-semibold text-sm">P&L Based Exit</p>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground bg-muted/30 border border-border/50 px-2 py-0.5 rounded-full">INTRADAY</span>
-            {pnlActive && (
-              <span className="flex items-center gap-1.5 text-[10px] font-bold text-primary uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />ACTIVE
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="px-6 py-5">
-          {!isConnected ? (
-            <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
-              <WifiOff className="w-6 h-6 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Connect broker first to use P&L exit.</p>
-            </div>
-          ) : (
-            <form onSubmit={pnlForm.handleSubmit(v => pnlExitMutation.mutate(v))}>
-              {/* Active status strip */}
-              {pnlActive && pnlStatus?.pnlExitStatus === "ACTIVE" && (
-                <div className="flex items-center gap-6 mb-5 px-4 py-3 rounded-xl bg-primary/5 border border-primary/20">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-3.5 h-3.5 text-green-400" />
-                    <span className="text-xs text-muted-foreground">Profit Target</span>
-                    <span className="text-sm font-bold text-green-400 tabular-nums">₹{pnlStatus.profit}</span>
-                  </div>
-                  <div className="w-px h-4 bg-border/50" />
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="w-3.5 h-3.5 text-destructive" />
-                    <span className="text-xs text-muted-foreground">Loss Stop</span>
-                    <span className="text-sm font-bold text-destructive tabular-nums">₹{pnlStatus.loss}</span>
-                  </div>
-                  <div className="w-px h-4 bg-border/50" />
-                  <div className="flex items-center gap-2">
-                    <Power className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Kill Switch</span>
-                    <span className="text-sm font-semibold">{pnlStatus.enable_kill_switch ? "Yes" : "No"}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 3-column input layout across the full width */}
-              <div className="grid grid-cols-3 gap-5 items-end">
-                <div className="space-y-1.5">
-                  <SectionLabel>Profit Target (₹)</SectionLabel>
-                  <div className="relative">
-                    <TrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-green-500/60" />
-                    <Input type="number" min={1} className="h-10 pl-8 tabular-nums bg-background/60" {...pnlForm.register("profitValue")} />
-                  </div>
-                  {pnlForm.formState.errors.profitValue && <p className="text-[10px] text-destructive">Required</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <SectionLabel>Loss Limit (₹)</SectionLabel>
-                  <div className="relative">
-                    <TrendingDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-destructive/60" />
-                    <Input type="number" min={1} className="h-10 pl-8 tabular-nums bg-background/60" {...pnlForm.register("lossValue")} />
-                  </div>
-                  {pnlForm.formState.errors.lossValue && <p className="text-[10px] text-destructive">Required</p>}
-                </div>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer group">
-                    <Checkbox checked={pnlForm.watch("enableKillSwitch")} onCheckedChange={v => pnlForm.setValue("enableKillSwitch", !!v)} />
-                    <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">Also activate kill switch on exit</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <Button type="submit" size="sm" className="h-10 flex-1 gap-1.5" disabled={pnlExitMutation.isPending}>
-                      {pnlExitMutation.isPending
-                        ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />…</>
-                        : <><Zap className="w-3.5 h-3.5" />{pnlActive ? "Update" : "Activate"}</>}
-                    </Button>
-                    {pnlActive && (
-                      <Button type="button" variant="outline" size="sm" className="h-10 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/8" disabled={stopPnlExitMutation.isPending} onClick={() => stopPnlExitMutation.mutate()}>
-                        <TrendingDown className="w-3.5 h-3.5" />{stopPnlExitMutation.isPending ? "…" : "Stop"}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </form>
-          )}
         </div>
       </div>
 

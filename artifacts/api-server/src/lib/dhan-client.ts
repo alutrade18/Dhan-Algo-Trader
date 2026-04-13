@@ -333,31 +333,6 @@ export const dhanClient = {
     return dhanRequest("POST", `/killswitch?killSwitchStatus=${status}`);
   },
 
-  async getPnlExit() {
-    return dhanRequest("GET", "/pnlExit");
-  },
-
-  async setPnlExit(data: {
-    profitValue: number;
-    lossValue: number;
-    productType: string[];
-    enableKillSwitch: boolean;
-  }) {
-    const body = {
-      dhanClientId: credentials.clientId,
-      profitValue: String(data.profitValue),
-      lossValue: String(data.lossValue),
-      productType: data.productType,
-      enableKillSwitch: data.enableKillSwitch,
-    };
-    logger.info({ pnlBody: body }, "setPnlExit body");
-    return dhanRequest("POST", "/pnlExit", body);
-  },
-
-  async stopPnlExit() {
-    return dhanRequest("DELETE", "/pnlExit");
-  },
-
   async getSuperOrders() {
     return dhanRequest("GET", "/superorder");
   },
