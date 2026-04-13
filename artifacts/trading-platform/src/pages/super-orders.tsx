@@ -12,7 +12,7 @@ import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search"
 
 const BASE = import.meta.env.BASE_URL;
 
-const TARGET_PCT  = 30;
+const TARGET_PCT  = 15;
 const SL_PCT      = 10;
 const DEFAULT_QTY = 5;
 
