@@ -26,12 +26,12 @@ import {
   MapPin,
   Clock,
   FileCode2,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL;
-const LS_SUCCESS_KEY = "log_success_reset_at";
 const LIMIT = 150;
 
 // ── Dhan API Error Code Lookup ───────────────────────────────────────────────
@@ -119,8 +119,6 @@ function fmtIST(iso: string) {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
   });
 }
-function getLs(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
-function setLs(key: string, val: string) { try { localStorage.setItem(key, val); } catch {} }
 
 function SourceRouteBadge({ route }: { route: string | undefined }) {
   if (!route) return null;
@@ -145,7 +143,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
   const requestBody = parsed?.requestBody as Record<string, unknown> | undefined;
   const queryParams = parsed?.queryParams as Record<string, unknown> | undefined;
 
-  // Build a clean details object (exclude fields shown elsewhere)
   const rawDetails: Record<string, unknown> = {};
   if (parsed) {
     for (const [k, v] of Object.entries(parsed)) {
@@ -196,8 +193,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
       {expanded && (
         <tr className="border-b border-border/40 bg-destructive/5">
           <td colSpan={6} className="px-4 py-3 space-y-3">
-
-            {/* ── Source + timing ── */}
             <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
               {sourceRoute && (
                 <span className="flex items-center gap-1.5">
@@ -220,8 +215,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
                 </span>
               )}
             </div>
-
-            {/* ── Dhan error explanation ── */}
             {dhanErr && (
               <div className="rounded border border-destructive/30 bg-destructive/8 p-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
@@ -231,8 +224,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
                 <p className="text-xs text-foreground/80 leading-relaxed">{dhanErr.message}</p>
               </div>
             )}
-
-            {/* ── Actual error message ── */}
             {errorMessage && !dhanErr && (
               <div className="rounded border border-destructive/30 bg-destructive/8 p-2.5">
                 <div className="flex items-center gap-2 mb-1">
@@ -242,8 +233,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
                 <p className="text-xs text-foreground/80 font-mono leading-relaxed break-all">{errorMessage}</p>
               </div>
             )}
-
-            {/* ── Request body ── */}
             {requestBody && Object.keys(requestBody).length > 0 && (
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1 flex items-center gap-1">
@@ -254,8 +243,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
                 </pre>
               </div>
             )}
-
-            {/* ── Query params ── */}
             {queryParams && Object.keys(queryParams).length > 0 && (
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">Query Params</p>
@@ -264,8 +251,6 @@ function FailedAppLogRow({ log }: { log: AppLog }) {
                 </pre>
               </div>
             )}
-
-            {/* ── Raw error response ── */}
             {Object.keys(rawDetails).length > 0 && (
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">Raw Error Response</p>
@@ -288,7 +273,6 @@ function SuccessLogRow({ log }: { log: AppLog }) {
   const sourceRoute = parsed?.sourceRoute as string | undefined;
   const duration = parsed?.duration as string | undefined;
   const requestBody = parsed?.requestBody as Record<string, unknown> | undefined;
-
   const hasDetails = !!(sourceRoute || duration || requestBody);
 
   return (
@@ -408,8 +392,8 @@ export default function Logs() {
   const [activeTab, setActiveTab] = useState("failed");
   const [failedPage, setFailedPage]   = useState(0);
   const [successPage, setSuccessPage] = useState(0);
-  const [successResetTs, setSuccessResetTsState] = useState(() => getLs(LS_SUCCESS_KEY));
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -427,7 +411,7 @@ export default function Logs() {
     staleTime: 2_000,
   });
 
-  // ── Failed: app_logs (failed/error) — refreshes every 3s ────────────────
+  // ── Failed: last 7 days only — enforced server-side — refreshes every 3s ─
   const { data: failedData, isLoading: failedLoading } = useQuery<LogsResponse>({
     queryKey: ["logs-failed", failedPage],
     queryFn: async () => {
@@ -441,12 +425,11 @@ export default function Logs() {
     enabled: activeTab === "failed",
   });
 
-  // ── Success: app_logs (success) — refreshes every 3s ────────────────────
+  // ── Success — refreshes every 3s ─────────────────────────────────────────
   const { data: successData, isLoading: successLoading } = useQuery<LogsResponse>({
-    queryKey: ["logs-success", successPage, successResetTs],
+    queryKey: ["logs-success", successPage],
     queryFn: async () => {
       const p = new URLSearchParams({ tab: "success", page: String(successPage), limit: String(LIMIT) });
-      if (successResetTs) p.set("fromTimestamp", successResetTs);
       const r = await fetch(`${BASE}api/logs?${p}`);
       if (!r.ok) throw new Error("Failed");
       return r.json();
@@ -473,15 +456,22 @@ export default function Logs() {
   const successLogs  = successData?.logs ?? [];
   const successTotal = successData?.total ?? 0;
 
-  // ── Clear Success logs view ──────────────────────────────────────────────
-  function handleClearSuccess() {
-    const now = new Date().toISOString();
-    setLs(LS_SUCCESS_KEY, now);
-    setSuccessResetTsState(now);
-    setSuccessPage(0);
-    queryClient.invalidateQueries({ queryKey: ["logs-success"] });
-    queryClient.invalidateQueries({ queryKey: ["log-counts"] });
-    toast({ title: "View cleared", description: "All logs permanently stored in the database." });
+  // ── Delete all success logs from database ────────────────────────────────
+  async function handleDeleteSuccess() {
+    setDeleting(true);
+    try {
+      const r = await fetch(`${BASE}api/logs/success`, { method: "DELETE" });
+      if (!r.ok) throw new Error("Failed");
+      setSuccessPage(0);
+      await queryClient.invalidateQueries({ queryKey: ["logs-success"] });
+      await queryClient.invalidateQueries({ queryKey: ["log-counts"] });
+      toast({ title: "Success logs deleted", description: "All success log entries have been permanently removed from the database." });
+    } catch {
+      toast({ title: "Delete failed", description: "Could not delete success logs. Please try again.", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+    }
   }
 
   return (
@@ -523,8 +513,9 @@ export default function Logs() {
               variant="outline" size="sm"
               className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 ml-auto"
               onClick={() => setConfirmOpen(true)}
+              disabled={successTotal === 0}
             >
-              <Trash2 className="h-3.5 w-3.5" /> Clear View
+              <Trash2 className="h-3.5 w-3.5" /> Delete All
             </Button>
           )}
         </div>
@@ -539,16 +530,17 @@ export default function Logs() {
                   <span className="font-semibold text-destructive">{failedTotal.toLocaleString()}</span>
                   {" "}failed / error {failedTotal === 1 ? "entry" : "entries"}
                 </span>
-                <span className="ml-auto text-[10px] flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-primary/50" />
-                  Source route shown per entry · auto-refreshes every 3s
+                <span className="ml-auto text-[10px] flex items-center gap-1.5">
+                  <CalendarDays className="w-3 h-3 text-primary/50" />
+                  <span className="text-primary/70 font-medium">Last 7 days only</span>
+                  <span className="text-muted-foreground">· saved permanently · auto-refreshes every 3s</span>
                 </span>
               </div>
               <LogTable
                 headers={["Time (IST)", "Level", "Category", "Action / Source Route", "Error Details", ""]}
                 isLoading={failedLoading}
                 isEmpty={failedLogs.length === 0}
-                emptyText="No failures yet — all API calls are succeeding."
+                emptyText="No failures in the last 7 days — all API calls are succeeding."
                 colSpan={6}
                 tableH={TABLE_H}
               >
@@ -571,7 +563,7 @@ export default function Logs() {
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span>
                   <span className="font-semibold text-emerald-400">{successTotal.toLocaleString()}</span>
-                  {" "}{successTotal === 1 ? "entry" : "entries"}
+                  {" "}{successTotal === 1 ? "entry" : "entries"} · use "Delete All" to clear from database
                 </span>
                 <span className="ml-auto text-[10px]">Live · auto-refreshes every 3s</span>
               </div>
@@ -622,18 +614,24 @@ export default function Logs() {
         </TabsContent>
       </Tabs>
 
-      {/* Confirm clear dialog */}
+      {/* Confirm delete dialog */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear success log view?</AlertDialogTitle>
+            <AlertDialogTitle>Delete all success logs?</AlertDialogTitle>
             <AlertDialogDescription>
-              This hides logs from view only — all entries remain permanently in the database for auditing.
+              This permanently deletes all <strong>{successTotal.toLocaleString()}</strong> success log entries from the database. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearSuccess}>Clear View</AlertDialogAction>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSuccess}
+              disabled={deleting}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {deleting ? "Deleting…" : "Delete All"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

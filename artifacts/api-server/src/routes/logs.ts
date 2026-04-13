@@ -5,6 +5,14 @@ import { desc, and, gte, lte, eq, ilike, or, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+// Failed logs always show last 7 days only
+function sevenDaysAgo(): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 router.get("/logs", async (req, res): Promise<void> => {
   try {
     const {
@@ -26,6 +34,8 @@ router.get("/logs", async (req, res): Promise<void> => {
 
     if (tab === "failed") {
       conditions.push(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!);
+      // Failed logs: enforce 7-day rolling window — no UI override possible
+      conditions.push(gte(appLogsTable.createdAt, sevenDaysAgo()));
     } else if (tab === "success") {
       conditions.push(eq(appLogsTable.status, "success"));
     }
@@ -33,13 +43,16 @@ router.get("/logs", async (req, res): Promise<void> => {
     if (category && category !== "all") {
       conditions.push(eq(appLogsTable.category, category));
     }
-    if (fromTimestamp) {
-      conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
-    } else if (fromDate) {
-      conditions.push(gte(appLogsTable.createdAt, new Date(fromDate + "T00:00:00Z")));
-    }
-    if (toDate) {
-      conditions.push(lte(appLogsTable.createdAt, new Date(toDate + "T23:59:59Z")));
+    // Date filters only apply to success (failed uses enforced 7-day window above)
+    if (tab !== "failed") {
+      if (fromTimestamp) {
+        conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
+      } else if (fromDate) {
+        conditions.push(gte(appLogsTable.createdAt, new Date(fromDate + "T00:00:00Z")));
+      }
+      if (toDate) {
+        conditions.push(lte(appLogsTable.createdAt, new Date(toDate + "T23:59:59Z")));
+      }
     }
     if (search) {
       conditions.push(
@@ -70,13 +83,17 @@ router.get("/logs", async (req, res): Promise<void> => {
 });
 
 // GET /logs/counts — badge counts for tab headers
+// Failed count: last 7 days only (matches what the UI displays)
 router.get("/logs/counts", async (_req, res): Promise<void> => {
   try {
     const [failedRow, successRow] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(appLogsTable)
-        .where(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!),
+        .where(and(
+          or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!,
+          gte(appLogsTable.createdAt, sevenDaysAgo()),
+        )),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(appLogsTable)
@@ -91,9 +108,17 @@ router.get("/logs/counts", async (_req, res): Promise<void> => {
   }
 });
 
-// View-reset — does NOT delete from DB; frontend uses localStorage timestamp.
-router.delete("/logs", async (_req, res): Promise<void> => {
-  res.json({ success: true });
+// DELETE /logs/success — permanently deletes all success logs from the database
+router.delete("/logs/success", async (_req, res): Promise<void> => {
+  try {
+    const result = await db
+      .delete(appLogsTable)
+      .where(eq(appLogsTable.status, "success"))
+      .returning({ id: appLogsTable.id });
+    res.json({ success: true, deleted: result.length });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to delete success logs" });
+  }
 });
 
 export default router;
