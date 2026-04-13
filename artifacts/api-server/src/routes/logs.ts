@@ -8,6 +8,7 @@ const router: IRouter = Router();
 router.get("/logs", async (req, res): Promise<void> => {
   try {
     const {
+      tab,
       level,
       category,
       search,
@@ -24,6 +25,16 @@ router.get("/logs", async (req, res): Promise<void> => {
 
     const conditions = [];
 
+    // Tab-based preset filters
+    if (tab === "failed") {
+      // Failed = explicit failed status OR any error-level log
+      conditions.push(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!);
+    } else if (tab === "success") {
+      // Success = explicit success status only
+      conditions.push(eq(appLogsTable.status, "success"));
+    }
+    // tab === "all" or undefined → no status filter
+
     if (level && level !== "all") {
       conditions.push(eq(appLogsTable.level, level));
     }
@@ -31,7 +42,6 @@ router.get("/logs", async (req, res): Promise<void> => {
       conditions.push(eq(appLogsTable.category, category));
     }
     if (fromTimestamp) {
-      // Precise ISO timestamp filter — used by "Delete" view reset on frontend
       conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
     } else if (fromDate) {
       conditions.push(gte(appLogsTable.createdAt, new Date(fromDate + "T00:00:00Z")));
@@ -44,7 +54,7 @@ router.get("/logs", async (req, res): Promise<void> => {
         or(
           ilike(appLogsTable.action, `%${search}%`),
           ilike(appLogsTable.details ?? sql`''`, `%${search}%`),
-        )
+        )!
       );
     }
 
@@ -76,8 +86,30 @@ router.get("/logs", async (req, res): Promise<void> => {
   }
 });
 
-// View-reset endpoint — does NOT delete from DB (logs are kept permanently for audit purposes).
-// The frontend uses a localStorage timestamp to "hide" older entries from the UI view.
+// GET /logs/counts — tab badge counts in a single query
+router.get("/logs/counts", async (_req, res): Promise<void> => {
+  try {
+    const [failedRow, successRow] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(appLogsTable)
+        .where(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(appLogsTable)
+        .where(eq(appLogsTable.status, "success")),
+    ]);
+    res.json({
+      failed: failedRow[0]?.count ?? 0,
+      success: successRow[0]?.count ?? 0,
+    });
+  } catch (e) {
+    req.log.error({ err: e }, "Logs counts error");
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+// View-reset — does NOT delete from DB; frontend uses localStorage timestamp.
 router.delete("/logs", async (_req, res): Promise<void> => {
   res.json({ success: true });
 });
