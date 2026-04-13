@@ -113,9 +113,14 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
   };
 }
 
-router.get("/settings", async (_req, res): Promise<void> => {
-  const settings = await getOrCreateSettings();
-  res.json(serializeSettings(settings));
+router.get("/settings", async (req, res): Promise<void> => {
+  try {
+    const settings = await getOrCreateSettings();
+    res.json(serializeSettings(settings));
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch settings");
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
 });
 
 router.put("/settings", async (req, res): Promise<void> => {
@@ -253,9 +258,14 @@ router.post("/settings/verify-pin", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/settings/audit-log", async (_req, res): Promise<void> => {
-  const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(50);
-  res.json(logs);
+router.get("/settings/audit-log", async (req, res): Promise<void> => {
+  try {
+    const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(50);
+    res.json(logs);
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch audit log");
+    res.status(500).json({ error: "Failed to fetch audit log" });
+  }
 });
 
 export default router;

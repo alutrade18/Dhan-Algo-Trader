@@ -120,7 +120,8 @@ router.post("/broker/renew-token", async (req, res): Promise<void> => {
   }
   try {
     const creds = dhanClient.getCredentials();
-    const response = await fetch("https://api.dhan.co/v2/RenewToken", {
+    const DHAN_BASE = "https://api.dhan.co/v2";
+    const response = await fetch(`${DHAN_BASE}/RenewToken`, {
       method: "GET",
       headers: {
         "access-token": creds.accessToken,

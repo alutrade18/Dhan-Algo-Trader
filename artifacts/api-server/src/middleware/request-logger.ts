@@ -34,31 +34,46 @@ function getAction(method: string, url: string): string {
   const map: Array<[RegExp, string]> = [
     [/^\/broker\/connect/, "Broker connect"],
     [/^\/broker\/disconnect/, "Broker disconnect"],
+    [/^\/broker\/renew-token/, "Renew token"],
+    [/^\/broker\/token-info/, "Token info"],
     [/^\/broker\/refresh/, "Broker balance refresh"],
     [/^\/orders\/cancel/, "Cancel order"],
-    [/^\/orders$/, method === "POST" ? "Place order" : "Orders"],
+    [/^\/orders$/, method === "POST" ? "Place order" : "Fetch orders"],
+    [/^\/orders\/[^/]+$/, method === "GET" ? "Fetch order by ID" : method === "PATCH" ? "Modify order" : method === "DELETE" ? "Cancel order" : "Order"],
     [/^\/super-orders\/[^/]+$/, method === "PUT" ? "Update super order" : method === "DELETE" ? "Delete super order" : "Super order"],
-    [/^\/super-orders$/, method === "POST" ? "Create super order" : "Super orders"],
+    [/^\/super-orders$/, method === "POST" ? "Create super order" : "Fetch super orders"],
     [/^\/forever-orders\/[^/]+\/cancel/, "Cancel forever order"],
     [/^\/forever-orders\/[^/]+$/, method === "PUT" ? "Update forever order" : method === "DELETE" ? "Delete forever order" : "Forever order"],
-    [/^\/forever-orders$/, method === "POST" ? "Create forever order" : "Forever orders"],
+    [/^\/forever-orders$/, method === "POST" ? "Create forever order" : "Fetch forever orders"],
     [/^\/conditional\/[^/]+\/toggle/, "Toggle conditional trigger"],
     [/^\/conditional\/[^/]+$/, method === "PUT" ? "Update conditional trigger" : method === "DELETE" ? "Delete conditional trigger" : "Conditional trigger"],
-    [/^\/conditional$/, method === "POST" ? "Create conditional trigger" : "Conditional triggers"],
+    [/^\/conditional$/, method === "POST" ? "Create conditional trigger" : "Fetch conditional triggers"],
     [/^\/strategies\/pause-all/, "Pause all strategies"],
-    [/^\/strategies\/[^/]+\/start/, "Start strategy"],
-    [/^\/strategies\/[^/]+\/stop/, "Stop strategy"],
-    [/^\/strategies\/[^/]+\/pause/, "Pause strategy"],
-    [/^\/strategies\/[^/]+\/resume/, "Resume strategy"],
-    [/^\/strategies$/, method === "POST" ? "Create strategy" : "Strategies"],
-    [/^\/strategies\/[^/]+$/, method === "PUT" ? "Update strategy" : method === "DELETE" ? "Delete strategy" : "Strategy"],
-    [/^\/settings$/, "Save settings"],
+    [/^\/strategies\/activate-all/, "Activate all strategies"],
+    [/^\/strategies\/[^/]+\/execute/, "Execute strategy"],
+    [/^\/strategies\/[^/]+\/toggle/, "Toggle strategy"],
+    [/^\/strategies\/[^/]+\/start/, "Start strategy engine"],
+    [/^\/strategies\/[^/]+\/stop/, "Stop strategy engine"],
+    [/^\/strategies$/, method === "POST" ? "Create strategy" : "Fetch strategies"],
+    [/^\/strategies\/[^/]+$/, method === "GET" ? "Fetch strategy" : method === "PATCH" ? "Update strategy" : method === "DELETE" ? "Delete strategy" : "Strategy"],
+    [/^\/settings\/verify-pin/, "Verify kill switch PIN"],
+    [/^\/settings\/audit-log/, "Fetch audit log"],
+    [/^\/settings$/, method === "PUT" ? "Save settings" : "Fetch settings"],
     [/^\/risk\/killswitch/, "Kill switch toggle"],
-    [/^\/risk\/pnlExit/, "P&L exit limit update"],
+    [/^\/risk\/pnl-exit/, "P&L exit limit update"],
     [/^\/risk\/dailyLoss/, "Daily loss limit update"],
-    [/^\/paper-trades\/[^/]+$/, method === "DELETE" ? "Close paper trade" : "Paper trade"],
-    [/^\/paper-trades$/, method === "POST" ? "Place paper trade" : "Paper trades"],
+    [/^\/positions$/, method === "GET" ? "Fetch positions" : method === "DELETE" ? "Exit all positions" : "Positions"],
+    [/^\/positions\/exit-single/, "Exit single position"],
+    [/^\/funds/, "Fetch funds"],
+    [/^\/paper-trades\/[^/]+\/close/, "Close paper trade"],
+    [/^\/paper-trades\/[^/]+$/, method === "DELETE" ? "Delete paper trade" : "Paper trade"],
+    [/^\/paper-trades$/, method === "POST" ? "Place paper trade" : "Fetch paper trades"],
     [/^\/postback/, "Dhan order postback"],
+    [/^\/dashboard/, "Dashboard summary"],
+    [/^\/instruments/, "Instruments search"],
+    [/^\/trades/, "Fetch trades / ledger"],
+    [/^\/market\/expiry-list/, "Fetch expiry list"],
+    [/^\/market\/option-chain/, "Fetch option chain"],
   ];
 
   const cleanPath = path.replace(/^\/api/, "");
@@ -69,37 +84,70 @@ function getAction(method: string, url: string): string {
   return `${method} /${parts.slice(0, 2).join("/")}`;
 }
 
-const SKIP_PATHS = ["/api/logs", "/api/health", "/api/market/quote", "/api/market/ltp"];
-const SKIP_METHODS = ["GET", "HEAD", "OPTIONS"];
+// Always skip polling + read-only data endpoints that fire every few seconds
+// (option chain, quotes, LTP) — they'd flood the logs.
+const ALWAYS_SKIP = [
+  "/api/logs",
+  "/api/health",
+  "/api/rate-limits",
+  "/api/market/quote",
+  "/api/market/ltp",
+  "/api/market/option-chain",
+  "/api/dashboard/summary",   // polled every 30s — too noisy
+  "/api/funds",               // polled constantly
+  "/api/risk/killswitch",     // polled every 15s
+];
+
+// For GET requests: only log if the response is an error (4xx/5xx).
+// For all mutating methods (POST/PUT/PATCH/DELETE): always log.
+const MUTE_SUCCESS_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export function requestLogger(req: Request, res: Response, next: NextFunction): void {
-  if (SKIP_METHODS.includes(req.method)) { next(); return; }
-  if (SKIP_PATHS.some(p => req.url.startsWith(p))) { next(); return; }
+  if (ALWAYS_SKIP.some(p => req.url.startsWith(p))) { next(); return; }
 
   const startedAt = Date.now();
   const category = getCategory(req.url);
   const action = getAction(req.method, req.url);
+  const isReadOnly = MUTE_SUCCESS_METHODS.has(req.method);
 
   const originalJson = res.json.bind(res);
   res.json = function (body: unknown) {
     const statusCode = res.statusCode;
     const duration = Date.now() - startedAt;
     const isError = statusCode >= 400;
+
+    // For GET requests: only write a log entry when it fails
+    if (isReadOnly && !isError) {
+      return originalJson(body);
+    }
+
     const level = statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "info";
     const status = isError ? "failed" : "success";
 
     const details: Record<string, unknown> = { duration: `${duration}ms` };
+
+    // Capture error details from the response body (Dhan error format + generic)
     if (isError && body && typeof body === "object") {
       const b = body as Record<string, unknown>;
-      if (b.errorMessage) details.error = b.errorMessage;
-      else if (b.error) details.error = b.error;
+      if (b.errorCode)    details.errorCode    = b.errorCode;
+      if (b.errorMessage) details.errorMessage  = b.errorMessage;
+      if (b.error)        details.error         = b.error;
+      if (b.message)      details.message       = b.message;
     }
-    if (req.body && typeof req.body === "object") {
+
+    // Capture request payload for mutating calls (strip sensitive fields)
+    if (!isReadOnly && req.body && typeof req.body === "object") {
       const safe = { ...req.body } as Record<string, unknown>;
       delete safe.accessToken;
       delete safe.password;
       delete safe.token;
+      delete safe.killSwitchPin;
       if (Object.keys(safe).length > 0) details.input = safe;
+    }
+
+    // For successful reads that aren't skipped, include the endpoint path
+    if (isReadOnly && isError) {
+      details.endpoint = `${req.method} ${req.url.split("?")[0]}`;
     }
 
     void logEvent({ level, category, action, details, status, statusCode });

@@ -29,45 +29,42 @@ function serializeStrategy(s: typeof strategiesTable.$inferSelect) {
   };
 }
 
-router.get("/strategies", async (_req, res): Promise<void> => {
-  const strategies = await db
-    .select()
-    .from(strategiesTable)
-    .orderBy(desc(strategiesTable.createdAt));
-  res.json(strategies.map(serializeStrategy));
+router.get("/strategies", async (req, res): Promise<void> => {
+  try {
+    const strategies = await db.select().from(strategiesTable).orderBy(desc(strategiesTable.createdAt));
+    res.json(strategies.map(serializeStrategy));
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch strategies");
+    res.status(500).json({ error: "Failed to fetch strategies" });
+  }
 });
 
-router.get("/strategies/performance", async (_req, res): Promise<void> => {
-  const strategies = await db.select().from(strategiesTable);
-  const totalStrategies = strategies.length;
-  const activeStrategies = strategies.filter((s) => s.status === "active").length;
-  const totalTrades = strategies.reduce((sum, s) => sum + s.totalTrades, 0);
-  const totalPnl = strategies.reduce((sum, s) => sum + Number(s.totalPnl), 0);
-  const totalWins = strategies.reduce((sum, s) => sum + s.winTrades, 0);
-  const overallWinRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
-  const avgPnlPerTrade = totalTrades > 0 ? totalPnl / totalTrades : 0;
-
-  let bestStrategy = "";
-  let worstStrategy = "";
-  let bestPnl = -Infinity;
-  let worstPnl = Infinity;
-
-  for (const s of strategies) {
-    const pnl = Number(s.totalPnl);
-    if (pnl > bestPnl) { bestPnl = pnl; bestStrategy = s.name; }
-    if (pnl < worstPnl) { worstPnl = pnl; worstStrategy = s.name; }
+router.get("/strategies/performance", async (req, res): Promise<void> => {
+  try {
+    const strategies = await db.select().from(strategiesTable);
+    const totalStrategies = strategies.length;
+    const activeStrategies = strategies.filter((s) => s.status === "active").length;
+    const totalTrades = strategies.reduce((sum, s) => sum + s.totalTrades, 0);
+    const totalPnl = strategies.reduce((sum, s) => sum + Number(s.totalPnl), 0);
+    const totalWins = strategies.reduce((sum, s) => sum + s.winTrades, 0);
+    const overallWinRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
+    const avgPnlPerTrade = totalTrades > 0 ? totalPnl / totalTrades : 0;
+    let bestStrategy = "", worstStrategy = "";
+    let bestPnl = -Infinity, worstPnl = Infinity;
+    for (const s of strategies) {
+      const pnl = Number(s.totalPnl);
+      if (pnl > bestPnl) { bestPnl = pnl; bestStrategy = s.name; }
+      if (pnl < worstPnl) { worstPnl = pnl; worstStrategy = s.name; }
+    }
+    res.json({ totalStrategies, activeStrategies, totalTrades, totalPnl,
+      overallWinRate: Math.round(overallWinRate * 100) / 100,
+      bestStrategy: bestStrategy || "N/A", worstStrategy: worstStrategy || "N/A",
+      avgPnlPerTrade: Math.round(avgPnlPerTrade * 100) / 100,
+    });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch strategy performance");
+    res.status(500).json({ error: "Failed to fetch strategy performance" });
   }
-
-  res.json({
-    totalStrategies,
-    activeStrategies,
-    totalTrades,
-    totalPnl,
-    overallWinRate: Math.round(overallWinRate * 100) / 100,
-    bestStrategy: bestStrategy || "N/A",
-    worstStrategy: worstStrategy || "N/A",
-    avgPnlPerTrade: Math.round(avgPnlPerTrade * 100) / 100,
-  });
 });
 
 router.get("/strategies/engine/status", (_req, res): void => {
@@ -104,66 +101,49 @@ router.get("/strategies/trade-logs", async (req, res): Promise<void> => {
 
 router.get("/strategies/:id", async (req, res): Promise<void> => {
   const params = GetStrategyParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  try {
+    const [strategy] = await db.select().from(strategiesTable).where(eq(strategiesTable.id, params.data.id));
+    if (!strategy) { res.status(404).json({ error: "Strategy not found" }); return; }
+    res.json(serializeStrategy(strategy));
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch strategy");
+    res.status(500).json({ error: "Failed to fetch strategy" });
   }
-  const [strategy] = await db
-    .select()
-    .from(strategiesTable)
-    .where(eq(strategiesTable.id, params.data.id));
-  if (!strategy) {
-    res.status(404).json({ error: "Strategy not found" });
-    return;
-  }
-  res.json(serializeStrategy(strategy));
 });
 
 router.post("/strategies", async (req, res): Promise<void> => {
   const parsed = CreateStrategyBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  try {
+    const [strategy] = await db
+      .insert(strategiesTable)
+      .values({
+        name: parsed.data.name, description: parsed.data.description, type: parsed.data.type,
+        securityId: parsed.data.securityId, tradingSymbol: parsed.data.tradingSymbol,
+        exchangeSegment: parsed.data.exchangeSegment, transactionType: parsed.data.transactionType,
+        productType: parsed.data.productType, orderType: parsed.data.orderType,
+        quantity: parsed.data.quantity, entryPrice: parsed.data.entryPrice?.toString(),
+        stopLoss: parsed.data.stopLoss?.toString(), target: parsed.data.target?.toString(),
+        trailingStopLoss: parsed.data.trailingStopLoss?.toString(),
+        maxPositions: parsed.data.maxPositions, maxLossPerDay: parsed.data.maxLossPerDay?.toString(),
+        maxProfitPerDay: parsed.data.maxProfitPerDay?.toString(),
+        timeframeMinutes: parsed.data.timeframeMinutes,
+        entryConditions: parsed.data.entryConditions, exitConditions: parsed.data.exitConditions,
+      })
+      .returning();
+    res.status(201).json(serializeStrategy(strategy));
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to create strategy");
+    res.status(500).json({ error: "Failed to create strategy" });
   }
-  const [strategy] = await db
-    .insert(strategiesTable)
-    .values({
-      name: parsed.data.name,
-      description: parsed.data.description,
-      type: parsed.data.type,
-      securityId: parsed.data.securityId,
-      tradingSymbol: parsed.data.tradingSymbol,
-      exchangeSegment: parsed.data.exchangeSegment,
-      transactionType: parsed.data.transactionType,
-      productType: parsed.data.productType,
-      orderType: parsed.data.orderType,
-      quantity: parsed.data.quantity,
-      entryPrice: parsed.data.entryPrice?.toString(),
-      stopLoss: parsed.data.stopLoss?.toString(),
-      target: parsed.data.target?.toString(),
-      trailingStopLoss: parsed.data.trailingStopLoss?.toString(),
-      maxPositions: parsed.data.maxPositions,
-      maxLossPerDay: parsed.data.maxLossPerDay?.toString(),
-      maxProfitPerDay: parsed.data.maxProfitPerDay?.toString(),
-      timeframeMinutes: parsed.data.timeframeMinutes,
-      entryConditions: parsed.data.entryConditions,
-      exitConditions: parsed.data.exitConditions,
-    })
-    .returning();
-  res.status(201).json(serializeStrategy(strategy));
 });
 
 router.patch("/strategies/:id", async (req, res): Promise<void> => {
   const params = UpdateStrategyParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateStrategyBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const updateData: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
@@ -186,82 +166,65 @@ router.patch("/strategies/:id", async (req, res): Promise<void> => {
   if (parsed.data.timeframeMinutes !== undefined) updateData.timeframeMinutes = parsed.data.timeframeMinutes;
   if (parsed.data.entryConditions !== undefined) updateData.entryConditions = parsed.data.entryConditions;
   if (parsed.data.exitConditions !== undefined) updateData.exitConditions = parsed.data.exitConditions;
-
-  const [strategy] = await db
-    .update(strategiesTable)
-    .set(updateData)
-    .where(eq(strategiesTable.id, params.data.id))
-    .returning();
-  if (!strategy) {
-    res.status(404).json({ error: "Strategy not found" });
-    return;
+  try {
+    const [strategy] = await db.update(strategiesTable).set(updateData).where(eq(strategiesTable.id, params.data.id)).returning();
+    if (!strategy) { res.status(404).json({ error: "Strategy not found" }); return; }
+    res.json(serializeStrategy(strategy));
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to update strategy");
+    res.status(500).json({ error: "Failed to update strategy" });
   }
-  res.json(serializeStrategy(strategy));
 });
 
 router.delete("/strategies/:id", async (req, res): Promise<void> => {
   const params = DeleteStrategyParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  try {
+    const [deleted] = await db.delete(strategiesTable).where(eq(strategiesTable.id, params.data.id)).returning();
+    if (!deleted) { res.status(404).json({ error: "Strategy not found" }); return; }
+    res.sendStatus(204);
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to delete strategy");
+    res.status(500).json({ error: "Failed to delete strategy" });
   }
-  const [deleted] = await db
-    .delete(strategiesTable)
-    .where(eq(strategiesTable.id, params.data.id))
-    .returning();
-  if (!deleted) {
-    res.status(404).json({ error: "Strategy not found" });
-    return;
-  }
-  res.sendStatus(204);
 });
 
 router.post("/strategies/:id/toggle", async (req, res): Promise<void> => {
   const params = ToggleStrategyParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  try {
+    const [existing] = await db.select().from(strategiesTable).where(eq(strategiesTable.id, params.data.id));
+    if (!existing) { res.status(404).json({ error: "Strategy not found" }); return; }
+    const newStatus = existing.status === "active" ? "paused" : "active";
+    const [strategy] = await db.update(strategiesTable).set({ status: newStatus }).where(eq(strategiesTable.id, params.data.id)).returning();
+    void sendTelegramAlert(`Strategy *${strategy.name}* ${newStatus === "active" ? "▶️ activated" : "⏸ paused"}`);
+    res.json(serializeStrategy(strategy));
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to toggle strategy");
+    res.status(500).json({ error: "Failed to toggle strategy" });
   }
-  const [existing] = await db
-    .select()
-    .from(strategiesTable)
-    .where(eq(strategiesTable.id, params.data.id));
-  if (!existing) {
-    res.status(404).json({ error: "Strategy not found" });
-    return;
-  }
-  const newStatus = existing.status === "active" ? "paused" : "active";
-  const [strategy] = await db
-    .update(strategiesTable)
-    .set({ status: newStatus })
-    .where(eq(strategiesTable.id, params.data.id))
-    .returning();
-
-  void sendTelegramAlert(
-    `Strategy *${strategy.name}* ${newStatus === "active" ? "▶️ activated" : "⏸ paused"}`
-  );
-
-  res.json(serializeStrategy(strategy));
 });
 
-router.post("/strategies/pause-all", async (_req, res): Promise<void> => {
-  await db
-    .update(strategiesTable)
-    .set({ status: "paused" })
-    .where(eq(strategiesTable.status, "active"));
-
-  void sendTelegramAlert("⏸ *All strategies paused* by user action");
-  res.json({ success: true, message: "All strategies paused" });
+router.post("/strategies/pause-all", async (req, res): Promise<void> => {
+  try {
+    await db.update(strategiesTable).set({ status: "paused" }).where(eq(strategiesTable.status, "active"));
+    void sendTelegramAlert("⏸ *All strategies paused* by user action");
+    res.json({ success: true, message: "All strategies paused" });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to pause all strategies");
+    res.status(500).json({ error: "Failed to pause all strategies" });
+  }
 });
 
-router.post("/strategies/activate-all", async (_req, res): Promise<void> => {
-  await db
-    .update(strategiesTable)
-    .set({ status: "active" })
-    .where(eq(strategiesTable.status, "paused"));
-
-  void sendTelegramAlert("▶️ *All strategies activated* by user action");
-  res.json({ success: true, message: "All strategies activated" });
+router.post("/strategies/activate-all", async (req, res): Promise<void> => {
+  try {
+    await db.update(strategiesTable).set({ status: "active" }).where(eq(strategiesTable.status, "paused"));
+    void sendTelegramAlert("▶️ *All strategies activated* by user action");
+    res.json({ success: true, message: "All strategies activated" });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to activate all strategies");
+    res.status(500).json({ error: "Failed to activate all strategies" });
+  }
 });
 
 router.post("/strategies/:id/execute", async (req, res): Promise<void> => {
