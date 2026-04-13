@@ -162,7 +162,7 @@ export default function Settings() {
             <div>
               <p className="text-sm font-semibold">Broker Connection</p>
               <p className={`text-[10px] font-medium ${isConnected ? "text-green-400" : "text-muted-foreground"}`}>
-                {isConnected ? "Connected · Dhan Broker API" : "Not connected to Dhan"}
+                {isConnected ? "Connected" : "Not connected to Dhan"}
               </p>
             </div>
           </div>
