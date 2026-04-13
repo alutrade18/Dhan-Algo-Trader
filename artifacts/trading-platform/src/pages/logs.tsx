@@ -26,7 +26,6 @@ import {
   MapPin,
   Clock,
   FileCode2,
-  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -524,18 +523,6 @@ export default function Logs() {
         <TabsContent value="failed" className="mt-0">
           <Card>
             <CardContent className="px-3 pb-3 pt-3">
-              <div className="flex items-center gap-2 mb-2.5 text-xs text-muted-foreground">
-                <XCircle className="w-3.5 h-3.5 text-destructive" />
-                <span>
-                  <span className="font-semibold text-destructive">{failedTotal.toLocaleString()}</span>
-                  {" "}failed / error {failedTotal === 1 ? "entry" : "entries"}
-                </span>
-                <span className="ml-auto text-[10px] flex items-center gap-1.5">
-                  <CalendarDays className="w-3 h-3 text-primary/50" />
-                  <span className="text-primary/70 font-medium">Last 7 days only</span>
-                  <span className="text-muted-foreground">· saved permanently · auto-refreshes every 3s</span>
-                </span>
-              </div>
               <LogTable
                 headers={["Time (IST)", "Level", "Category", "Action / Source Route", "Error Details", ""]}
                 isLoading={failedLoading}
@@ -559,14 +546,6 @@ export default function Logs() {
         <TabsContent value="success" className="mt-0">
           <Card>
             <CardContent className="px-3 pb-3 pt-3">
-              <div className="flex items-center gap-2 mb-2.5 text-xs text-muted-foreground">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>
-                  <span className="font-semibold text-emerald-400">{successTotal.toLocaleString()}</span>
-                  {" "}{successTotal === 1 ? "entry" : "entries"} · use "Delete All" to clear from database
-                </span>
-                <span className="ml-auto text-[10px]">Live · auto-refreshes every 3s</span>
-              </div>
               <LogTable
                 headers={["Time (IST)", "Level", "Category", "Action / Source Route", "Status / Duration", ""]}
                 isLoading={successLoading}
