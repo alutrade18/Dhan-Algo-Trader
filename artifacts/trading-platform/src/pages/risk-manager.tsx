@@ -382,6 +382,16 @@ export default function RiskManager() {
                   </Button>
                   {!canDeactivate && <p className="text-[11px] text-muted-foreground text-center">Resets at midnight IST</p>}
                 </div>
+              ) : !settingsData?.hasKillSwitchPin ? (
+                <div className="space-y-2.5">
+                  <Button variant="destructive" className="w-full h-10 gap-2 font-semibold opacity-40 cursor-not-allowed" disabled>
+                    <Power className="w-4 h-4" />Activate Kill Switch
+                  </Button>
+                  <div className="flex items-start gap-2 rounded-xl bg-warning/8 border border-warning/30 px-3 py-2.5">
+                    <Lock className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-warning font-medium leading-snug">Set a 4-digit PIN first to enable the Kill Switch.</p>
+                  </div>
+                </div>
               ) : (
                 <Button variant="destructive" className="w-full h-10 gap-2 font-semibold" disabled={killSwitchMutation.isPending} onClick={() => handleKillSwitchAction("ACTIVATE")}>
                   <Power className="w-4 h-4" />{killSwitchMutation.isPending ? "Activating…" : "Activate Kill Switch"}
