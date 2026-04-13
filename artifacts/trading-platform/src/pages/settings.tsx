@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
-  Bell, AlertTriangle, Send, Server, Copy, ExternalLink, RefreshCw,
+  Bell, AlertTriangle, Send, Server, Copy, RefreshCw,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -114,6 +114,12 @@ function ServerIpInfo() {
   const [setting, setSetting] = useState<"PRIMARY" | "SECONDARY" | null>(null);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  useEffect(() => {
+    if (!result) return;
+    const t = setTimeout(() => setResult(null), 10_000);
+    return () => clearTimeout(t);
+  }, [result]);
+
   const copy = () => {
     if (!ip) return;
     void navigator.clipboard.writeText(ip).then(() => toast({ title: "IP copied to clipboard" }));
@@ -150,8 +156,7 @@ function ServerIpInfo() {
             <Server className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold">Server IP — Dhan Whitelist</p>
-            <p className="text-[10px] text-muted-foreground">Required for order APIs to work on VPS</p>
+            <p className="text-sm font-semibold">Your Server's IP</p>
           </div>
         </div>
         <button onClick={reload} className="text-muted-foreground hover:text-foreground transition-colors" title="Refresh IP">
@@ -163,7 +168,7 @@ function ServerIpInfo() {
         {/* IP display + whitelist buttons */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Your Server's Public IP</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Server IP Address</p>
             <div className="flex items-center gap-2">
               {loading ? (
                 <div className="h-9 w-44 rounded-lg bg-muted/30 animate-pulse" />
@@ -190,7 +195,7 @@ function ServerIpInfo() {
                 disabled={!!setting}
                 onClick={() => void setIp("PRIMARY")}
               >
-                {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Set as Primary IP</>}
+                {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Whitelist IP - Primary Recommend</>}
               </Button>
               <Button
                 size="sm"
@@ -205,7 +210,7 @@ function ServerIpInfo() {
           )}
         </div>
 
-        {/* Result banner */}
+        {/* Result banner — auto-hides after 10s */}
         {result && (
           <div className={`flex items-start gap-2 rounded-xl border px-4 py-2.5 text-xs ${result.ok ? "border-success/30 bg-success/8 text-success" : "border-destructive/30 bg-destructive/8 text-destructive"}`}>
             {result.ok
@@ -234,10 +239,6 @@ function ServerIpInfo() {
               <li>Select your app → Whitelist IP</li>
               <li>Paste <span className="font-mono font-semibold text-foreground">{ip ?? "…"}</span></li>
             </ol>
-            <a href="https://developer.dhan.co" target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5">
-              Dhan Developer Portal <ExternalLink className="w-3 h-3" />
-            </a>
           </div>
         </div>
       </div>
@@ -349,7 +350,6 @@ export default function Settings() {
   return (
     <div className="grid grid-cols-2 gap-4 w-full items-stretch">
       <TokenExpiryBanner onReconnect={() => brokerForm.setFocus("accessToken")} />
-      <ServerIpInfo />
 
       {/* ── Broker Connection ── */}
       <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-success/30 bg-card" : "border-border/50 bg-card"}`}>
@@ -478,6 +478,9 @@ export default function Settings() {
           </div>
         </form>
       </div>
+
+      {/* ── Server IP Whitelist ── */}
+      <ServerIpInfo />
 
     </div>
   );
