@@ -376,8 +376,8 @@ export default function OptionChain() {
       return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
     enabled: !!expiry && !!activeDhanSecId,
-    refetchInterval: marketStatus.isOpen ? 3_000 : false,
-    staleTime: 2_500,
+    refetchInterval: marketStatus.isOpen ? 5_000 : false,
+    staleTime: 4_000,
     refetchOnWindowFocus: false,
     // Keep previous data visible during background refetch — no dimming
     placeholderData: (prev) => prev,

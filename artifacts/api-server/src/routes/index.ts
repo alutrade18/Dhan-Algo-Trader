@@ -19,7 +19,6 @@ import {
   dataRateLimit,
   quoteRateLimit,
   nonTradingRateLimit,
-  optionChainRateLimitMiddleware,
 } from "../middleware/rate-limit";
 
 const router: IRouter = Router();
@@ -34,8 +33,8 @@ router.use("/market/quote", quoteRateLimit);
 router.use("/market/ltp", quoteRateLimit);
 router.use("/funds/margin", quoteRateLimit);
 
-// ── OPTION CHAIN: 1 per 3 seconds per underlying (Dhan special rule) ─────────
-router.use("/market/option-chain", optionChainRateLimitMiddleware);
+// ── OPTION CHAIN: throttled in route handler (market.ts) with 3.5s delay ─────
+// No middleware block here — the route handler delays instead of rejecting.
 
 // ── DATA APIs: 5/sec | 100,000/day (historical & candle data) ────────────────
 router.use("/market/historical", dataRateLimit);
