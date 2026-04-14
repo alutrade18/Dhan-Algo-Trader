@@ -1,9 +1,12 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
-import { db, settingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, settingsTable, strategiesTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import { getCachedEquityCurve } from "../lib/equity-scheduler";
 import { cachedGetLedger, cachedGetAllLedger } from "../lib/ledger-cache";
+
+let _recentActivityCache: { data: unknown; ts: number } | null = null;
+const RECENT_ACTIVITY_TTL_MS = 30_000;
 
 const router: IRouter = Router();
 
@@ -18,13 +21,13 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
     const todayStr = now.toISOString().split("T")[0];
 
-    // Only 3 Dhan API calls (down from 7): funds + ledger (cached) + killswitch
-    const [fundsResult, ledgerResult, settingsResult, killSwitchResult] =
+    const [fundsResult, ledgerResult, settingsResult, killSwitchResult, strategiesResult] =
       await Promise.allSettled([
         dhanClient.getFundLimits(),
         cachedGetAllLedger(allTimeStartStr, todayStr),
         db.select().from(settingsTable),
         dhanClient.getKillSwitchStatus(),
+        db.select({ count: sql<number>`count(*)::int` }).from(strategiesTable).where(eq(strategiesTable.active, true)),
       ]);
 
     let availableBalance = 0, usedMargin = 0;
@@ -74,13 +77,15 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
     const killSwitchEnabled = dhanKsActive;
 
-    // todayPnl / dailyLossAmount are computed on the frontend from the shared positions
-    // cache (same data used by the Positions page — no extra API call needed).
+    const activeStrategies = strategiesResult.status === "fulfilled"
+      ? (strategiesResult.value[0]?.count ?? 0)
+      : 0;
+
     res.json({
       totalPnl,
       availableBalance,
       usedMargin,
-      activeStrategies: 0,
+      activeStrategies,
       winRate: 0,
       killSwitchEnabled,
       maxDailyLoss,
@@ -363,6 +368,13 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
 router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
   try {
     const limit = parseInt(String(req.query.limit || "10"), 10);
+
+    if (_recentActivityCache && Date.now() - _recentActivityCache.ts < RECENT_ACTIVITY_TTL_MS) {
+      const cached = _recentActivityCache.data as Array<Record<string, unknown>>;
+      res.json(cached.slice(0, limit));
+      return;
+    }
+
     const activities: Array<{
       id: string;
       type: string;
@@ -378,7 +390,7 @@ router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
     try {
       const orders = (await dhanClient.getOrders()) as Array<Record<string, unknown>>;
       if (Array.isArray(orders)) {
-        for (const o of orders.slice(0, limit)) {
+        for (const o of orders) {
           activities.push({
             id: String(o.orderId || ""),
             type: "order",
@@ -399,6 +411,8 @@ router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
     activities.sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
+
+    _recentActivityCache = { data: activities, ts: Date.now() };
 
     res.json(activities.slice(0, limit));
   } catch (e) {

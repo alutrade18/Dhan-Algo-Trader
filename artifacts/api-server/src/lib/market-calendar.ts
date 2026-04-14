@@ -18,6 +18,7 @@
  */
 
 import { db, marketHolidaysTable } from "@workspace/db";
+import { logger } from "./logger";
 
 // ── In-memory cache ───────────────────────────────────────────────────────────
 
@@ -51,10 +52,9 @@ export async function loadHolidayCache(): Promise<void> {
       mcxEveningClosed: r.mcxEveningClosed,
     }));
     _cacheLoadedAt = Date.now();
-    console.info(`[MarketCalendar] Loaded ${_cache.length} holidays from DB`);
+    logger.info({ count: _cache.length }, "[MarketCalendar] Loaded holidays from DB");
   } catch (err) {
-    // Non-fatal: getMarketStatus() will fall back to hardcoded lists
-    console.warn("[MarketCalendar] Could not load holidays from DB:", err);
+    logger.warn({ err }, "[MarketCalendar] Could not load holidays from DB — using fallback");
   }
 }
 

@@ -50,6 +50,27 @@ function isWeekendIST(): boolean {
   return day === 0 || day === 6;
 }
 
+let _holidayCache: Set<string> | null = null;
+let _holidayCacheDate = "";
+
+async function isNseHolidayToday(): Promise<boolean> {
+  const today = todayIST();
+  if (_holidayCacheDate === today && _holidayCache !== null) {
+    return _holidayCache.has(today);
+  }
+  try {
+    const { db, marketHolidaysTable } = await import("@workspace/db");
+    const rows = await db
+      .select({ date: marketHolidaysTable.holidayDate, nseClosed: marketHolidaysTable.nseClosed })
+      .from(marketHolidaysTable);
+    _holidayCache = new Set(rows.filter(r => r.nseClosed).map(r => r.date));
+    _holidayCacheDate = today;
+    return _holidayCache.has(today);
+  } catch {
+    return false;
+  }
+}
+
 /** Milliseconds until the next occurrence of HH:MM IST. */
 function msUntilISTTime(targetH: number, targetM: number): number {
   const now = new Date();
@@ -186,6 +207,11 @@ export async function refreshAllEquityCache(): Promise<void> {
 
   if (isWeekendIST()) {
     logger.info("[EquityScheduler] Weekend — equity curve doesn't change, skipping refresh");
+    return;
+  }
+
+  if (await isNseHolidayToday()) {
+    logger.info("[EquityScheduler] NSE market holiday — skipping equity refresh");
     return;
   }
 

@@ -25,21 +25,27 @@ const EXCHANGE_MAP: Record<number, string> = {
 };
 
 const REQUEST_CODE = { TICKER: 15, QUOTE: 17, FULL: 21 };
+const MIN_RECONNECT_MS = 5_000;
+const MAX_RECONNECT_MS = 120_000;
 
 class MarketFeedWS extends EventEmitter {
   private ws: WebSocket | null = null;
   private clientId = "";
   private accessToken = "";
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private subscriptions: Map<string, { exchange: number; securityIds: number[]; mode: number }> = new Map();
+  private subscriptions: Map<string, { exchange: number; securityIds: Set<number>; mode: number }> = new Map();
   private connected = false;
+  private destroyed = false;
+  private reconnectDelay = MIN_RECONNECT_MS;
 
   configure(clientId: string, accessToken: string) {
     this.clientId = clientId;
     this.accessToken = accessToken;
+    this.reconnectDelay = MIN_RECONNECT_MS;
   }
 
   connect() {
+    if (this.destroyed) return;
     if (!this.clientId || !this.accessToken) return;
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
@@ -52,6 +58,7 @@ class MarketFeedWS extends EventEmitter {
     this.ws.on("open", () => {
       logger.info("MarketFeedWS connected");
       this.connected = true;
+      this.reconnectDelay = MIN_RECONNECT_MS;
       this.emit("connected");
       this.resubscribeAll();
     });
@@ -61,7 +68,7 @@ class MarketFeedWS extends EventEmitter {
         const buf = data instanceof ArrayBuffer ? Buffer.from(data) : data;
         this.parsePacket(buf);
       } catch (e) {
-        logger.warn({ err: e }, "MarketFeedWS parse error");
+        logger.debug({ err: (e as Error).message }, "MarketFeedWS parse error");
       }
     });
 
@@ -70,23 +77,29 @@ class MarketFeedWS extends EventEmitter {
     });
 
     this.ws.on("close", (code) => {
-      logger.warn({ code }, "MarketFeedWS disconnected");
       this.connected = false;
+      if (this.destroyed) return;
+      logger.warn({ code, nextRetryMs: this.reconnectDelay }, "MarketFeedWS disconnected");
       this.emit("disconnected", { code });
       this.scheduleReconnect();
     });
 
     this.ws.on("error", (err) => {
-      logger.warn({ err }, "MarketFeedWS error");
+      logger.warn({ err: (err as Error).message }, "MarketFeedWS error");
     });
   }
 
   private scheduleReconnect() {
+    if (this.destroyed) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_MS);
     this.reconnectTimer = setTimeout(() => {
-      logger.info("MarketFeedWS reconnecting...");
-      this.connect();
-    }, 5000);
+      if (!this.destroyed) {
+        logger.info({ delayMs: delay }, "MarketFeedWS reconnecting...");
+        this.connect();
+      }
+    }, delay);
   }
 
   private parsePacket(buf: Buffer) {
@@ -128,7 +141,13 @@ class MarketFeedWS extends EventEmitter {
     const exchNum = exchangeNumMap[exchangeSegment] ?? 1;
     const requestCode = mode === "full" ? REQUEST_CODE.FULL : mode === "quote" ? REQUEST_CODE.QUOTE : REQUEST_CODE.TICKER;
     const key = `${exchangeSegment}:${mode}`;
-    this.subscriptions.set(key, { exchange: exchNum, securityIds, mode: requestCode });
+
+    const existing = this.subscriptions.get(key);
+    if (existing) {
+      for (const id of securityIds) existing.securityIds.add(id);
+    } else {
+      this.subscriptions.set(key, { exchange: exchNum, securityIds: new Set(securityIds), mode: requestCode });
+    }
 
     if (this.connected && this.ws?.readyState === WebSocket.OPEN) {
       this.sendSubscribe(exchNum, securityIds, requestCode);
@@ -137,7 +156,8 @@ class MarketFeedWS extends EventEmitter {
 
   private resubscribeAll() {
     for (const sub of this.subscriptions.values()) {
-      this.sendSubscribe(sub.exchange, sub.securityIds, sub.mode);
+      const ids = Array.from(sub.securityIds);
+      if (ids.length > 0) this.sendSubscribe(sub.exchange, ids, sub.mode);
     }
   }
 
@@ -155,16 +175,22 @@ class MarketFeedWS extends EventEmitter {
   }
 
   unsubscribe(exchangeSegment: string, securityIds: number[]) {
-    ["ticker", "quote", "full"].forEach(mode => {
-      this.subscriptions.delete(`${exchangeSegment}:${mode}`);
-    });
-
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const exchangeNumMap: Record<string, number> = {
       "IDX_I": 0, "NSE_EQ": 1, "NSE_FNO": 2, "NSE_CURRENCY": 3,
       "BSE_EQ": 4, "BSE_FNO": 5, "BSE_CURRENCY": 6, "MCX_COMM": 7,
     };
     const exchNum = exchangeNumMap[exchangeSegment] ?? 1;
+
+    for (const mode of ["ticker", "quote", "full"] as const) {
+      const key = `${exchangeSegment}:${mode}`;
+      const sub = this.subscriptions.get(key);
+      if (sub) {
+        for (const id of securityIds) sub.securityIds.delete(id);
+        if (sub.securityIds.size === 0) this.subscriptions.delete(key);
+      }
+    }
+
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const msg = JSON.stringify({
       RequestCode: 16,
       InstrumentCount: securityIds.length,
@@ -174,10 +200,16 @@ class MarketFeedWS extends EventEmitter {
   }
 
   disconnect() {
+    this.destroyed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.ws?.close();
     this.ws = null;
     this.connected = false;
+  }
+
+  reset() {
+    this.destroyed = false;
+    this.reconnectDelay = MIN_RECONNECT_MS;
   }
 
   isConnected() { return this.connected; }

@@ -9,7 +9,7 @@ import { decryptToken } from "../lib/crypto-utils";
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
 function hashPin(pin: string): string {
-  const salt = process.env.PIN_SALT ?? "rajesh-algo-pin-salt";
+  const salt = process.env.PIN_SALT ?? process.env.ENCRYPTION_KEY?.slice(0, 32) ?? "rajesh-algo-salt-v2";
   return crypto.createHash("sha256").update(pin + salt).digest("hex");
 }
 

@@ -36,8 +36,7 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
       "http://localhost:8081",
       "http://localhost:80",
       "http://localhost",
-      process.env.FRONTEND_URL,
-    ].filter(Boolean) as string[];
+    ];
 
 app.use(
   cors({

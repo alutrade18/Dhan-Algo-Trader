@@ -1,6 +1,7 @@
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "./dhan-client";
 import { sendTelegramAlert } from "./telegram";
+import { logger } from "./logger";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
@@ -42,31 +43,28 @@ async function checkAndSquareOff(): Promise<void> {
 
     lastSquareOffDate = dateStr;
 
-    console.log(`[AutoSquareOff] Triggering at ${timeStr} IST for ${dateStr}`);
+    logger.info({ timeStr, dateStr }, "[AutoSquareOff] Triggering square-off");
 
     const result = await dhanClient.exitAllPositions();
-    console.log("[AutoSquareOff] Result:", result);
+    logger.info({ result }, "[AutoSquareOff] Exit all positions result");
 
     await db.insert(auditLogTable).values({
       action: "AUTO_SQUARE_OFF",
       description: `Auto square-off triggered at ${timeStr} IST on ${dateStr}`,
     });
 
-    const prefs = settings.notificationPreferences as { autoSquareOff?: boolean } | null;
-    if (prefs?.autoSquareOff !== false) {
-      void sendTelegramAlert(
-        `⏰ *Auto Square-Off Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_${APP_NAME} — Auto Square-Off_`
-      );
-    }
+    void sendTelegramAlert(
+      `⏰ *Auto Square-Off Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_${APP_NAME} — Auto Square-Off_`
+    );
   } catch (e) {
-    console.error("[AutoSquareOff] Error:", e);
+    logger.error({ err: e }, "[AutoSquareOff] Error during square-off");
   }
 }
 
 export function startAutoSquareOffScheduler(): void {
   if (schedulerInterval) return;
   schedulerInterval = setInterval(() => void checkAndSquareOff(), 30_000);
-  console.log("[AutoSquareOff] Scheduler started (checks every 30s)");
+  logger.info("[AutoSquareOff] Scheduler started (checks every 30s)");
 }
 
 export function stopAutoSquareOffScheduler(): void {

@@ -53,6 +53,8 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
     dhanClient.configure(cid, token);
     marketFeedWS.configure(cid, token);
     orderUpdateWS.configure(cid, token);
+    marketFeedWS.reset();
+    orderUpdateWS.reset();
     marketFeedWS.connect();
     orderUpdateWS.connect();
 
@@ -96,20 +98,22 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
 });
 
 router.post("/broker/disconnect", async (req, res): Promise<void> => {
-  // 1. Disconnect all live connections
+  // 1. Disconnect all live connections and reset reconnect state
   dhanClient.disconnect();
   marketFeedWS.disconnect();
   orderUpdateWS.disconnect();
+  marketFeedWS.reset();
+  orderUpdateWS.reset();
 
   // 2. Clear in-memory ledger cache — prevents stale data bleeding into a new session
   clearLedgerCache();
 
-  // 3. Clear broker credentials from DB (Client ID + Access Token)
+  // 3. Clear broker credentials from DB and reset kill switch state
   try {
     const settings = await getOrCreateSettings();
     await db
       .update(settingsTable)
-      .set({ brokerClientId: null, brokerAccessToken: null })
+      .set({ brokerClientId: null, brokerAccessToken: null, killSwitchEnabled: false })
       .where(eq(settingsTable.id, settings.id));
     req.log.info("Broker credentials cleared from database");
   } catch (e) {

@@ -45,8 +45,27 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 ### Database Schema
 - `strategies` — Trading strategy definitions with JSON conditions, entry/exit rules, risk limits, performance tracking
 - `trade_logs` — Execution logs from strategy runs (linked to strategies)
-- `settings` — App settings including broker credentials, risk limits, Telegram config, kill switch
+- `settings` — App settings including broker credentials, risk limits, Telegram config, kill switch, `dashboardWidgets` (todayPnl, availableBalance, activeStrategies)
 - `paper_trades` — Paper trading positions (open/closed) stored in DB
+
+### Security & Safety
+- **Kill switch**: Enforced server-side in `order-guards.ts` before every order placement; reset to `false` on broker disconnect
+- **Postback endpoint**: Rejects all requests if `POSTBACK_SECRET` env var is not set (fail-closed)
+- **PIN hashing**: Falls back to `ENCRYPTION_KEY` slice if `PIN_SALT` is not set
+- **Super Orders**: INTRADAY-only enforced at route level (400 if `product_type !== INTRADAY`)
+
+### WebSocket Reliability
+- Both `OrderUpdateWS` and `MarketFeedWS` use exponential backoff (5s → 120s max) with `destroyed` flag to stop reconnects after explicit disconnect
+- Binary/protocol frames from Dhan are skipped safely (first-byte check for `{` or `[`)
+- `ping/pong` heartbeat handled in both WS classes
+- `subscribe()` accumulates securityIds in a `Set` — multiple calls don't overwrite each other
+- `reset()` method clears `destroyed` flag before new broker connect
+
+### Performance Caches
+- Positions: 15-second in-memory cache in `order-guards.ts` (avoids redundant Dhan API calls during guard checks)
+- Recent-activity: 30-second in-memory cache in `dashboard.ts`
+- NSE holidays: per-day in-memory cache in `equity-scheduler.ts`
+- Equity curve: skips refresh on weekends AND NSE market holidays
 
 ## Features
 

@@ -95,6 +95,13 @@ router.post("/super-orders", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Broker not connected" });
     return;
   }
+
+  const bodyProductType = String((req.body as Record<string, unknown>).product_type ?? "INTRADAY");
+  if (bodyProductType !== "INTRADAY") {
+    res.status(400).json({ error: "Super Orders are INTRADAY only. Use product_type: INTRADAY." });
+    return;
+  }
+
   try {
     const {
       security_id,

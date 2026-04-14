@@ -21,16 +21,12 @@ export const settingsTable = pgTable("settings", {
 
   dashboardWidgets: jsonb("dashboard_widgets").$type<{
     todayPnl: boolean;
-    totalPnl: boolean;
     availableBalance: boolean;
     activeStrategies: boolean;
-    equityCurve: boolean;
   }>().default({
     todayPnl: true,
-    totalPnl: true,
     availableBalance: true,
     activeStrategies: true,
-    equityCurve: true,
   }),
 
   refreshIntervalSeconds: integer("refresh_interval_seconds").notNull().default(15),
