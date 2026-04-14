@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { isHolidayToday } from "@/lib/market-calendar";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,14 @@ function computeMarketStatus(exchange: Exchange): {
     return {
       isOpen: false,
       label: "Market closed · Weekend",
+      color: "text-muted-foreground",
+    };
+  }
+  // Check exchange-specific holiday calendar
+  if (isHolidayToday(exchange === "MCX" ? "MCX" : "NSE")) {
+    return {
+      isOpen: false,
+      label: "Market closed · Public holiday",
       color: "text-muted-foreground",
     };
   }

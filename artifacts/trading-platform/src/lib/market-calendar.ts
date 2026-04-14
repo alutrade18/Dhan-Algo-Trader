@@ -1,0 +1,41 @@
+/**
+ * Client-side market holiday calendar.
+ * Mirror of the server-side list in api-server/src/lib/market-calendar.ts.
+ * Update annually when NSE India publishes the new holiday master.
+ */
+
+// ── NSE / BSE holidays ────────────────────────────────────────────────────
+const NSE_HOLIDAYS: readonly string[] = [
+  // 2025
+  "2025-01-26", "2025-02-26", "2025-03-14", "2025-03-31",
+  "2025-04-14", "2025-04-18", "2025-05-01", "2025-08-15",
+  "2025-10-02", "2025-10-20", "2025-10-21", "2025-11-05", "2025-12-25",
+  // 2026
+  "2026-01-26", "2026-03-03", "2026-03-23", "2026-04-03",
+  "2026-04-14", "2026-05-01", "2026-08-15", "2026-10-02",
+  "2026-10-19", "2026-11-08", "2026-11-09", "2026-11-25", "2026-12-25",
+];
+
+// ── MCX holidays (shorter list — MCX runs an evening session on some NSE holidays) ──
+const MCX_HOLIDAYS: readonly string[] = [
+  // 2025
+  "2025-01-26", "2025-02-26", "2025-03-14", "2025-03-31",
+  "2025-04-14", "2025-04-18", "2025-05-01", "2025-08-15",
+  "2025-10-02", "2025-10-20", "2025-11-05", "2025-12-25",
+  // 2026
+  "2026-01-26", "2026-03-03", "2026-03-23", "2026-04-03",
+  "2026-04-14", "2026-05-01", "2026-08-15", "2026-10-02",
+  "2026-11-08", "2026-11-25", "2026-12-25",
+];
+
+/** Returns today's date in IST as "YYYY-MM-DD". */
+function todayIST(): string {
+  const utcMs = Date.now() + new Date().getTimezoneOffset() * 60_000;
+  return new Date(utcMs + 5.5 * 3_600_000).toISOString().split("T")[0];
+}
+
+/** True if today is a recognised holiday for the given exchange. */
+export function isHolidayToday(exchange: "NSE" | "MCX" = "NSE"): boolean {
+  const today = todayIST();
+  return (exchange === "MCX" ? MCX_HOLIDAYS : NSE_HOLIDAYS).includes(today);
+}

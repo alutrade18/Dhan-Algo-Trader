@@ -31,30 +31,15 @@ const PAGE_TITLES: Record<string, string> = {
   "/logs": "Logs",
 };
 
-type MarketStatus = { name: string; isOpen: boolean };
-
-function getMarketStatus(): MarketStatus {
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istNow = new Date(now.getTime() + istOffset);
-  const dayOfWeek = istNow.getUTCDay(); // 0=Sun 1=Mon … 5=Fri 6=Sat
-
-  // Weekend — all markets closed
-  if (dayOfWeek === 0 || dayOfWeek === 6) return { name: "NSE Market", isOpen: false };
-
-  const mins = istNow.getUTCHours() * 60 + istNow.getUTCMinutes();
-  const NSE_OPEN  = 9 * 60;        // 09:00 AM IST
-  const NSE_CLOSE = 15 * 60 + 30;  // 03:30 PM IST
-  const MCX_CLOSE = 23 * 60 + 30;  // 11:30 PM IST
-
-  if (mins >= NSE_OPEN && mins < NSE_CLOSE) {
-    return { name: "NSE Market", isOpen: true };
-  } else if (mins >= NSE_CLOSE && mins < MCX_CLOSE) {
-    return { name: "MCX Market", isOpen: true };
-  } else {
-    // Before NSE opens (midnight–9 AM) or after MCX closes (11:30 PM+)
-    return { name: "NSE Market", isOpen: false };
-  }
+// Market status comes from the backend /healthz endpoint which checks
+// weekends AND the official NSE/MCX holiday calendar — not just clock time.
+// This avoids the bug where the UI showed "NSE OPEN" on public holidays.
+interface HealthData {
+  marketOpen: boolean;
+  marketName: string;
+  marketClosedReason?: string;
+  brokerConnected: boolean;
+  systemOnline: boolean;
 }
 
 function formatCurrency(val?: number | null) {
@@ -124,15 +109,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [location]);
 
-  const [market, setMarket] = useState<MarketStatus>(getMarketStatus);
-  useEffect(() => {
-    // Re-evaluate every 30 seconds so transitions happen promptly
-    const id = setInterval(() => setMarket(getMarketStatus()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const marketOpen = market.isOpen;
-  const brokerConnected = health?.brokerConnected ?? false;
+  // Market status is derived from the backend health check (already polls every 30s).
+  // The backend uses the official NSE/MCX holiday calendar — handles public holidays correctly.
+  const healthData = health as unknown as HealthData | undefined;
+  const marketOpen = healthData?.marketOpen ?? false;
+  const marketName = healthData?.marketName ?? "NSE";
+  const brokerConnected = healthData?.brokerConnected ?? false;
   const systemOnline = marketOpen && brokerConnected;
 
   const isBrokerConnected = isBrokerStatusLoading ? null : (brokerStatus?.connected ?? false);
@@ -341,7 +323,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="hidden md:flex items-center gap-1.5">
               <Activity className={cn("w-4 h-4", marketOpen ? "text-success" : "text-muted-foreground")} />
               <span className="text-xs font-mono text-muted-foreground">
-                {market.name}:{" "}
+                {marketName} Market:{" "}
                 <span className={cn("font-bold", marketOpen ? "text-success" : "text-destructive")}>
                   {marketOpen ? "OPEN" : "CLOSED"}
                 </span>
