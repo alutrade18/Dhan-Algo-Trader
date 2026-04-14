@@ -1,0 +1,49 @@
+Share Market Holidays on Weekdays in 2026
+Sr.No.	Holidays	Dates	Days	Exchanges
+1	Republic Day	26 Jan 2026	Monday	NSE, BSE & MCX
+2	Holi	03 Mar 2026	Tuesday	NSE, BSE
+3	Shri Ram Navami	26 Mar 2026	Thursday	NSE, BSE
+4	Shri Mahavir Jayanti	31 Mar 2026	Tuesday	NSE, BSE
+5	Good Friday	03 Apr 2026	Friday	NSE, BSE & MCX
+6	Dr. Baba Saheb Ambedkar Jayanti	14 Apr 2026	Tuesday	NSE, BSE
+7	Maharashtra Day	01 May 2026	Friday	NSE, BSE
+8	Bakri Id	28 May 2026	Thursday	NSE, BSE
+9	Muharram	26 Jun 2026	Friday	NSE, BSE
+10	Ganesh Chaturthi	14 Sep 2026	Monday	NSE, BSE
+11	Mahatma Gandhi Jayanti	02 Oct 2026	Friday	NSE, BSE & MCX
+12	Dussehra	20 Oct 2026	Tuesday	NSE, BSE
+13	Diwali - Balipratipada	10 Nov 2026	Tuesday	NSE, BSE
+14	Prakash Gurpurb Sri Guru Nanak Dev	24 Nov 2026	Tuesday	NSE, BSE
+15	Christmas	25 Dec 2026	Friday	NSE, BSE & MCX
+Note: The above list is related to stock market trading and clearing holidays both.
+
+Share Market Clearing Holidays in 2026:
+Sr.No.	Holidays	Dates	Days	Exchanges
+1	Chhatrapati Shivaji Maharaj Jayanti	19 Feb 2026	Thursday	NSE
+2	Gudhi Padwa	19 Mar 2026	Thursday	NSE
+3	Annual Bank Closing	01 Apr 2026	Wednesday	NSE
+4	Id-E-Milad	26 Aug 2026	Wednesday	NSE
+Note: The above list only contains clearing holidays.
+
+Share Market Holidays on Weekends in 2026:
+Sr.No.	Holidays	Dates	Days	Exchanges
+1	Mahashivratri	15 Feb 2026	Sunday	NSE, BSE & MCX
+2	Id-Ul-Fitr (Ramadan Eid)	21 Mar 2026	Saturday	NSE, BSE & MCX
+3	Independence Day	15 Aug 2026	Saturday	NSE, BSE & MCX
+4	Diwali - Laxmi Pujan (Muhurat Trading Session)	08 Nov 2026	Sunday	NSE, BSE & MCX
+
+MCX Trading Sessions on Holidays in 2026:
+Sr.No.	Holidays	Dates	Days	Morning Session
+Evening Session
+1	New Year Day	1 Jan 2026	Thursday	Open	Closed
+2	Holi	3 Mar 2026	Tuesday	Closed	Open
+3	Shri Ram Navmi	26 Mar 2026	Thursday	Closed	Open
+4	Shri Mahavir Jayanti	31 Mar 2026	Tuesday	Closed	Open
+5	Dr. Baba Saheb Ambedkar Jayanti	14 Apr 2026	Tuesday	Closed	Open
+6	Maharashtra Day	1 May 2026	Friday	Closed	Open
+7	Bakri Id	28 May 2026	Thursday	Closed	Open
+8	Moharram	26 Jun 2026	Friday	Closed	Open
+9	Ganesh Chaturthi	14 Sep 2026	Monday	Closed	Open
+10	Dassera	20 Oct 2026	Tuesday	Closed	Open
+11	Diwali-Balipratipada	10 Nov 2026	Tuesday	Closed	Open
+12	Guru Nanak Jayanti	24 Nov 2026	Tuesday	Closed	Open

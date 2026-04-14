@@ -1,102 +1,100 @@
 /**
  * Indian Market Holiday Calendar
  *
- * Source: Dhan market holiday page + NSE India Holiday Master
- * https://dhan.co/market-holiday/
- * https://www.nseindia.com/services/holiday-master
- *
- * ── How market status is determined ─────────────────────────────────────────
- *   1. Weekend (Sat/Sun)  → CLOSED
- *   2. Date in holiday list → CLOSED
- *   3. Time within trading hours on a weekday → OPEN
+ * Primary data source: market_holidays DB table (seeded from Dhan holiday page)
+ * Fallback:            hardcoded lists below (for tests / DB unavailability)
  *
  * ── Trading hours (IST) ──────────────────────────────────────────────────────
- *   NSE/BSE:  09:15 – 15:30
- *   MCX:      09:00 – 23:30  (runs all day, not just evening)
+ *   NSE/BSE:         09:15 – 15:30
+ *   MCX Morning:     09:00 – 17:00
+ *   MCX Evening:     17:00 – 23:30
  *
- * ── MCX vs NSE holidays ──────────────────────────────────────────────────────
- *   MCX follows a different (shorter) holiday list.
- *   Key difference: MCX does NOT close for state-level or minor national
- *   holidays (e.g. Maharashtra Day, Dr. Ambedkar Jayanti, Dussehra) that NSE
- *   observes. MCX only shuts for major national holidays + Diwali evening session.
+ * On many NSE holidays, MCX morning is CLOSED but the evening session is OPEN.
+ * The DB schema captures this with separate mcx_morning_closed / mcx_evening_closed flags.
  *
- * ── Important: NSE holiday ≠ MCX holiday ────────────────────────────────────
- *   When NSE is on holiday during 09:15–15:30, MCX may still be open.
- *   getMarketStatus() handles this: if NSE is on holiday but MCX is not,
- *   it returns { name: "MCX", isOpen: true } even during NSE hours.
- *
- * Update lists each year when NSE/MCX publish the new holiday master (Dec).
+ * ── Cache ────────────────────────────────────────────────────────────────────
+ *   Holiday data is cached in-memory at startup and refreshed every 24 hours
+ *   so individual health-check calls are never blocked on a DB round-trip.
  */
 
-// ── NSE / BSE Trading Holidays 2025 ─────────────────────────────────────────
-const NSE_HOLIDAYS_2025: readonly string[] = [
-  "2025-01-26", // Republic Day
-  "2025-02-26", // Mahashivratri
-  "2025-03-14", // Holi
-  "2025-03-31", // Id-Ul-Fitr (Ramzan Eid)
-  "2025-04-14", // Dr. Babasaheb Ambedkar Jayanti
-  "2025-04-18", // Good Friday
-  "2025-05-01", // Maharashtra Day
-  "2025-08-15", // Independence Day
-  "2025-10-02", // Gandhi Jayanti
-  "2025-10-20", // Diwali (Laxmi Pujan)
-  "2025-10-21", // Diwali (Balipratipada)
-  "2025-11-05", // Gurunanak Jayanti
-  "2025-12-25", // Christmas
+import { db, marketHolidaysTable } from "@workspace/db";
+
+// ── In-memory cache ───────────────────────────────────────────────────────────
+
+interface CachedHoliday {
+  date: string;          // "YYYY-MM-DD"
+  nseClosed: boolean;
+  mcxMorningClosed: boolean;
+  mcxEveningClosed: boolean;
+}
+
+let _cache: CachedHoliday[] = [];
+let _cacheLoadedAt = 0;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
+
+/** Loads holidays from DB into the in-memory cache. Falls back silently. */
+export async function loadHolidayCache(): Promise<void> {
+  try {
+    const rows = await db
+      .select({
+        date:             marketHolidaysTable.holidayDate,
+        nseClosed:        marketHolidaysTable.nseClosed,
+        mcxMorningClosed: marketHolidaysTable.mcxMorningClosed,
+        mcxEveningClosed: marketHolidaysTable.mcxEveningClosed,
+      })
+      .from(marketHolidaysTable);
+
+    _cache = rows.map((r) => ({
+      date:             r.date,
+      nseClosed:        r.nseClosed,
+      mcxMorningClosed: r.mcxMorningClosed,
+      mcxEveningClosed: r.mcxEveningClosed,
+    }));
+    _cacheLoadedAt = Date.now();
+    console.info(`[MarketCalendar] Loaded ${_cache.length} holidays from DB`);
+  } catch (err) {
+    // Non-fatal: getMarketStatus() will fall back to hardcoded lists
+    console.warn("[MarketCalendar] Could not load holidays from DB:", err);
+  }
+}
+
+/** Refreshes cache if stale (called lazily from getMarketStatus). */
+async function maybeRefreshCache(): Promise<void> {
+  if (Date.now() - _cacheLoadedAt > CACHE_TTL_MS) {
+    await loadHolidayCache();
+  }
+}
+
+// ── Hardcoded fallback (if DB unavailable) ────────────────────────────────────
+// Keep in sync with seed-market-holidays.ts
+
+const FALLBACK_NSE: readonly string[] = [
+  "2025-01-26","2025-02-26","2025-03-14","2025-03-31","2025-04-14",
+  "2025-04-18","2025-05-01","2025-08-15","2025-10-02","2025-10-20",
+  "2025-10-21","2025-11-05","2025-12-25",
+  "2026-01-26","2026-03-03","2026-03-26","2026-03-31","2026-04-03",
+  "2026-04-14","2026-05-01","2026-05-28","2026-06-26","2026-09-14",
+  "2026-10-02","2026-10-20","2026-11-10","2026-11-24","2026-12-25",
 ];
 
-// ── NSE / BSE Trading Holidays 2026 ─────────────────────────────────────────
-// Confirmed dates marked ✓; lunar-based holidays are approximate.
-// Verify annually at: https://www.nseindia.com/services/holiday-master
-const NSE_HOLIDAYS_2026: readonly string[] = [
-  "2026-01-26", // Republic Day ✓
-  "2026-03-03", // Mahashivratri (approx — lunar)
-  "2026-03-23", // Holi (approx — lunar)
-  "2026-04-03", // Good Friday ✓
-  "2026-04-14", // Dr. Babasaheb Ambedkar Jayanti ✓
-  "2026-05-01", // Maharashtra Day ✓
-  "2026-08-15", // Independence Day ✓
-  "2026-10-02", // Gandhi Jayanti ✓
-  "2026-10-19", // Dussehra (approx — lunar)
-  "2026-11-08", // Diwali Laxmi Pujan (approx — lunar)
-  "2026-11-09", // Diwali Balipratipada (approx — lunar)
-  "2026-11-25", // Gurunanak Jayanti (approx — lunar)
-  "2026-12-25", // Christmas ✓
+// Days where MCX morning (09:00–17:00) is closed
+const FALLBACK_MCX_MORNING_CLOSED: readonly string[] = [
+  "2025-01-26","2025-02-26","2025-03-14","2025-03-31","2025-04-14",
+  "2025-04-18","2025-05-01","2025-08-15","2025-10-02","2025-10-21",
+  "2025-11-05","2025-12-25",
+  "2026-01-26","2026-03-03","2026-03-26","2026-03-31","2026-04-03",
+  "2026-04-14","2026-05-01","2026-05-28","2026-06-26","2026-09-14",
+  "2026-10-02","2026-10-20","2026-11-10","2026-11-24","2026-12-25",
 ];
 
-// ── MCX Trading Holidays 2025 ────────────────────────────────────────────────
-// MCX has fewer holidays than NSE. It stays open on many NSE-only closures
-// (e.g. Dr. Ambedkar Jayanti, Maharashtra Day, Dussehra).
-// Source: https://dhan.co/market-holiday/ (MCX tab)
-const MCX_HOLIDAYS_2025: readonly string[] = [
-  "2025-01-26", // Republic Day
-  "2025-02-26", // Mahashivratri
-  "2025-03-14", // Holi
-  "2025-03-31", // Id-Ul-Fitr
-  "2025-04-18", // Good Friday
-  "2025-08-15", // Independence Day
-  "2025-10-02", // Gandhi Jayanti
-  "2025-10-20", // Diwali Laxmi Pujan (evening session closed)
-  "2025-12-25", // Christmas
-  // NOTE: Dr. Ambedkar Jayanti (Apr 14), Maharashtra Day (May 1),
-  //       Gurunanak Jayanti (Nov 5) are NSE holidays but MCX stays OPEN.
+// Days where MCX evening (17:00–23:30) is closed
+const FALLBACK_MCX_EVENING_CLOSED: readonly string[] = [
+  "2025-01-26","2025-04-18","2025-08-15","2025-10-02","2025-10-20",
+  "2025-12-25",
+  "2026-01-01","2026-01-26","2026-04-03","2026-10-02","2026-12-25",
 ];
 
-// ── MCX Trading Holidays 2026 ────────────────────────────────────────────────
-const MCX_HOLIDAYS_2026: readonly string[] = [
-  "2026-01-26", // Republic Day ✓
-  "2026-03-03", // Mahashivratri (approx)
-  "2026-03-23", // Holi (approx)
-  "2026-04-03", // Good Friday ✓
-  "2026-08-15", // Independence Day ✓
-  "2026-10-02", // Gandhi Jayanti ✓
-  "2026-11-08", // Diwali Laxmi Pujan (approx — evening session closed)
-  "2026-12-25", // Christmas ✓
-  // NOTE: Dr. Ambedkar Jayanti (Apr 14), Maharashtra Day (May 1),
-  //       Gurunanak Jayanti (Nov 25) are NSE holidays but MCX stays OPEN.
-];
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Returns today's date in IST as "YYYY-MM-DD". */
 function todayIST(): string {
@@ -122,89 +120,112 @@ function istDayOfWeek(): number {
   return ist.getUTCDay();
 }
 
-function isHoliday(dateStr: string, holidayList: readonly string[]): boolean {
-  return holidayList.includes(dateStr);
+function lookupFromCache(today: string): { nseClosed: boolean; mcxMorningClosed: boolean; mcxEveningClosed: boolean } | null {
+  const row = _cache.find((r) => r.date === today);
+  if (!row) return null;
+  return { nseClosed: row.nseClosed, mcxMorningClosed: row.mcxMorningClosed, mcxEveningClosed: row.mcxEveningClosed };
 }
 
-function allNseHolidays(): readonly string[] {
-  return [...NSE_HOLIDAYS_2025, ...NSE_HOLIDAYS_2026];
+function lookupFromFallback(today: string) {
+  return {
+    nseClosed:        FALLBACK_NSE.includes(today),
+    mcxMorningClosed: FALLBACK_MCX_MORNING_CLOSED.includes(today),
+    mcxEveningClosed: FALLBACK_MCX_EVENING_CLOSED.includes(today),
+  };
 }
 
-function allMcxHolidays(): readonly string[] {
-  return [...MCX_HOLIDAYS_2025, ...MCX_HOLIDAYS_2026];
-}
-
-// ── Public API ───────────────────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────────────────────
 
 export interface MarketStatus {
-  /** Exchange label shown in the UI, e.g. "NSE" or "MCX" */
+  /** Primary exchange for the current time slot ("NSE" or "MCX") */
   name: string;
   isOpen: boolean;
-  /** Human-readable reason why the market is closed (when isOpen=false) */
   closedReason?: "weekend" | "holiday" | "pre-market" | "post-market";
-  /** Individual exchange statuses for granular display */
+  /** Granular per-exchange open status */
   nseOpen: boolean;
   mcxOpen: boolean;
+  /** Which MCX session is currently active (for UI labelling) */
+  mcxSession: "morning" | "evening" | "closed";
 }
 
 /**
  * Returns the current market status, correctly handling:
  *  - Weekends
- *  - NSE-only holidays (where MCX is still open — e.g. Dr. Ambedkar Jayanti)
- *  - MCX-only holidays
- *  - Full-market holidays (both NSE and MCX closed)
+ *  - NSE-only holidays (where MCX may still have an evening session open)
+ *  - MCX morning-only vs evening-only closures
+ *  - Full-market holidays (NSE + all MCX sessions closed)
  *
- * Trading hours:
- *  NSE/BSE: 09:15 – 15:30 IST
- *  MCX:     09:00 – 23:30 IST  (NOT just the evening; MCX opens at 9 AM)
+ * Reads from the in-memory holiday cache (DB-backed, refreshed every 24 h).
+ * Falls back to hardcoded lists if the DB has not been loaded yet.
  *
- * When NSE is on holiday during NSE hours, MCX is checked next.
- * If MCX is open → returns { name: "MCX", isOpen: true }.
+ * Note: this function is synchronous for use in request handlers.
+ * Call loadHolidayCache() at startup and maybeRefreshCache() elsewhere.
  */
 export function getMarketStatus(): MarketStatus {
-  const day = istDayOfWeek();
+  const day   = istDayOfWeek();
   const today = todayIST();
-  const mins = istMinutes();
+  const mins  = istMinutes();
 
-  // ── Weekend ─────────────────────────────────────────────────────────────
+  // ── Weekend ──────────────────────────────────────────────────────────────
   if (day === 0 || day === 6) {
-    return { name: "NSE", isOpen: false, closedReason: "weekend", nseOpen: false, mcxOpen: false };
+    return { name: "NSE", isOpen: false, closedReason: "weekend", nseOpen: false, mcxOpen: false, mcxSession: "closed" };
   }
 
-  // ── Holiday check ────────────────────────────────────────────────────────
-  const nseHoliday = isHoliday(today, allNseHolidays());
-  const mcxHoliday = isHoliday(today, allMcxHolidays());
+  // ── Holiday lookup (DB cache, then fallback) ─────────────────────────────
+  const h = _cache.length > 0 ? lookupFromCache(today) : null;
+  const { nseClosed, mcxMorningClosed, mcxEveningClosed } = h ?? lookupFromFallback(today);
 
-  // Trading session boundaries
-  const NSE_OPEN  = 9 * 60 + 15;  // 09:15 IST
-  const NSE_CLOSE = 15 * 60 + 30; // 15:30 IST
-  const MCX_OPEN  = 9 * 60;       // 09:00 IST
-  const MCX_CLOSE = 23 * 60 + 30; // 23:30 IST
+  // ── Session boundaries ────────────────────────────────────────────────────
+  // NSE/BSE
+  const NSE_OPEN   = 9 * 60 + 15;  // 09:15 IST
+  const NSE_CLOSE  = 15 * 60 + 30; // 15:30 IST
+  // MCX morning session
+  const MCX_OPEN   = 9 * 60;       // 09:00 IST
+  const MCX_MID    = 17 * 60;      // 17:00 IST  (morning → evening split)
+  const MCX_CLOSE  = 23 * 60 + 30; // 23:30 IST
 
-  const nseOpen = !nseHoliday && mins >= NSE_OPEN && mins < NSE_CLOSE;
-  const mcxOpen = !mcxHoliday && mins >= MCX_OPEN && mins < MCX_CLOSE;
+  // ── Compute open/closed for each session ──────────────────────────────────
+  const nseOpen = !nseClosed && mins >= NSE_OPEN && mins < NSE_CLOSE;
 
-  // ── NSE primary window (09:15 – 15:30) ──────────────────────────────────
+  let mcxOpen = false;
+  let mcxSession: MarketStatus["mcxSession"] = "closed";
+
+  if (mins >= MCX_OPEN && mins < MCX_MID) {
+    // We are in the MCX morning window (09:00–17:00)
+    mcxSession = "morning";
+    mcxOpen = !mcxMorningClosed;
+  } else if (mins >= MCX_MID && mins < MCX_CLOSE) {
+    // We are in the MCX evening window (17:00–23:30)
+    mcxSession = "evening";
+    mcxOpen = !mcxEveningClosed;
+  }
+
+  // ── Pick the primary exchange label for this time slot ────────────────────
   if (mins >= NSE_OPEN && mins < NSE_CLOSE) {
-    if (nseOpen) {
-      return { name: "NSE", isOpen: true, nseOpen: true, mcxOpen };
-    }
-    // NSE is closed (holiday) — fall through to MCX
-    if (mcxOpen) {
-      return { name: "MCX", isOpen: true, nseOpen: false, mcxOpen: true };
-    }
-    return { name: "NSE", isOpen: false, closedReason: "holiday", nseOpen: false, mcxOpen: false };
+    // NSE primary window
+    if (nseOpen) return { name: "NSE", isOpen: true,  nseOpen: true,  mcxOpen, mcxSession };
+    if (mcxOpen) return { name: "MCX", isOpen: true,  nseOpen: false, mcxOpen: true,  mcxSession };
+    return { name: "NSE", isOpen: false, closedReason: nseClosed ? "holiday" : "pre-market", nseOpen: false, mcxOpen: false, mcxSession: "closed" };
   }
 
-  // ── MCX-only window (15:30 – 23:30) — NSE has closed for the day ────────
+  if (mins >= MCX_OPEN && mins < NSE_OPEN) {
+    // MCX morning pre-NSE window (09:00–09:15): only MCX morning
+    if (mcxOpen) return { name: "MCX", isOpen: true, nseOpen: false, mcxOpen: true, mcxSession };
+    return { name: "NSE", isOpen: false, closedReason: "pre-market", nseOpen: false, mcxOpen: false, mcxSession: "closed" };
+  }
+
   if (mins >= NSE_CLOSE && mins < MCX_CLOSE) {
-    if (mcxOpen) {
-      return { name: "MCX", isOpen: true, nseOpen: false, mcxOpen: true };
-    }
-    return { name: "MCX", isOpen: false, closedReason: "holiday", nseOpen: false, mcxOpen: false };
+    // MCX evening window — NSE has closed for the day
+    if (mcxOpen) return { name: "MCX", isOpen: true, nseOpen: false, mcxOpen: true, mcxSession };
+    return { name: "MCX", isOpen: false, closedReason: mcxEveningClosed ? "holiday" : "post-market", nseOpen: false, mcxOpen: false, mcxSession: "closed" };
   }
 
-  // ── Pre-market (before 09:00) or post-market (after 23:30) ──────────────
+  // Pre-market (before 09:00) or post-market (after 23:30)
   const reason = mins < MCX_OPEN ? "pre-market" : "post-market";
-  return { name: "NSE", isOpen: false, closedReason: reason, nseOpen: false, mcxOpen: false };
+  return { name: "NSE", isOpen: false, closedReason: reason, nseOpen: false, mcxOpen: false, mcxSession: "closed" };
+}
+
+/** Trigger cache refresh in the background (safe to call from request handler). */
+export function refreshHolidayCacheIfStale(): void {
+  void maybeRefreshCache();
 }

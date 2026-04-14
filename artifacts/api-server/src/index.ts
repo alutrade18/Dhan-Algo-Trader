@@ -13,6 +13,7 @@ import { startKillSwitchScheduler } from "./routes/risk";
 import { startEquityScheduler } from "./lib/equity-scheduler";
 import { decryptToken } from "./lib/crypto-utils";
 import { loadDailyCountersFromDb } from "./lib/rate-limiter";
+import { loadHolidayCache } from "./lib/market-calendar";
 
 const rawPort = process.env["PORT"];
 
@@ -77,6 +78,7 @@ async function loadSavedCredentials() {
 
 loadSavedCredentials().then(async () => {
   await loadDailyCountersFromDb();
+  await loadHolidayCache();
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
     startAutoSquareOffScheduler();

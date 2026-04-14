@@ -40,6 +40,7 @@ interface HealthData {
   marketClosedReason?: string;
   nseOpen: boolean;
   mcxOpen: boolean;
+  mcxSession: "morning" | "evening" | "closed";
   brokerConnected: boolean;
   systemOnline: boolean;
 }
@@ -114,11 +115,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Market status is derived from the backend health check (already polls every 30s).
   // The backend uses the official NSE/MCX holiday calendar, handles public holidays
   // correctly, and distinguishes NSE-only vs MCX-only closures.
-  const healthData = health as unknown as HealthData | undefined;
-  const marketOpen = healthData?.marketOpen ?? false;
-  const marketName = healthData?.marketName ?? "NSE";
-  const nseOpen    = healthData?.nseOpen ?? false;
-  const mcxOpen    = healthData?.mcxOpen ?? false;
+  const healthData  = health as unknown as HealthData | undefined;
+  const marketOpen  = healthData?.marketOpen ?? false;
+  const marketName  = healthData?.marketName ?? "NSE";
+  const nseOpen     = healthData?.nseOpen ?? false;
+  const mcxOpen     = healthData?.mcxOpen ?? false;
+  const mcxSession  = healthData?.mcxSession ?? "closed";
   const brokerConnected = healthData?.brokerConnected ?? false;
   const systemOnline = marketOpen && brokerConnected;
 
@@ -338,7 +340,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </span>
                   <span className="text-muted-foreground/40">|</span>
                   <span>
-                    MCX:{" "}
+                    MCX{mcxOpen && mcxSession !== "closed" ? ` (${mcxSession === "morning" ? "AM" : "PM"})` : ""}:{" "}
                     <span className={cn("font-bold", mcxOpen ? "text-success" : "text-destructive")}>
                       {mcxOpen ? "OPEN" : "CLOSED"}
                     </span>
@@ -346,7 +348,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </span>
               ) : (
                 <span className="text-xs font-mono text-muted-foreground">
-                  {marketName} Market:{" "}
+                  {marketName}{marketName === "MCX" && mcxSession !== "closed" ? ` (${mcxSession === "morning" ? "AM" : "PM"})` : ""} Market:{" "}
                   <span className={cn("font-bold", marketOpen ? "text-success" : "text-destructive")}>
                     {marketOpen ? "OPEN" : "CLOSED"}
                   </span>

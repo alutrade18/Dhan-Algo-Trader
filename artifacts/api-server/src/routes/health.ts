@@ -2,11 +2,14 @@ import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
 import { getRateLimitStats } from "../lib/rate-limiter";
 import { RATE_LIMITS_REFERENCE } from "../lib/dhan-errors";
-import { getMarketStatus } from "../lib/market-calendar";
+import { getMarketStatus, refreshHolidayCacheIfStale } from "../lib/market-calendar";
 
 const router: IRouter = Router();
 
 router.get("/healthz", (_req, res) => {
+  // Trigger a background refresh if the 24-h cache is stale (non-blocking)
+  refreshHolidayCacheIfStale();
+
   const market = getMarketStatus();
   const brokerConnected = dhanClient.isConfigured();
 
@@ -17,6 +20,7 @@ router.get("/healthz", (_req, res) => {
     marketClosedReason: market.closedReason,
     nseOpen: market.nseOpen,
     mcxOpen: market.mcxOpen,
+    mcxSession: market.mcxSession,
     brokerConnected,
     systemOnline: market.isOpen && brokerConnected,
   });
