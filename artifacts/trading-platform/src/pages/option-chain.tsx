@@ -18,7 +18,9 @@ import {
   Clock,
   TrendingUp,
   TrendingDown,
+  Wifi,
 } from "lucide-react";
+import { marketSocket } from "@/lib/market-socket";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -43,6 +45,8 @@ interface StockUnderlying {
 
 interface OptionEntry {
   strikePrice: number;
+  callSecId?: number;
+  putSecId?: number;
   callLTP: number;
   callOI: number;
   callVolume: number;
@@ -319,6 +323,12 @@ export default function OptionChain() {
       : (stockUnderlying?.underlyingSymbol ?? "");
   const activeExchange: Exchange = "NSE";
 
+  // Derive option contract exchange segment from underlying segment
+  const optionSegment =
+    activeSegment === "MCX_COMM" ? "MCX_COMM"
+    : activeSegment?.startsWith("BSE") ? "BSE_FNO"
+    : "NSE_FNO";
+
   // Market hours gate
   const marketStatus = useMarketStatus(activeExchange);
 
@@ -376,10 +386,11 @@ export default function OptionChain() {
       return res.json() as Promise<{ data?: Record<string, unknown>; ltp?: number }>;
     },
     enabled: !!expiry && !!activeDhanSecId,
-    refetchInterval: marketStatus.isOpen ? 5_000 : false,
-    staleTime: 4_000,
+    // 30s REST poll — just for OI / IV / Volume refresh.
+    // LTP is updated in real-time via WebSocket (see liveLtps below).
+    refetchInterval: marketStatus.isOpen ? 30_000 : false,
+    staleTime: 25_000,
     refetchOnWindowFocus: false,
-    // Keep previous data visible during background refetch — no dimming
     placeholderData: (prev) => prev,
     retry: 0,
   });
@@ -405,8 +416,12 @@ export default function OptionChain() {
     const putOI = Number(pe.oi ?? pe.openInterest ?? 0);
     if (callOI > maxOI) maxOI = callOI;
     if (putOI > maxOI) maxOI = putOI;
+    const callSecId = Number(ce.security_id ?? ce.securityId ?? ce.SecurityId ?? 0) || undefined;
+    const putSecId  = Number(pe.security_id ?? pe.securityId ?? pe.SecurityId ?? 0) || undefined;
     entries.push({
       strikePrice: strike,
+      callSecId,
+      putSecId,
       callLTP: Number(ce.last_price ?? ce.ltp ?? 0),
       callOI,
       callVolume: Number(ce.volume ?? 0),
@@ -443,13 +458,52 @@ export default function OptionChain() {
     );
   })();
 
+  // ── WebSocket live LTP ────────────────────────────────────────────
+  // liveBuffer: raw tick data written by WS callbacks (no re-render)
+  // liveLtps: throttled snapshot flushed to state every 500 ms
+  const liveBuffer = useRef<Map<number, number>>(new Map());
+  const [liveLtps, setLiveLtps] = useState<Map<number, number>>(new Map());
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // 500 ms flush: copy buffer → state (triggers single re-render per batch)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (liveBuffer.current.size > 0) {
+        setLiveLtps(new Map(liveBuffer.current));
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+
+  // Subscribe to WS when the visible strikes change
+  useEffect(() => {
+    if (!marketStatus.isOpen || displayEntries.length === 0) return;
+
+    const ceIds = displayEntries.map((e) => e.callSecId).filter((id): id is number => !!id);
+    const peIds = displayEntries.map((e) => e.putSecId).filter((id): id is number => !!id);
+    const allIds = [...ceIds, ...peIds];
+    if (allIds.length === 0) return;
+
+    const cb = (tick: { securityId: number; ltp: number }) => {
+      liveBuffer.current.set(tick.securityId, tick.ltp);
+    };
+
+    const unsubscribe = marketSocket.subscribeBatch(optionSegment, allIds, cb, "quote");
+    setWsConnected(true);
+    return () => {
+      unsubscribe();
+      setWsConnected(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayEntries, marketStatus.isOpen, optionSegment]);
+
   // ── Live LTP flash tracking ──────────────────────────────────────
-  // prevPricesRef: prices from previous fetch cycle
+  // prevPricesRef: prices from previous render cycle (REST or WS)
   const prevPricesRef = useRef<Map<number, { call: number; put: number }>>(new Map());
-  // flashDirs: direction of last price change per strike (1=up, -1=down, 0=no change)
   const [flashDirs, setFlashDirs] = useState<Map<number, FlashEntry>>(new Map());
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Flash on REST-based updates (OI/IV/volume refresh)
   useEffect(() => {
     if (entries.length === 0) return;
 
@@ -457,28 +511,56 @@ export default function OptionChain() {
     const newFlash = new Map<number, FlashEntry>();
 
     entries.forEach((e) => {
-      newPrices.set(e.strikePrice, { call: e.callLTP, put: e.putLTP });
+      const liveCe = e.callSecId ? (liveBuffer.current.get(e.callSecId) ?? e.callLTP) : e.callLTP;
+      const livePe = e.putSecId  ? (liveBuffer.current.get(e.putSecId)  ?? e.putLTP)  : e.putLTP;
+      newPrices.set(e.strikePrice, { call: liveCe, put: livePe });
       const prev = prevPricesRef.current.get(e.strikePrice);
       if (prev) {
-        const callDir: Dir = e.callLTP > prev.call ? 1 : e.callLTP < prev.call ? -1 : 0;
-        const putDir: Dir = e.putLTP > prev.put ? 1 : e.putLTP < prev.put ? -1 : 0;
+        const callDir: Dir = liveCe > prev.call ? 1 : liveCe < prev.call ? -1 : 0;
+        const putDir: Dir  = livePe > prev.put  ? 1 : livePe < prev.put  ? -1 : 0;
         if (callDir !== 0 || putDir !== 0) {
           newFlash.set(e.strikePrice, { call: callDir, put: putDir });
         }
       }
     });
 
-    // Always update prev prices immediately for next cycle comparison
     prevPricesRef.current = newPrices;
 
     if (newFlash.size > 0) {
       setFlashDirs(newFlash);
-      // Flash color shows for 2 seconds then fades to neutral
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       flashTimerRef.current = setTimeout(() => setFlashDirs(new Map()), 2_000);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chain]);
+
+  // Flash on WebSocket LTP updates (500 ms cadence)
+  useEffect(() => {
+    if (displayEntries.length === 0 || liveLtps.size === 0) return;
+
+    const newFlash = new Map<number, FlashEntry>();
+
+    displayEntries.forEach((e) => {
+      const liveCe = e.callSecId ? (liveLtps.get(e.callSecId) ?? e.callLTP) : e.callLTP;
+      const livePe = e.putSecId  ? (liveLtps.get(e.putSecId)  ?? e.putLTP)  : e.putLTP;
+      const prev = prevPricesRef.current.get(e.strikePrice);
+      if (prev) {
+        const callDir: Dir = liveCe > prev.call ? 1 : liveCe < prev.call ? -1 : 0;
+        const putDir: Dir  = livePe > prev.put  ? 1 : livePe < prev.put  ? -1 : 0;
+        if (callDir !== 0 || putDir !== 0) {
+          newFlash.set(e.strikePrice, { call: callDir, put: putDir });
+          prevPricesRef.current.set(e.strikePrice, { call: liveCe, put: livePe });
+        }
+      }
+    });
+
+    if (newFlash.size > 0) {
+      setFlashDirs((prev) => new Map([...prev, ...newFlash]));
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setFlashDirs(new Map()), 2_000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveLtps]);
 
   // ── Auto-scroll table to ATM row ─────────────────────────────────
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -629,6 +711,12 @@ export default function OptionChain() {
           <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
             {activeLabel} · {expiry}
           </Badge>
+          {marketStatus.isOpen && (
+            <span className={`flex items-center gap-1 text-[10px] font-medium ${wsConnected ? "text-emerald-400" : "text-muted-foreground"}`}>
+              <Wifi className="w-3 h-3" />
+              {wsConnected ? "Live LTP" : "Connecting…"}
+            </span>
+          )}
         </div>
       )}
 
@@ -760,7 +848,7 @@ export default function OptionChain() {
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
                       {e.callIV > 0 ? e.callIV.toFixed(1) : "—"}
                     </td>
-                    {/* LTP — color flashes on price change */}
+                    {/* LTP — live via WebSocket, flashes on price change */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
                       <span
                         className={`font-mono font-semibold transition-colors duration-300 ${
@@ -771,7 +859,8 @@ export default function OptionChain() {
                               : "text-foreground"
                         }`}
                       >
-                        ₹{e.callLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        ₹{(e.callSecId ? (liveLtps.get(e.callSecId) ?? e.callLTP) : e.callLTP)
+                            .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </span>
                     </td>
 
@@ -792,7 +881,7 @@ export default function OptionChain() {
                     </td>
 
                     {/* ── PUT side ── */}
-                    {/* LTP — color flashes on price change */}
+                    {/* LTP — live via WebSocket, flashes on price change */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
                       <span
                         className={`font-mono font-semibold transition-colors duration-300 ${
@@ -803,7 +892,8 @@ export default function OptionChain() {
                               : "text-foreground"
                         }`}
                       >
-                        ₹{e.putLTP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        ₹{(e.putSecId ? (liveLtps.get(e.putSecId) ?? e.putLTP) : e.putLTP)
+                            .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </span>
                     </td>
                     {/* IV */}
@@ -850,7 +940,11 @@ export default function OptionChain() {
           <span className="flex items-center gap-1">
             <span className="text-emerald-400 text-[10px]">▲</span>
             <span className="text-red-400 text-[10px]">▼</span>
-            LTP up / down from last update
+            LTP up / down (WebSocket live)
+          </span>
+          <span className="flex items-center gap-1">
+            <Wifi className="w-3 h-3 text-emerald-400" />
+            LTP via real-time feed · OI/IV/Vol refreshes every 30 s
           </span>
         </div>
       )}

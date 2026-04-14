@@ -64,6 +64,37 @@ class MarketSocket {
     }
   }
 
+  // Batch subscribe: subscribes ALL securityIds in a single WebSocket message.
+  // Returns a cleanup function that unsubscribes everything.
+  subscribeBatch(
+    exchange: string,
+    securityIds: number[],
+    cb: TickCallback,
+    mode: "ticker" | "quote" | "full" = "quote",
+  ): () => void {
+    if (securityIds.length === 0) return () => {};
+
+    securityIds.forEach((secId) => {
+      const key = `${exchange}:${secId}`;
+      if (!this.tickListeners.has(key)) this.tickListeners.set(key, new Set());
+      this.tickListeners.get(key)!.add(cb);
+    });
+
+    this.socket.emit("market:subscribe", { exchange, securityIds, mode });
+
+    return () => {
+      securityIds.forEach((secId) => {
+        const key = `${exchange}:${secId}`;
+        const listeners = this.tickListeners.get(key);
+        if (listeners) {
+          listeners.delete(cb);
+          if (listeners.size === 0) this.tickListeners.delete(key);
+        }
+      });
+      this.socket.emit("market:unsubscribe", { exchange, securityIds });
+    };
+  }
+
   onOrderUpdate(cb: OrderUpdateCallback): () => void {
     this.orderUpdateListeners.add(cb);
     return () => this.orderUpdateListeners.delete(cb);
