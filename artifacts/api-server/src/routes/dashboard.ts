@@ -5,6 +5,36 @@ import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+// ── Server-side ledger cache ───────────────────────────────────────────────
+// Dhan ledger API has strict rate limits (DH-904).
+// Caching responses avoids hammering it from multiple simultaneous endpoints.
+//   - Short ranges (≤90d): 3-minute TTL
+//   - Long/all-time ranges (>90d): 15-minute TTL
+const LEDGER_CACHE: Map<string, { data: unknown; ts: number }> = new Map();
+
+function ledgerTTL(fromStr: string, toStr: string): number {
+  const diffDays = (new Date(toStr).getTime() - new Date(fromStr).getTime()) / 86_400_000;
+  return diffDays <= 90 ? 3 * 60_000 : 15 * 60_000;
+}
+
+async function cachedGetLedger(fromStr: string, toStr: string): Promise<unknown> {
+  const key = `ledger:${fromStr}:${toStr}`;
+  const hit = LEDGER_CACHE.get(key);
+  if (hit && Date.now() - hit.ts < ledgerTTL(fromStr, toStr)) return hit.data;
+  const data = await dhanClient.getLedger(fromStr, toStr);
+  LEDGER_CACHE.set(key, { data, ts: Date.now() });
+  return data;
+}
+
+async function cachedGetAllLedger(fromStr: string, toStr: string): Promise<Record<string, unknown>[]> {
+  const key = `allLedger:${fromStr}:${toStr}`;
+  const hit = LEDGER_CACHE.get(key);
+  if (hit && Date.now() - hit.ts < ledgerTTL(fromStr, toStr)) return hit.data as Record<string, unknown>[];
+  const data = await dhanClient.getAllLedger(fromStr, toStr);
+  LEDGER_CACHE.set(key, { data, ts: Date.now() });
+  return data;
+}
+
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   try {
     const now = new Date();
@@ -22,7 +52,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       dhanClient.getFundLimits(),
       dhanClient.getPositions(),
       dhanClient.getHoldings(),
-      dhanClient.getAllLedger(allTimeStartStr, todayStr),
+      cachedGetAllLedger(allTimeStartStr, todayStr),
       dhanClient.getOrders(),
       dhanClient.getTradeBook(),
       db.select().from(settingsTable),
@@ -189,7 +219,7 @@ router.get("/dashboard/period-pnl", async (req, res): Promise<void> => {
     from.setDate(from.getDate() - (days - 1));
     const fromStr = from.toISOString().split("T")[0];
 
-    const ledgerResult = await dhanClient.getLedger(fromStr, toStr).catch(() => null);
+    const ledgerResult = await cachedGetLedger(fromStr, toStr).catch(() => null);
     if (!ledgerResult) {
       // Ledger API unavailable (e.g. outside market hours, rate limit, or token issue).
       // Return graceful 200 with null so the chart shows "unavailable" instead of error banner.
@@ -348,7 +378,7 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
         const todayStr = now.toISOString().split("T")[0];
 
         try {
-          const raw = await dhanClient.getAllLedger(allTimeStartStr, todayStr);
+          const raw = await cachedGetAllLedger(allTimeStartStr, todayStr);
           const pts = buildEquityCurvePoints(raw);
           res.json(pts);
           return;
@@ -377,8 +407,8 @@ router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
 
     if (useLedger) {
       try {
-        const raw = await dhanClient.getLedger(fromStr, toStr);
-        res.json(buildEquityCurvePoints(raw));
+        const raw = await cachedGetLedger(fromStr, toStr);
+        res.json(buildEquityCurvePoints(raw as unknown[]));
         return;
       } catch (err) {
         req.log.error({ err }, "equity-curve ledger error");
