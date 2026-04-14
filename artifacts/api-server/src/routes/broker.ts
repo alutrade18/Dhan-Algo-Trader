@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, settingsTable } from "@workspace/db";
+import { db, settingsTable, equityCurveCacheTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { marketFeedWS } from "../lib/market-feed-ws";
 import { orderUpdateWS } from "../lib/order-update-ws";
 import { getRateLimitStats } from "../lib/rate-limiter";
 import { encryptToken, decryptToken } from "../lib/crypto-utils";
+import { clearLedgerCache } from "../lib/ledger-cache";
 
 const router: IRouter = Router();
 
@@ -95,19 +96,32 @@ router.post("/broker/connect", async (req, res): Promise<void> => {
 });
 
 router.post("/broker/disconnect", async (req, res): Promise<void> => {
+  // 1. Disconnect all live connections
   dhanClient.disconnect();
   marketFeedWS.disconnect();
   orderUpdateWS.disconnect();
 
+  // 2. Clear in-memory ledger cache — prevents stale data bleeding into a new session
+  clearLedgerCache();
+
+  // 3. Clear broker credentials from DB (Client ID + Access Token)
   try {
     const settings = await getOrCreateSettings();
     await db
       .update(settingsTable)
       .set({ brokerClientId: null, brokerAccessToken: null })
       .where(eq(settingsTable.id, settings.id));
-    req.log.info("Broker credentials cleared from memory and database");
+    req.log.info("Broker credentials cleared from database");
   } catch (e) {
     req.log.error({ err: e }, "Failed to clear broker credentials from database");
+  }
+
+  // 4. Clear equity curve cache from DB — cached ledger data belongs to this account only
+  try {
+    await db.delete(equityCurveCacheTable);
+    req.log.info("Equity curve cache cleared from database");
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to clear equity curve cache from database");
   }
 
   res.json({ success: true, message: "Disconnected from broker" });

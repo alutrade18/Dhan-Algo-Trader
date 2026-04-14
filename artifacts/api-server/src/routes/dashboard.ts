@@ -3,38 +3,9 @@ import { dhanClient } from "../lib/dhan-client";
 import { db, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getCachedEquityCurve } from "../lib/equity-scheduler";
+import { cachedGetLedger, cachedGetAllLedger } from "../lib/ledger-cache";
 
 const router: IRouter = Router();
-
-// ── Server-side ledger cache ───────────────────────────────────────────────
-// Dhan ledger API has strict rate limits (DH-904).
-// Caching responses avoids hammering it from multiple simultaneous endpoints.
-//   - Short ranges (≤90d): 3-minute TTL
-//   - Long/all-time ranges (>90d): 15-minute TTL
-const LEDGER_CACHE: Map<string, { data: unknown; ts: number }> = new Map();
-
-function ledgerTTL(fromStr: string, toStr: string): number {
-  const diffDays = (new Date(toStr).getTime() - new Date(fromStr).getTime()) / 86_400_000;
-  return diffDays <= 90 ? 3 * 60_000 : 15 * 60_000;
-}
-
-async function cachedGetLedger(fromStr: string, toStr: string): Promise<unknown> {
-  const key = `ledger:${fromStr}:${toStr}`;
-  const hit = LEDGER_CACHE.get(key);
-  if (hit && Date.now() - hit.ts < ledgerTTL(fromStr, toStr)) return hit.data;
-  const data = await dhanClient.getLedger(fromStr, toStr);
-  LEDGER_CACHE.set(key, { data, ts: Date.now() });
-  return data;
-}
-
-async function cachedGetAllLedger(fromStr: string, toStr: string): Promise<Record<string, unknown>[]> {
-  const key = `allLedger:${fromStr}:${toStr}`;
-  const hit = LEDGER_CACHE.get(key);
-  if (hit && Date.now() - hit.ts < ledgerTTL(fromStr, toStr)) return hit.data as Record<string, unknown>[];
-  const data = await dhanClient.getAllLedger(fromStr, toStr);
-  LEDGER_CACHE.set(key, { data, ts: Date.now() });
-  return data;
-}
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   try {
