@@ -41,6 +41,15 @@ function istHHMM(): { h: number; m: number } {
   return { h: ist.getHours(), m: ist.getMinutes() };
 }
 
+/** Returns true on IST Saturday (6) or Sunday (0) — equity curve doesn't change on weekends. */
+function isWeekendIST(): boolean {
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60_000;
+  const ist = new Date(utcMs + 5.5 * 3_600_000);
+  const day = ist.getDay(); // 0=Sun, 6=Sat
+  return day === 0 || day === 6;
+}
+
 /** Milliseconds until the next occurrence of HH:MM IST. */
 function msUntilISTTime(targetH: number, targetM: number): number {
   const now = new Date();
@@ -172,6 +181,11 @@ async function fetchAndCacheMode(cacheKey: string, fromStr: string, toStr: strin
 export async function refreshAllEquityCache(): Promise<void> {
   if (!dhanClient.isConfigured()) {
     logger.info("[EquityScheduler] Broker not connected — skipping refresh");
+    return;
+  }
+
+  if (isWeekendIST()) {
+    logger.info("[EquityScheduler] Weekend — equity curve doesn't change, skipping refresh");
     return;
   }
 

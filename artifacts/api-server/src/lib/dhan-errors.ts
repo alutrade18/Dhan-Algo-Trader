@@ -3,6 +3,7 @@ export interface DhanErrorInfo {
   httpStatus: number;
   message: string;
   retryable: boolean;
+  retryAfterMs?: number;
 }
 
 export const TRADING_API_ERRORS: Record<string, DhanErrorInfo> = {
@@ -150,10 +151,9 @@ export const DATA_API_ERRORS: Record<number, DhanErrorInfo> = {
 };
 
 export const RATE_LIMITS_REFERENCE = {
-  order:      { perSecond: 10,  perMinute: 250,       perHour: 1000,      perDay: 7000,   modificationCapPerOrder: 25 },
-  data:       { perSecond: 5,   perMinute: null,       perHour: null,      perDay: 100000 },
-  quote:      { perSecond: 1,   perMinute: "Unlimited", perHour: "Unlimited", perDay: "Unlimited" },
-  nontrading: { perSecond: 20,  perMinute: "Unlimited", perHour: "Unlimited", perDay: "Unlimited" },
+  order:      { perSecond: 25,  perMinute: 250,         perHour: 1000,         perDay: 7000,         modificationCapPerOrder: 25 },
+  data:       { perSecond: 10,  perMinute: 1000,        perHour: 5000,         perDay: "Unlimited" },
+  nontrading: { perSecond: 20,  perMinute: "Unlimited", perHour: "Unlimited",  perDay: "Unlimited" },
 } as const;
 
 export function resolveDhanError(rawData: unknown): DhanErrorInfo | null {

@@ -1,4 +1,4 @@
-import { useGetSettings } from "@workspace/api-client-react";
+import { useGetSettings, useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,6 +37,11 @@ export default function RiskManager() {
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
 
+  // Shared health cache — same query key as app-layout, so no extra fetch
+  const { data: healthRaw } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 25_000 } });
+  const _rh = healthRaw as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
+  const anyMarketOpenRisk = (_rh?.nseOpen ?? false) || (_rh?.mcxOpen ?? false);
+
   const [autoSquareOffEnabled, setAutoSquareOffEnabled] = useState(false);
   const [autoSquareOffTime, setAutoSquareOffTime] = useState("15:14");
 
@@ -68,7 +73,7 @@ export default function RiskManager() {
   }, [settingsData?.id]);
 
   const { data: ksStatus, refetch: refetchKs } = useQuery<KillSwitchStatus>({
-    queryKey: ["killswitch-status"], enabled: isConnected, refetchInterval: 15000, staleTime: 0, gcTime: 0,
+    queryKey: ["killswitch-status"], enabled: isConnected, refetchInterval: isConnected && anyMarketOpenRisk ? 15000 : false, staleTime: 0, gcTime: 0,
     queryFn: async () => { if (!isConnected) return {}; const r = await fetch(`${BASE}api/risk/killswitch`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }); if (!r.ok) return {}; return r.json(); },
   });
 

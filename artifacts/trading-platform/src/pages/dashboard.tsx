@@ -3,6 +3,9 @@ import {
   useGetFundLimits,
   getGetFundLimitsQueryKey,
   useGetSettings,
+  getGetSettingsQueryKey,
+  useHealthCheck,
+  getHealthCheckQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -271,7 +274,7 @@ function CustomTooltip({
 }
 
 export default function Dashboard() {
-  const { data: settingsRaw } = useGetSettings({ query: { staleTime: 60_000 } });
+  const { data: settingsRaw } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey(), staleTime: 60_000 } });
   const settings = settingsRaw as (typeof settingsRaw & { dashboardWidgets?: Record<string, boolean> }) | undefined;
   const widgets = {
     todayPnl: settings?.dashboardWidgets?.todayPnl !== false,
@@ -280,6 +283,13 @@ export default function Dashboard() {
     activeStrategies: settings?.dashboardWidgets?.activeStrategies !== false,
     equityCurve: settings?.dashboardWidgets?.equityCurve !== false,
   };
+
+  // Shared health check — same cache as app-layout (no extra request).
+  // Used to gate position/killswitch polling: when market is fully closed
+  // (weekend, holiday, after-hours) we stop hammering Dhan's API.
+  const { data: healthRaw } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 25_000 } });
+  const healthForGate = healthRaw as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
+  const anyMarketOpen = (healthForGate?.nseOpen ?? false) || (healthForGate?.mcxOpen ?? false);
 
   const { data: funds, isLoading: isFundsLoading } = useGetFundLimits({
     query: {
@@ -346,13 +356,15 @@ export default function Dashboard() {
       if (!res.ok) return {};
       return res.json();
     },
-    refetchInterval: 15_000,
+    // Only poll killswitch during market hours — pointless + wasteful to check outside
+    refetchInterval: anyMarketOpen ? 15_000 : false,
     staleTime: 0,
     gcTime: 0,
   });
 
   // Shared positions cache — same queryKey as Positions page, so no extra Dhan API call.
   // todayPnl is computed here instead of being fetched from the summary endpoint.
+  // Only auto-refresh during market hours; outside hours the data doesn't change.
   const { data: positions = [], isLoading: isPositionsLoading } = useQuery<DhanPosition[]>({
     queryKey: ["positions"],
     queryFn: async () => {
@@ -361,7 +373,7 @@ export default function Dashboard() {
       const raw = await res.json();
       return Array.isArray(raw) ? raw : [];
     },
-    refetchInterval: 5_000,
+    refetchInterval: anyMarketOpen ? 5_000 : false,
     staleTime: 3_000,
   });
 

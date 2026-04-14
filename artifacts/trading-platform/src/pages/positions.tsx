@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -54,8 +55,8 @@ interface DhanPosition {
   crossCurrency?: boolean;
 }
 
-// Data APIs: 5 req/sec, 100k/day — 3s polling = safe within limits
-const REFETCH_MS         = 3_000;
+// Data API limit: 10/s, 1000/min, 5000/hr — poll every 5 s during market hours only
+const REFETCH_MS         = 5_000;
 const REFRESH_COOLDOWN   = 2_000;
 
 const isClosed      = (p: DhanPosition) => (p.netQty ?? 0) === 0 || p.positionType === "CLOSED";
@@ -80,6 +81,11 @@ export default function Positions() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const unsubsRef = useRef<Array<() => void>>([]);
 
+  // Shared health cache (same key as app-layout — no extra fetch)
+  const { data: healthRaw } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 25_000 } });
+  const _h = healthRaw as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
+  const anyMarketOpen = (_h?.nseOpen ?? false) || (_h?.mcxOpen ?? false);
+
   const { data: positions = [], isLoading, isError, dataUpdatedAt } = useQuery<DhanPosition[]>({
     queryKey: ["positions"],
     queryFn: async () => {
@@ -88,7 +94,8 @@ export default function Positions() {
       const raw = await res.json();
       return Array.isArray(raw) ? raw : [];
     },
-    refetchInterval: REFETCH_MS,
+    // Gate auto-refresh on market status — no need to poll when market is closed
+    refetchInterval: anyMarketOpen ? REFETCH_MS : false,
   });
 
   useEffect(() => { if (dataUpdatedAt) setLastUpdated(new Date(dataUpdatedAt)); }, [dataUpdatedAt]);

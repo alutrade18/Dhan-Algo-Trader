@@ -1,7 +1,38 @@
 import { logger } from "./logger";
 import { resolveDhanError, type DhanErrorInfo } from "./dhan-errors";
+import { checkRateLimit, type ApiCategory } from "./rate-limiter";
 
 const DHAN_BASE_URL = "https://api.dhan.co/v2";
+
+// ── Map every Dhan endpoint to an API category ────────────────────────────────
+// Order API  : POST/PUT/DELETE on order-placement endpoints
+// Data API   : all read (GET) + market data + historical/charting
+// Non-Trading: killswitch, instruments, margin calculator, alerts
+function getApiCategory(method: string, path: string): ApiCategory {
+  const m = method.toUpperCase();
+  const p = path.toLowerCase();
+
+  // Order mutations (POST/PUT/DELETE on trading endpoints)
+  if (m !== "GET") {
+    if (p.startsWith("/orders") || p.startsWith("/superorder") || p.startsWith("/forever")) {
+      return "order";
+    }
+  }
+
+  // Non-trading endpoints (independent of method)
+  if (
+    p.startsWith("/killswitch") ||
+    p.startsWith("/compact/instruments") ||
+    p.startsWith("/margincalculator") ||
+    p.startsWith("/alerts")
+  ) {
+    return "nontrading";
+  }
+
+  // Everything else: data reads (positions, holdings, orders-read, trades, ledger,
+  // market feed, charts, option chain, fund limits, super-order reads)
+  return "data";
+}
 
 const credentials = {
   clientId: process.env.DHAN_CLIENT_ID || "",
@@ -21,6 +52,28 @@ async function dhanRequest(
     "access-token": creds.accessToken,
     "client-id": creds.clientId,
   };
+
+  // ── Enforce rate limit before hitting Dhan ────────────────────────────────
+  const category = getApiCategory(method, path);
+  const rl = checkRateLimit(category);
+  if (!rl.allowed) {
+    const retryMs = rl.retryAfterMs ?? 1000;
+    logger.warn(
+      { category, window: rl.violatedWindow, retryAfterMs: retryMs, path },
+      `[RateLimit] ${category} ${rl.violatedWindow} limit — blocking Dhan call`,
+    );
+    // Surface as a 429 so routes can propagate it to the frontend
+    throw new DhanApiError(429, {
+      errorCode: "DH-904",
+      errorMessage: `Rate limit exceeded (${category} ${rl.violatedWindow}). Retry in ${Math.ceil(retryMs / 1000)}s.`,
+    }, {
+      code: "DH-904",
+      message: `Rate limit: retry in ${Math.ceil(retryMs / 1000)}s`,
+      httpStatus: 429,
+      retryable: true,
+      retryAfterMs: retryMs,
+    });
+  }
 
   logger.info({ method, path }, "Dhan API request");
 
@@ -76,6 +129,7 @@ export class DhanApiError extends Error {
           ? `${this.errorInfo.message} (${rawMessage})`
           : this.errorInfo.message,
         retryable: this.errorInfo.retryable,
+        retryAfterMs: this.errorInfo.retryAfterMs,
         raw: this.data,
       };
     }
@@ -83,6 +137,7 @@ export class DhanApiError extends Error {
       errorCode: `HTTP-${this.status}`,
       errorMessage: rawMessage ?? "An unexpected error occurred with the broker API.",
       retryable: false,
+      retryAfterMs: undefined,
       raw: this.data,
     };
   }

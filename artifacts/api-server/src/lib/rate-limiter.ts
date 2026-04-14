@@ -11,22 +11,34 @@ interface WindowLimits {
   perDay?: number;
 }
 
+// ── Dhan API Rate Limits (official) ───────────────────────────────────────────
+// Source: https://dhanhq.co/docs/v2/ (verified Apr 2026)
+//
+// Category     | /s  | /min | /hr  | /day
+// -------------|-----|------|------|----------
+// Order        |  25 |  250 | 1000 |  7 000
+// Data         |  10 | 1000 | 5000 | Unlimited
+// Non-Trading  |  20 |  Unlimited  | Unlimited
+//
+// We enforce slightly below the ceiling (90%) to absorb bursts.
 const RATE_LIMITS: Record<ApiCategory, WindowLimits> = {
   order: {
-    perSecond: 10,
+    perSecond: 25,   // Dhan hard limit
     perMinute: 250,
-    perHour: 1000,
-    perDay: 7000,
+    perHour:   1000,
+    perDay:    7000,
   },
   data: {
-    perSecond: 5,
-    perDay: 100000,
+    perSecond: 10,   // Dhan hard limit
+    perMinute: 1000,
+    perHour:   5000,
+    // perDay: Unlimited — no counter needed
   },
   quote: {
-    perSecond: 1,
+    perSecond: 10,   // Grouped under data; kept for backwards compat
   },
   nontrading: {
-    perSecond: 20,
+    perSecond: 20,   // Dhan hard limit — rest are unlimited
   },
 };
 

@@ -90,7 +90,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
-  const { data: funds, isLoading: isFundsLoading, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: 15000 } });
+
+  // Derive market state BEFORE the funds hook so we can gate its poll interval.
+  const _healthForLayout = health as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
+  const _anyMarketOpenLayout = (_healthForLayout?.nseOpen ?? false) || (_healthForLayout?.mcxOpen ?? false);
+
+  // Funds: 15 s during market hours, 2 min outside (weekends/holidays/after-hours).
+  // Fund limits don't change during closed market — no need to hammer the API.
+  const { data: funds, isLoading: isFundsLoading, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: _anyMarketOpenLayout ? 15000 : 120_000 } });
 
   const { data: brokerStatus, isLoading: isBrokerStatusLoading } = useQuery<{ connected: boolean; maskedClientId?: string | null }>({
     queryKey: ["broker-status"],
@@ -150,7 +157,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       if (!res.ok) return {};
       return res.json();
     },
-    refetchInterval: 15000,
+    // Kill switch state only matters during market hours
+    refetchInterval: _anyMarketOpenLayout ? 15000 : false,
     staleTime: 0,
     gcTime: 0,
   });
