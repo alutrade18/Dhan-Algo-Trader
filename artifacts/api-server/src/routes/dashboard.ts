@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
 import { db, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { getCachedEquityCurve } from "../lib/equity-scheduler";
 
 const router: IRouter = Router();
 
@@ -38,27 +39,22 @@ async function cachedGetAllLedger(fromStr: string, toStr: string): Promise<Recor
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   try {
     const now = new Date();
-    // Fetch 3 years of ledger history to capture all deposits/withdrawals since account opening
+    // All-time ledger: served from DB equity cache; fall back to cached Dhan call.
+    // Positions/orders/trades are no longer fetched here — the frontend shares the
+    // ["positions"] TanStack Query cache with the Positions page (no duplicate calls).
     const allTimeStart = new Date(now);
     allTimeStart.setFullYear(allTimeStart.getFullYear() - 3);
     const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
     const todayStr = now.toISOString().split("T")[0];
 
-    // Fire all Dhan + DB calls in parallel
-    const [
-      fundsResult, positionsResult, holdingsResult, ledgerResult, ordersResult, tradesResult,
-      settingsResult, killSwitchResult,
-    ] = await Promise.allSettled([
-      dhanClient.getFundLimits(),
-      dhanClient.getPositions(),
-      dhanClient.getHoldings(),
-      cachedGetAllLedger(allTimeStartStr, todayStr),
-      dhanClient.getOrders(),
-      dhanClient.getTradeBook(),
-      db.select().from(settingsTable),
-      // Fetch REAL-TIME kill switch status from Dhan API — not from DB
-      dhanClient.getKillSwitchStatus(),
-    ]);
+    // Only 3 Dhan API calls (down from 7): funds + ledger (cached) + killswitch
+    const [fundsResult, ledgerResult, settingsResult, killSwitchResult] =
+      await Promise.allSettled([
+        dhanClient.getFundLimits(),
+        cachedGetAllLedger(allTimeStartStr, todayStr),
+        db.select().from(settingsTable),
+        dhanClient.getKillSwitchStatus(),
+      ]);
 
     let availableBalance = 0, usedMargin = 0;
     if (fundsResult.status === "fulfilled") {
@@ -67,22 +63,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       usedMargin = Number(funds.utilizedAmount || 0);
     }
 
-    let openPositions = 0, todayPnl = 0;
-    if (positionsResult.status === "fulfilled") {
-      const positions = positionsResult.value as Record<string, unknown>[];
-      if (Array.isArray(positions)) {
-        openPositions = positions.length;
-        todayPnl = positions.reduce((s, p) => s + Number(p.realizedProfit || 0) + Number(p.unrealizedProfit || 0), 0);
-      }
-    }
-
-    const totalHoldings = holdingsResult.status === "fulfilled" && Array.isArray(holdingsResult.value)
-      ? (holdingsResult.value as unknown[]).length : 0;
-
-    // All-Time P&L: sum (credit − debit) for genuine trading entries in the full ledger.
-    // Uses isNonTradingEntry() to exclude deposits, withdrawals, quarterly settlements,
-    // and platform fees — same logic as the period-pnl endpoint.
-    // NOTE: isNonTradingEntry is defined later in this file but hoisted at runtime.
+    // All-Time P&L: from ledger (in-memory cached, or DB equity cache used by scheduler)
     let totalPnl = 0;
     if (ledgerResult.status === "fulfilled") {
       const entries = Array.isArray(ledgerResult.value) ? (ledgerResult.value as Record<string, unknown>[]) : [];
@@ -98,59 +79,39 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
         totalPnl += safeCredit - safeDebit;
       }
       totalPnl = Math.round(totalPnl * 100) / 100;
-    } else {
-      req.log.warn({ err: (ledgerResult as PromiseRejectedResult).reason }, "Ledger fetch failed");
     }
 
-    let pendingOrders = 0;
-    if (ordersResult.status === "fulfilled" && Array.isArray(ordersResult.value)) {
-      pendingOrders = (ordersResult.value as Record<string, unknown>[]).filter(o => o.orderStatus === "PENDING").length;
-    }
-
-    const todayTrades = tradesResult.status === "fulfilled" && Array.isArray(tradesResult.value)
-      ? (tradesResult.value as unknown[]).length : 0;
-
-    const settings = settingsResult.status === "fulfilled" ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null; id?: number }[])[0] : null;
-    // maxDailyLoss = 0 means "not configured" — treat as null so it never false-triggers
+    const settings = settingsResult.status === "fulfilled"
+      ? (settingsResult.value as { killSwitchEnabled?: boolean; maxDailyLoss?: string | null; id?: number }[])[0]
+      : null;
     const rawMaxDailyLoss = settings?.maxDailyLoss ? Number(settings.maxDailyLoss) : null;
     const maxDailyLoss = rawMaxDailyLoss !== null && rawMaxDailyLoss > 0 ? rawMaxDailyLoss : null;
 
-    // Use REAL-TIME kill switch status from Dhan API
     const ksData = killSwitchResult.status === "fulfilled"
       ? (killSwitchResult.value as Record<string, unknown>)
       : null;
     const dhanKsActive =
-      ksData?.killSwitchStatus === "ACTIVATE" ||
-      ksData?.killSwitchStatus === "ACTIVE";
+      ksData?.killSwitchStatus === "ACTIVATE" || ksData?.killSwitchStatus === "ACTIVE";
 
-    // If Dhan says KS is off but our DB still shows it on, sync the DB silently
     const dbKsEnabled = settings?.killSwitchEnabled ?? false;
     if (dbKsEnabled && !dhanKsActive && settings?.id !== undefined) {
       db.update(settingsTable)
         .set({ killSwitchEnabled: false, updatedAt: new Date() })
         .where(eq(settingsTable.id, settings.id))
-        .catch(() => {/* silent sync */});
+        .catch(() => {});
     }
 
     const killSwitchEnabled = dhanKsActive;
-    // Daily loss = abs of negative today P&L from live positions (real-time)
-    const dailyLossAmount = Math.abs(Math.min(0, todayPnl));
-    const killSwitchTriggered = killSwitchEnabled || (maxDailyLoss !== null && dailyLossAmount >= maxDailyLoss);
 
+    // todayPnl / dailyLossAmount are computed on the frontend from the shared positions
+    // cache (same data used by the Positions page — no extra API call needed).
     res.json({
       totalPnl,
-      todayPnl,
       availableBalance,
       usedMargin,
-      openPositions,
-      totalHoldings,
-      pendingOrders,
       activeStrategies: 0,
-      todayTrades,
       winRate: 0,
-      killSwitchTriggered,
       killSwitchEnabled,
-      dailyLossAmount,
       maxDailyLoss,
     });
   } catch (e) {
@@ -353,106 +314,75 @@ function buildEquityCurvePoints(
 
 router.get("/dashboard/equity-curve", async (req, res): Promise<void> => {
   try {
-    const source = String(req.query.source ?? "local");
-    const useDhan = source === "dhan";
-    const useLedger = source === "ledger";
-    const points: Array<{ date: string; pnl: number; cumulative: number; runbal?: number; type?: string; label?: string }> = [];
+    // ── Determine the cache key for this request ─────────────────────────
+    // Standard preset modes: served from DB equity cache (populated by scheduler).
+    // Custom date ranges: served directly from in-memory ledger cache.
+    let cacheKey: string | null = null;
 
-    let startDate: Date;
-    let endDate: Date;
-
-    if (req.query.fromDate && req.query.toDate) {
-      startDate = new Date(String(req.query.fromDate) + "T00:00:00Z");
-      endDate = new Date(String(req.query.toDate) + "T00:00:00Z");
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
-        res.status(400).json({ error: "Invalid date range" });
-        return;
-      }
-    } else if (req.query.allTime === "true") {
-      if (useLedger) {
-        // For all-time ledger: use getAllLedger with 3-year window (same as summary endpoint)
-        const now = new Date();
-        const allTimeStart = new Date(now);
-        allTimeStart.setFullYear(allTimeStart.getFullYear() - 3);
-        const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
-        const todayStr = now.toISOString().split("T")[0];
-
-        try {
-          const raw = await cachedGetAllLedger(allTimeStartStr, todayStr);
-          const pts = buildEquityCurvePoints(raw);
-          res.json(pts);
-          return;
-        } catch (err) {
-          req.log.error({ err }, "equity-curve allTime ledger error");
-          res.json([]);
-          return;
-        }
-      }
-      // No local trade log source — use ledger or dhan for all-time equity
-      if (!useDhan) { res.json([]); return; }
-      startDate = new Date();
-      startDate.setFullYear(startDate.getFullYear() - 1);
-      endDate = new Date();
-      endDate.setHours(0, 0, 0, 0);
-    } else {
-      const days = parseInt(String(req.query.days || "7"), 10);
-      endDate = new Date();
-      endDate.setHours(0, 0, 0, 0);
-      startDate = new Date(endDate);
-      startDate.setDate(startDate.getDate() - (days - 1));
+    if (req.query.allTime === "true") {
+      cacheKey = "alltime";
+    } else if (req.query.days) {
+      const days = parseInt(String(req.query.days), 10);
+      if (days === 365) cacheKey = "365d";
+      else if (days === 30) cacheKey = "30d";
+      else if (days === 7) cacheKey = "7d";
     }
 
-    const fromStr = startDate.toISOString().split("T")[0];
-    const toStr = endDate.toISOString().split("T")[0];
-
-    if (useLedger) {
-      try {
-        const raw = await cachedGetLedger(fromStr, toStr);
-        res.json(buildEquityCurvePoints(raw as unknown[]));
+    // ── DB cache first for all standard presets ───────────────────────────
+    if (cacheKey) {
+      const cached = await getCachedEquityCurve(cacheKey);
+      if (cached && cached.length > 0) {
+        res.json(cached);
         return;
+      }
+      // DB cache miss: compute on-the-fly from in-memory ledger cache
+      // and serve immediately (scheduler will persist it next scheduled run)
+      const now = new Date();
+      let fromStr: string;
+      const toStr = now.toISOString().split("T")[0];
+      if (cacheKey === "alltime") {
+        const t = new Date(now);
+        t.setFullYear(t.getFullYear() - 3);
+        fromStr = t.toISOString().split("T")[0];
+      } else {
+        const daysMap: Record<string, number> = { "365d": 364, "30d": 29, "7d": 6 };
+        const t = new Date(now);
+        t.setDate(t.getDate() - (daysMap[cacheKey] ?? 6));
+        fromStr = t.toISOString().split("T")[0];
+      }
+      try {
+        const raw = cacheKey === "alltime"
+          ? await cachedGetAllLedger(fromStr, toStr)
+          : await cachedGetLedger(fromStr, toStr);
+        res.json(buildEquityCurvePoints(raw));
       } catch (err) {
-        req.log.error({ err }, "equity-curve ledger error");
+        req.log.error({ err, cacheKey }, "equity-curve preset fallback error");
         res.json([]);
-        return;
       }
-    } else if (useDhan) {
-      try {
-        const trades = await dhanClient.getAllTradeHistory(fromStr, toStr);
-        const dailyMap = new Map<string, number>();
-
-        for (const t of trades as Record<string, unknown>[]) {
-          const timeStr = String(t.exchangeTradeTime ?? t.createTime ?? "");
-          const dateKey = timeStr.split(" ")[0] ?? timeStr.split("T")[0];
-          if (!dateKey || dateKey.length < 10) continue;
-          const profit = parseFloat(String(t.realizedProfit ?? t.profit ?? 0));
-          if (!isNaN(profit)) {
-            dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + profit);
-          }
-        }
-
-        const cur = new Date(startDate);
-        while (cur <= endDate) {
-          const key = cur.toISOString().split("T")[0];
-          points.push({ date: key, pnl: Math.round((dailyMap.get(key) ?? 0) * 100) / 100, cumulative: 0 });
-          cur.setDate(cur.getDate() + 1);
-        }
-      } catch {
-        res.json([]);
-        return;
-      }
-    } else {
-      // No local trade log source — return empty; use source=ledger or source=dhan
-      res.json([]);
       return;
     }
 
-    let cumulative = 0;
-    for (const p of points) {
-      cumulative += p.pnl;
-      p.cumulative = Math.round(cumulative * 100) / 100;
+    // ── Custom date range: use in-memory ledger cache ─────────────────────
+    if (req.query.fromDate && req.query.toDate) {
+      const fromStr = String(req.query.fromDate);
+      const toStr   = String(req.query.toDate);
+      const s = new Date(fromStr + "T00:00:00Z");
+      const e = new Date(toStr   + "T00:00:00Z");
+      if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) {
+        res.status(400).json({ error: "Invalid date range" });
+        return;
+      }
+      try {
+        const raw = await cachedGetLedger(fromStr, toStr);
+        res.json(buildEquityCurvePoints(raw));
+      } catch (err) {
+        req.log.error({ err }, "equity-curve custom range error");
+        res.json([]);
+      }
+      return;
     }
 
-    res.json(points);
+    res.json([]);
   } catch (e) {
     req.log.error({ err: e }, "Equity curve error");
     res.status(500).json({ error: "Failed to fetch equity curve" });

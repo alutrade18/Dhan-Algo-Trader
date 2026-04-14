@@ -261,7 +261,7 @@ export default function Settings() {
   const maskedAccessToken = settingsData?.dhanAccessToken ?? "";
 
   const { data: brokerStatus } = useQuery<FundDetails & { connected: boolean }>({
-    queryKey: ["broker-status"], enabled: isConnected, refetchInterval: 4_000, staleTime: 0, gcTime: 0,
+    queryKey: ["broker-status"], enabled: isConnected, refetchInterval: 30_000, staleTime: 0, gcTime: 0,
     queryFn: async () => { const r = await fetch(`${BASE}api/broker/status`); if (!r.ok) return { connected: false }; return r.json(); },
   });
 

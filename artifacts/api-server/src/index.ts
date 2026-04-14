@@ -10,6 +10,7 @@ import { setIO } from "./lib/io";
 import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
 import { startSuperOrderMonitor } from "./lib/super-order-monitor";
 import { startKillSwitchScheduler } from "./routes/risk";
+import { startEquityScheduler } from "./lib/equity-scheduler";
 import { decryptToken } from "./lib/crypto-utils";
 import { loadDailyCountersFromDb } from "./lib/rate-limiter";
 
@@ -81,6 +82,7 @@ loadSavedCredentials().then(async () => {
     startAutoSquareOffScheduler();
     startSuperOrderMonitor();
     startKillSwitchScheduler();
+    startEquityScheduler();
   });
 });
 

@@ -127,15 +127,20 @@ interface EquityPoint {
 }
 
 interface DashboardSummary {
-  todayPnl?: number;
   totalPnl?: number;
   activeStrategies?: number;
   winRate?: number;
-  killSwitchTriggered?: boolean;
-  dailyLossAmount?: number;
+  killSwitchEnabled?: boolean;
   maxDailyLoss?: number;
   availableBalance?: number;
   usedMargin?: number;
+}
+
+interface DhanPosition {
+  realizedProfit?: number;
+  unrealizedProfit?: number;
+  positionType?: string;
+  netQty?: number | string;
 }
 
 type DateMode = "alltime" | "7d" | "30d" | "365d" | "custom";
@@ -346,6 +351,20 @@ export default function Dashboard() {
     gcTime: 0,
   });
 
+  // Shared positions cache — same queryKey as Positions page, so no extra Dhan API call.
+  // todayPnl is computed here instead of being fetched from the summary endpoint.
+  const { data: positions = [], isLoading: isPositionsLoading } = useQuery<DhanPosition[]>({
+    queryKey: ["positions"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/positions`);
+      if (!res.ok) throw new Error("Failed");
+      const raw = await res.json();
+      return Array.isArray(raw) ? raw : [];
+    },
+    refetchInterval: 5_000,
+    staleTime: 3_000,
+  });
+
   const { data: equityCurve, isLoading: isEquityLoading } = useQuery<
     EquityPoint[]
   >({
@@ -366,8 +385,8 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    refetchInterval: 300_000,
-    staleTime: 240_000,
+    staleTime: 15 * 60 * 1_000,
+    gcTime: 30 * 60 * 1_000,
   });
 
   // Period P&L — fetched live from backend.
@@ -399,16 +418,23 @@ export default function Dashboard() {
     staleTime: 240_000,
   });
 
+  // today P&L — computed live from the shared positions cache (no extra API call)
+  const todayPnlFromPositions = positions.reduce(
+    (s, p) => s + Number(p.realizedProfit ?? 0) + Number(p.unrealizedProfit ?? 0),
+    0,
+  );
+  // dailyLossAmount = negative portion of todayPnl only
+  const dailyLossAmountFromPositions = Math.abs(Math.min(0, todayPnlFromPositions));
+
   // Kill switch: ONLY trust real-time Dhan API (from dedicated /risk/killswitch endpoint)
   const dhanKillActive =
     ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE";
-  // Daily loss trigger: compute directly from raw figures.
+  // Daily loss trigger: maxDailyLoss from summary (settings DB), loss amount from positions.
   // Guard: maxDailyLoss must be > 0 to be meaningful — 0 means "not configured".
   const dailyLossTriggered =
     summary?.maxDailyLoss != null &&
     summary.maxDailyLoss > 0 &&
-    summary?.dailyLossAmount != null &&
-    summary.dailyLossAmount >= summary.maxDailyLoss;
+    dailyLossAmountFromPositions >= summary.maxDailyLoss;
   const killTriggered = dhanKillActive || dailyLossTriggered;
 
   // Total P&L card:
@@ -475,7 +501,7 @@ export default function Dashboard() {
     scheduleAutoReset();
   }
 
-  const todayPnl = summary?.todayPnl ?? 0;
+  const todayPnl = todayPnlFromPositions;
   const activeStrategies = summary?.activeStrategies ?? 0;
   const winRate = summary?.winRate ?? 0;
   const availBal = fundsData?.availableBalance ?? summary?.availableBalance;
@@ -493,7 +519,7 @@ export default function Dashboard() {
             <p className="text-xs mt-0.5 text-destructive/80">
               {dhanKillActive
                 ? `Dhan kill switch is active. ${ksStatus?.canDeactivateToday ? "Go to Settings to deactivate (1 reset remaining today)." : "Auto-resets at midnight IST — fresh trading resumes next day."}`
-                : `Daily loss limit of ${formatCurrency(summary?.maxDailyLoss)} reached (loss: ${formatCurrency(summary?.dailyLossAmount)}). Trading blocked for today.`}
+                : `Daily loss limit of ${formatCurrency(summary?.maxDailyLoss)} reached (loss: ${formatCurrency(dailyLossAmountFromPositions)}). Trading blocked for today.`}
             </p>
           </div>
           <Badge variant="destructive" className="text-xs">
@@ -510,7 +536,7 @@ export default function Dashboard() {
               value={formatCurrency(todayPnl)}
               inlineTag="Realized + Unrealized"
               icon={TrendingUp}
-              isLoading={isSummaryLoading}
+              isLoading={isPositionsLoading}
               valueClass={todayPnl > 0 ? "text-success" : todayPnl < 0 ? "text-destructive" : ""}
             />
           )}
