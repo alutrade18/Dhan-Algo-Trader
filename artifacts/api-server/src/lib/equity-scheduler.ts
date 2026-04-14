@@ -53,7 +53,7 @@ function isWeekendIST(): boolean {
 let _holidayCache: Set<string> | null = null;
 let _holidayCacheDate = "";
 
-async function isNseHolidayToday(): Promise<boolean> {
+export async function isNseHolidayToday(): Promise<boolean> {
   const today = todayIST();
   if (_holidayCacheDate === today && _holidayCache !== null) {
     return _holidayCache.has(today);

@@ -2,6 +2,7 @@ import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "./dhan-client";
 import { sendTelegramAlert } from "./telegram";
 import { logger } from "./logger";
+import { isNseHolidayToday } from "./equity-scheduler";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
@@ -34,6 +35,7 @@ async function checkAndSquareOff(): Promise<void> {
     const { hours, minutes, timeStr, dateStr } = nowIST();
     if (!isWeekday(dateStr)) return;
     if (lastSquareOffDate === dateStr) return;
+    if (await isNseHolidayToday()) return;
 
     const targetTime = settings.autoSquareOffTime ?? "15:14";
     const [targetH, targetM] = targetTime.split(":").map(Number);

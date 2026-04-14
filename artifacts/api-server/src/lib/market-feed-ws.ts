@@ -58,7 +58,6 @@ class MarketFeedWS extends EventEmitter {
     this.ws.on("open", () => {
       logger.info("MarketFeedWS connected");
       this.connected = true;
-      this.reconnectDelay = MIN_RECONNECT_MS;
       this.emit("connected");
       this.resubscribeAll();
     });
@@ -102,6 +101,10 @@ class MarketFeedWS extends EventEmitter {
     }, delay);
   }
 
+  private onValidPacketReceived() {
+    this.reconnectDelay = MIN_RECONNECT_MS;
+  }
+
   private parsePacket(buf: Buffer) {
     if (buf.length < 8) return;
     const responseCode = buf.readUInt8(0);
@@ -114,6 +117,7 @@ class MarketFeedWS extends EventEmitter {
       const ltp = buf.readFloatLE(8);
       const ltt = buf.readInt32LE(12);
       const tick: TickData = { securityId: Math.abs(securityId), exchangeSegment: exchSeg, ltp, ltt };
+      this.onValidPacketReceived();
       this.emit("tick", tick);
     } else if (responseCode === 4) {
       if (buf.length < 40) return;
@@ -125,6 +129,7 @@ class MarketFeedWS extends EventEmitter {
       const close = buf.readFloatLE(28);
       const volume = buf.readInt32LE(32);
       const quote: QuoteData = { securityId: Math.abs(securityId), exchangeSegment: exchSeg, ltp, ltt, open, high, low, close, volume };
+      this.onValidPacketReceived();
       this.emit("quote", quote);
       this.emit("tick", { securityId: quote.securityId, exchangeSegment: exchSeg, ltp, ltt });
     } else if (responseCode === 50) {

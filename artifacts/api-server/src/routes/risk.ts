@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
-import { db, settingsTable } from "@workspace/db";
+import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { sendTelegramAlert } from "../lib/telegram";
-import { eq } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -47,6 +48,39 @@ function recordDeactivation() {
     deactivationTracker.count = 0;
   }
   deactivationTracker.count += 1;
+  void db.insert(auditLogTable).values({
+    action: "KILL_SWITCH_DEACTIVATE",
+    description: `Kill switch deactivated (count ${deactivationTracker.count} on ${today})`,
+  }).catch((e) => logger.warn({ err: e }, "Failed to log kill switch deactivation to audit log"));
+}
+
+/**
+ * Load today's deactivation count from the audit log so the 1/day limit
+ * survives server restarts. Call once from index.ts after the DB is ready.
+ */
+export async function initDeactivationTracker(): Promise<void> {
+  try {
+    const today = getISTDateString();
+    const todayISTMidnightUTC = new Date(`${today}T00:00:00.000Z`);
+    todayISTMidnightUTC.setTime(todayISTMidnightUTC.getTime() - 5.5 * 60 * 60 * 1000);
+
+    const rows = await db
+      .select()
+      .from(auditLogTable)
+      .where(
+        and(
+          eq(auditLogTable.action, "KILL_SWITCH_DEACTIVATE"),
+          gte(auditLogTable.changedAt, todayISTMidnightUTC),
+        ),
+      );
+    deactivationTracker.date = today;
+    deactivationTracker.count = rows.length;
+    logger.info({ count: deactivationTracker.count, date: today }, "[Risk] Kill switch deactivation tracker loaded from audit log");
+  } catch (e) {
+    logger.warn({ err: e }, "[Risk] Failed to load deactivation count from audit log — starting at 0");
+    deactivationTracker.date = getISTDateString();
+    deactivationTracker.count = 0;
+  }
 }
 
 async function autoDeactivateKillSwitch() {

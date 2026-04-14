@@ -8,11 +8,8 @@ const router: IRouter = Router();
 
 function todayIST(): string {
   const now = new Date();
-  const ist = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const yyyy = ist.getFullYear();
-  const mm = String(ist.getMonth() + 1).padStart(2, "0");
-  const dd = String(ist.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
 }
 
 interface DhanOrder {
@@ -202,6 +199,9 @@ router.post("/super-orders", async (req, res): Promise<void> => {
   }
 });
 
+const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "TARGET_HIT", "STOP_LOSS_HIT"] as const;
+type TerminalStatus = typeof TERMINAL_STATUSES[number];
+
 router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {
   if (!dhanClient.isConfigured()) {
     res.status(401).json({ error: "Broker not connected" });
@@ -209,7 +209,11 @@ router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {
   }
   try {
     const { orderId } = req.params;
-    const internalId = parseInt(orderId);
+    const internalId = parseInt(orderId, 10);
+    if (isNaN(internalId)) {
+      res.status(400).json({ error: "Invalid order ID" });
+      return;
+    }
 
     const [dbRecord] = await db
       .select()
@@ -221,11 +225,16 @@ router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {
       return;
     }
 
+    if (TERMINAL_STATUSES.includes(dbRecord.status as TerminalStatus)) {
+      res.status(409).json({ error: `Cannot cancel a super order that is already ${dbRecord.status}` });
+      return;
+    }
+
     if (dbRecord.dhanOrderId) {
       try {
         await dhanClient.cancelOrder(dbRecord.dhanOrderId);
       } catch {
-        // Best-effort: continue even if Dhan cancel fails (order may already be filled)
+        // Best-effort: continue even if Dhan cancel fails (order may already be filled/cancelled on exchange)
       }
     }
 

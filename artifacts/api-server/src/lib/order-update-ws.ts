@@ -51,7 +51,6 @@ class OrderUpdateWS extends EventEmitter {
     this.ws.on("open", () => {
       logger.info("OrderUpdateWS connected — sending auth");
       this.connected = true;
-      this.reconnectDelay = MIN_RECONNECT_MS;
       const authMsg = JSON.stringify({
         LoginReq: {
           MsgCode: 42,
@@ -79,6 +78,7 @@ class OrderUpdateWS extends EventEmitter {
         const json = JSON.parse(buf.toString("utf-8")) as OrderUpdate;
         if (!json || typeof json !== "object") return;
 
+        this.reconnectDelay = MIN_RECONNECT_MS;
         logger.info({ orderUpdate: json }, "OrderUpdateWS: order update received");
         this.emit("orderUpdate", json);
       } catch (e) {
