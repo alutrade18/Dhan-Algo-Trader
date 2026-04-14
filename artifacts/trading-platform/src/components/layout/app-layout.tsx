@@ -38,6 +38,8 @@ interface HealthData {
   marketOpen: boolean;
   marketName: string;
   marketClosedReason?: string;
+  nseOpen: boolean;
+  mcxOpen: boolean;
   brokerConnected: boolean;
   systemOnline: boolean;
 }
@@ -110,10 +112,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [location]);
 
   // Market status is derived from the backend health check (already polls every 30s).
-  // The backend uses the official NSE/MCX holiday calendar — handles public holidays correctly.
+  // The backend uses the official NSE/MCX holiday calendar, handles public holidays
+  // correctly, and distinguishes NSE-only vs MCX-only closures.
   const healthData = health as unknown as HealthData | undefined;
   const marketOpen = healthData?.marketOpen ?? false;
   const marketName = healthData?.marketName ?? "NSE";
+  const nseOpen    = healthData?.nseOpen ?? false;
+  const mcxOpen    = healthData?.mcxOpen ?? false;
   const brokerConnected = healthData?.brokerConnected ?? false;
   const systemOnline = marketOpen && brokerConnected;
 
@@ -320,14 +325,33 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             <div className="hidden sm:block h-4 w-[1px] bg-border" />
 
-            <div className="hidden md:flex items-center gap-1.5">
+            <div className="hidden md:flex items-center gap-2">
               <Activity className={cn("w-4 h-4", marketOpen ? "text-success" : "text-muted-foreground")} />
-              <span className="text-xs font-mono text-muted-foreground">
-                {marketName} Market:{" "}
-                <span className={cn("font-bold", marketOpen ? "text-success" : "text-destructive")}>
-                  {marketOpen ? "OPEN" : "CLOSED"}
+              {/* When NSE and MCX have different statuses, show both */}
+              {nseOpen !== mcxOpen ? (
+                <span className="text-xs font-mono text-muted-foreground flex items-center gap-1.5">
+                  <span>
+                    NSE:{" "}
+                    <span className={cn("font-bold", nseOpen ? "text-success" : "text-destructive")}>
+                      {nseOpen ? "OPEN" : "CLOSED"}
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground/40">|</span>
+                  <span>
+                    MCX:{" "}
+                    <span className={cn("font-bold", mcxOpen ? "text-success" : "text-destructive")}>
+                      {mcxOpen ? "OPEN" : "CLOSED"}
+                    </span>
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span className="text-xs font-mono text-muted-foreground">
+                  {marketName} Market:{" "}
+                  <span className={cn("font-bold", marketOpen ? "text-success" : "text-destructive")}>
+                    {marketOpen ? "OPEN" : "CLOSED"}
+                  </span>
+                </span>
+              )}
             </div>
 
             <div className="hidden md:block h-4 w-[1px] bg-border" />

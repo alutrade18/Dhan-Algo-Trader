@@ -15,6 +15,8 @@ router.get("/healthz", (_req, res) => {
     marketOpen: market.isOpen,
     marketName: market.name,
     marketClosedReason: market.closedReason,
+    nseOpen: market.nseOpen,
+    mcxOpen: market.mcxOpen,
     brokerConnected,
     systemOnline: market.isOpen && brokerConnected,
   });
