@@ -340,7 +340,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </span>
                   <span className="text-muted-foreground/40">|</span>
                   <span>
-                    MCX{mcxOpen && mcxSession !== "closed" ? ` (${mcxSession === "morning" ? "AM" : "PM"})` : ""}:{" "}
+                    MCX:{" "}
                     <span className={cn("font-bold", mcxOpen ? "text-success" : "text-destructive")}>
                       {mcxOpen ? "OPEN" : "CLOSED"}
                     </span>
@@ -348,7 +348,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </span>
               ) : (
                 <span className="text-xs font-mono text-muted-foreground">
-                  {marketName}{marketName === "MCX" && mcxSession !== "closed" ? ` (${mcxSession === "morning" ? "AM" : "PM"})` : ""} Market:{" "}
+                  {marketName} Market:{" "}
                   <span className={cn("font-bold", marketOpen ? "text-success" : "text-destructive")}>
                     {marketOpen ? "OPEN" : "CLOSED"}
                   </span>
