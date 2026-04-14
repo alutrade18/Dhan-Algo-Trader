@@ -15,7 +15,6 @@ import {
   IndianRupee,
   TrendingUp,
   Briefcase,
-  Activity,
   ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -102,7 +101,6 @@ export default function Dashboard() {
   const settings = settingsRaw as (typeof settingsRaw & { dashboardWidgets?: Record<string, boolean> }) | undefined;
   const widgets = {
     todayPnl: settings?.dashboardWidgets?.todayPnl !== false,
-    totalPnl: settings?.dashboardWidgets?.totalPnl !== false,
     availableBalance: settings?.dashboardWidgets?.availableBalance !== false,
     activeStrategies: settings?.dashboardWidgets?.activeStrategies !== false,
   };
@@ -192,8 +190,6 @@ export default function Dashboard() {
     dailyLossAmountFromPositions >= summary.maxDailyLoss;
   const killTriggered = dhanKillActive || dailyLossTriggered;
 
-  // Total P&L — always show all-time net from summary API (equity curve moved to Ledger Statement)
-  const displayPnl = summary?.totalPnl ?? 0;
   const todayPnl = todayPnlFromPositions;
   const activeStrategies = summary?.activeStrategies ?? 0;
   const winRate = summary?.winRate ?? 0;
@@ -224,8 +220,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {(widgets.todayPnl || widgets.totalPnl || widgets.availableBalance || widgets.activeStrategies) && (
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {(widgets.todayPnl || widgets.availableBalance || widgets.activeStrategies) && (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
           {widgets.todayPnl && (
             <StatCard
               title="Today P&L"
@@ -234,16 +230,6 @@ export default function Dashboard() {
               icon={TrendingUp}
               isLoading={isPositionsLoading}
               valueClass={todayPnl > 0 ? "text-success" : todayPnl < 0 ? "text-destructive" : ""}
-            />
-          )}
-          {widgets.totalPnl && (
-            <StatCard
-              title="Total P&L"
-              value={formatCurrency(displayPnl)}
-              inlineTag="All-Time Net"
-              icon={Activity}
-              isLoading={isSummaryLoading}
-              valueClass={displayPnl > 0 ? "text-success" : displayPnl < 0 ? "text-destructive" : ""}
             />
           )}
           {widgets.availableBalance && (

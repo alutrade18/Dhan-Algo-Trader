@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Download, RefreshCw, Wallet, CalendarIcon,
-  ChevronLeft, ChevronRight, TrendingUp, BarChart2, BookOpen,
+  ChevronLeft, ChevronRight, TrendingUp, BarChart2, BookOpen, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -360,6 +360,45 @@ export default function TradeHistory() {
   const maxRunbal = equityData.reduce((m, p) => Math.max(m, p.runbal ?? 0), 0);
   const { yMax: Y_MAX, yTicks: Y_TICKS } = computeYScale(maxRunbal);
 
+  // ── Total P&L card (moved from Dashboard) ───────────────────────────────────
+  const [pnlMode, setPnlMode] = useState<"7d" | "30d" | "365d" | "alltime">("30d");
+  const pnlDays = pnlMode === "7d" ? 7 : pnlMode === "30d" ? 30 : pnlMode === "365d" ? 365 : null;
+
+  const { data: periodPnlData, isLoading: isPeriodPnlLoading } = useQuery<{ periodPnl: number | null }>({
+    queryKey: ["period-pnl", pnlDays],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/dashboard/period-pnl?days=${pnlDays}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: pnlDays !== null && activeTab === "diary",
+    refetchInterval: 300_000,
+    staleTime: 240_000,
+  });
+
+  const { data: allTimeSummary, isLoading: isAllTimeLoading } = useQuery<{ totalPnl?: number }>({
+    queryKey: ["dashboard-summary"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}api/dashboard/summary`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: pnlMode === "alltime" && activeTab === "diary",
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const pnlValue = pnlMode === "alltime" ? (allTimeSummary?.totalPnl ?? null) : (periodPnlData?.periodPnl ?? null);
+  const isPnlLoading = pnlMode === "alltime" ? isAllTimeLoading : isPeriodPnlLoading;
+  const pnlLabel = pnlMode === "7d" ? "7D Net" : pnlMode === "30d" ? "30D Net" : pnlMode === "365d" ? "365D Net" : "All-Time Net";
+
+  const PNL_MODES: { label: string; mode: typeof pnlMode }[] = [
+    { label: "7D", mode: "7d" },
+    { label: "30D", mode: "30d" },
+    { label: "365D", mode: "365d" },
+    { label: "All-Time", mode: "alltime" },
+  ];
+
   // ── Diary state ─────────────────────────────────────────────────────────────
   const [diaryPeriod, setDiaryPeriod] = useState<"weekly" | "monthly" | "yearly">("monthly");
   const [monthOffset, setMonthOffset] = useState(0);
@@ -663,7 +702,7 @@ export default function TradeHistory() {
       ══════════════════════════════════════════════════════════════════════════ */}
       {activeTab === "diary" && (
         <div className="space-y-4">
-          {/* Header with period switcher */}
+          {/* Header row: title + Total P&L card + weekly/monthly/yearly toggle */}
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
@@ -672,6 +711,46 @@ export default function TradeHistory() {
               </div>
               <h2 className="text-xl font-bold text-foreground tracking-tight">RAJESH ALGO</h2>
             </div>
+
+            {/* Total P&L card */}
+            <Card className="flex-1 min-w-[220px] max-w-xs bg-card">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5" />
+                    Total P&amp;L
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">{pnlLabel}</span>
+                </div>
+                {isPnlLoading ? (
+                  <Skeleton className="h-7 w-32 mb-2" />
+                ) : (
+                  <div className={cn(
+                    "text-xl font-bold font-mono tracking-tight mb-2",
+                    pnlValue === null ? "text-muted-foreground" : pnlValue >= 0 ? "text-emerald-400" : "text-red-400"
+                  )}>
+                    {pnlValue === null ? "—" : formatCurrency(pnlValue)}
+                  </div>
+                )}
+                <div className="flex gap-1">
+                  {PNL_MODES.map(m => (
+                    <button
+                      key={m.mode}
+                      onClick={() => setPnlMode(m.mode)}
+                      className={cn(
+                        "flex-1 text-[10px] font-medium py-1 rounded transition-all border",
+                        pnlMode === m.mode
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 bg-transparent"
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 bg-muted/30">
               {(["weekly", "monthly", "yearly"] as const).map(p => (
                 <button
