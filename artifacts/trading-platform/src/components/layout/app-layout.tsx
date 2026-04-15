@@ -130,7 +130,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const systemOnline = marketOpen && brokerConnected;
 
   const isBrokerConnected = isBrokerStatusLoading ? null : (brokerStatus?.connected ?? false);
-  const showBrokerBanner = isBrokerConnected === false && location !== "/settings";
+  const BROKER_BANNER_PAGES = ["/", "/positions", "/orders", "/super-orders"];
+  const showBrokerBanner = isBrokerConnected === false && BROKER_BANNER_PAGES.includes(location);
 
   const fundsData = funds as (typeof funds & { availableBalance?: number | null }) | undefined;
   const availableBalance = fundsData?.availableBalance;

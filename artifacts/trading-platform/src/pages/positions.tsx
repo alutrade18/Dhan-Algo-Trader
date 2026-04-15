@@ -261,14 +261,6 @@ export default function Positions() {
       </div>
 
       {/* ── Error banner ── */}
-      {brokerAuthError && (
-        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          Broker not connected — enter your Dhan credentials in{" "}
-          <a href="../settings" className="underline font-medium hover:no-underline">Settings</a>{" "}
-          to view positions.
-        </div>
-      )}
       {isError && !brokerAuthError && (
         <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" />
