@@ -147,12 +147,11 @@ router.post("/market/ltp-batch", async (req, res): Promise<void> => {
   }
   const body = req.body as { securities?: Record<string, unknown> };
   if (!body.securities || typeof body.securities !== "object" || Array.isArray(body.securities)) {
-    req.log.warn({ bodyKeys: Object.keys(body ?? {}), securitiesType: typeof body?.securities }, "ltp-batch: invalid body");
     res.status(400).json({ error: "securities object required" });
     return;
   }
 
-  // Validate and sanitise: segment → integer[] only
+  // Validate and sanitise: segment → string[] of integer IDs
   const secStrings: Record<string, string[]> = {};
   let totalIds = 0;
   for (const [seg, raw] of Object.entries(body.securities)) {
@@ -167,23 +166,42 @@ router.post("/market/ltp-batch", async (req, res): Promise<void> => {
     res.json({ ltps: {} });
     return;
   }
-  if (totalIds > 1000) {
-    res.status(400).json({ error: "Maximum 1000 instruments per request" });
-    return;
+
+  // Auto-chunk: Dhan allows max 1000 instruments per request.
+  // Build flat list of [seg, secId] pairs then split into ≤1000 chunks.
+  const CHUNK_SIZE = 1000;
+  const allPairs: Array<[string, string]> = [];
+  for (const [seg, ids] of Object.entries(secStrings)) {
+    for (const id of ids) allPairs.push([seg, id]);
+  }
+
+  const chunks: Array<Record<string, string[]>> = [];
+  for (let i = 0; i < allPairs.length; i += CHUNK_SIZE) {
+    const chunkMap: Record<string, string[]> = {};
+    for (const [seg, id] of allPairs.slice(i, i + CHUNK_SIZE)) {
+      (chunkMap[seg] ??= []).push(id);
+    }
+    chunks.push(chunkMap);
   }
 
   try {
-    const raw = await dhanClient.getMarketQuote(secStrings, "ltp") as Record<string, unknown>;
-    // Dhan v2 wraps: { data: { NSE_FNO: { "49081": { last_price: X }, ... } }, status: "success" }
-    const unwrapped = (raw.data && typeof raw.data === "object" ? raw.data : raw) as
-      Record<string, Record<string, { last_price?: number }>>;
+    const results = await Promise.all(
+      chunks.map(chunkSecs =>
+        (dhanClient.getMarketQuote(chunkSecs, "ltp") as Promise<Record<string, unknown>>)
+      )
+    );
 
+    // Dhan v2 wraps: { data: { NSE_FNO: { "49081": { last_price: X } } }, status: "success" }
     const ltps: Record<string, number> = {};
-    for (const segData of Object.values(unwrapped)) {
-      if (!segData || typeof segData !== "object") continue;
-      for (const [secId, entry] of Object.entries(segData)) {
-        const ltp = Number((entry as { last_price?: number }).last_price ?? 0);
-        if (ltp > 0) ltps[secId] = ltp;
+    for (const raw of results) {
+      const unwrapped = (raw.data && typeof raw.data === "object" ? raw.data : raw) as
+        Record<string, Record<string, { last_price?: number }>>;
+      for (const segData of Object.values(unwrapped)) {
+        if (!segData || typeof segData !== "object") continue;
+        for (const [secId, entry] of Object.entries(segData)) {
+          const ltp = Number((entry as { last_price?: number }).last_price ?? 0);
+          if (ltp > 0) ltps[secId] = ltp;
+        }
       }
     }
 

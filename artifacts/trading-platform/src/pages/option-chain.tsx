@@ -673,9 +673,10 @@ export default function OptionChain() {
   }, [liveLtps]);
 
   // ── Batch REST LTP poll (POST /marketfeed/ltp) ───────────────────
-  // Provides fresh LTP every 5 s for ALL strikes via Dhan Market Quote API.
+  // Provides fresh LTP every 5 s for displayed strikes via Dhan Market Quote API.
   // WebSocket ticks remain primary — this is a reliable fallback + initialization.
-  const allSecIds = entries.flatMap(e =>
+  // Uses displayEntries (±20 ATM window) to stay well under the 1000-instrument limit.
+  const allSecIds = displayEntries.flatMap(e =>
     [e.callSecId, e.putSecId].filter((id): id is number => !!id)
   );
 
