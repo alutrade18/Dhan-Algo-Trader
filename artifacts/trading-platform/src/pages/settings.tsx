@@ -181,7 +181,7 @@ function ServerIpInfo() {
 
       <div className="px-5 py-4 space-y-4">
         {/* IP display + whitelist buttons */}
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Server IP Address</p>
             <div className="flex items-center gap-2">
@@ -189,8 +189,8 @@ function ServerIpInfo() {
                 <div className="h-9 w-44 rounded-lg bg-muted/30 animate-pulse" />
               ) : ip ? (
                 <>
-                  <code className="font-mono text-base font-bold text-foreground bg-muted/20 border border-border/40 px-3 py-1.5 rounded-lg select-all">{ip}</code>
-                  <button onClick={copy} className="text-muted-foreground hover:text-primary transition-colors" title="Copy IP">
+                  <code className="font-mono text-sm sm:text-base font-bold text-foreground bg-muted/20 border border-border/40 px-3 py-1.5 rounded-lg select-all break-all">{ip}</code>
+                  <button onClick={copy} className="text-muted-foreground hover:text-primary transition-colors shrink-0" title="Copy IP">
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                 </>
@@ -202,25 +202,27 @@ function ServerIpInfo() {
 
           {/* One-click whitelist buttons */}
           {ip && (
-            <div className="flex items-center gap-2 shrink-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Set IP Address</p>
-              <Button
-                size="sm"
-                className="h-9 gap-1.5 text-xs"
-                disabled={!!setting}
-                onClick={() => void setIp("PRIMARY")}
-              >
-                {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Set as Primary (Recommend)</>}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 gap-1.5 text-xs"
-                disabled={!!setting}
-                onClick={() => void setIp("SECONDARY")}
-              >
-                {setting === "SECONDARY" ? <><span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />Setting…</> : <>Set as Secondary</>}
-              </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Set IP Address</p>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  className="h-9 gap-1.5 text-xs flex-1 sm:flex-none"
+                  disabled={!!setting}
+                  onClick={() => void setIp("PRIMARY")}
+                >
+                  {setting === "PRIMARY" ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Setting…</> : <>Set as Primary (Recommend)</>}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1.5 text-xs flex-1 sm:flex-none"
+                  disabled={!!setting}
+                  onClick={() => void setIp("SECONDARY")}
+                >
+                  {setting === "SECONDARY" ? <><span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />Setting…</> : <>Set as Secondary</>}
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -428,7 +430,7 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-4 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
         <Skeleton className="h-64 rounded-2xl" />
         <Skeleton className="h-64 rounded-2xl" />
       </div>
@@ -438,7 +440,7 @@ export default function Settings() {
   const funds: FundDetails = connectResult?.success ? connectResult : (brokerStatus?.connected ? brokerStatus : {});
 
   return (
-    <div className="grid grid-cols-2 gap-4 w-full items-stretch">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
       <TokenExpiryBanner onReconnect={() => brokerForm.setFocus("accessToken")} />
 
       {/* ── Broker Connection ── */}

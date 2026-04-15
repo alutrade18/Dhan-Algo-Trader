@@ -764,11 +764,11 @@ export default function OrdersPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
 
         {/* ── Single header row ─────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-sm font-bold text-foreground">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <p className="text-sm font-bold text-foreground hidden sm:block">
             Today&apos;s orders and view past trade history
           </p>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:ml-auto">
             <Button
               variant="outline"
               size="sm"
@@ -780,7 +780,7 @@ export default function OrdersPage() {
               {ordersRefreshing || historyLoading ? "Refreshing…" : "Refresh"}
             </Button>
             <TabsList className="bg-muted/40 h-8">
-              <TabsTrigger value="today" className="text-xs px-3 h-6">Today's Orders</TabsTrigger>
+              <TabsTrigger value="today" className="text-xs px-3 h-6">Today&apos;s Orders</TabsTrigger>
               <TabsTrigger value="history" className="text-xs px-3 h-6">Order History</TabsTrigger>
             </TabsList>
           </div>

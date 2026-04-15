@@ -202,8 +202,8 @@ export default function Positions() {
 
       {/* ── Exit All Hero Banner (shown when any open position exists) ── */}
       {openAll.length > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-destructive/30 bg-destructive/5 px-5 py-3.5">
-          <div className="flex items-start gap-3 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 sm:px-5 py-3.5">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
             <ShieldX className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-destructive">Exit All Positions</p>
@@ -239,21 +239,26 @@ export default function Positions() {
       )}
 
       {/* ── Stats bar ── */}
-      <div className="grid grid-cols-4 divide-x divide-border rounded-lg border bg-card overflow-hidden">
+      <div className="grid grid-cols-2 sm:grid-cols-4 rounded-lg border bg-card overflow-hidden">
         {[
-          { label: "Unrealized P&L",     value: totalUnrealized, note: "Live · open positions" },
-          { label: "Realized P&L",        value: totalRealized,   note: "Booked today" },
-          { label: "Total P&L",           value: totalPnl,        note: "Unrealized + Realized" },
-        ].map(({ label, value, note }) => (
-          <div key={label} className="px-5 py-3">
+          { label: "Unrealized P&L", value: totalUnrealized, note: "Live · open positions" },
+          { label: "Realized P&L",   value: totalRealized,   note: "Booked today" },
+          { label: "Total P&L",      value: totalPnl,        note: "Unrealized + Realized" },
+        ].map(({ label, value, note }, i) => (
+          <div key={label} className={cn(
+            "px-3 sm:px-5 py-3",
+            i === 0 && "border-r border-b sm:border-b-0",
+            i === 1 && "border-b sm:border-b-0 sm:border-r",
+            i === 2 && "border-r",
+          )}>
             <p className="text-[11px] text-muted-foreground mb-1">{label}</p>
-            <p className={cn("text-base font-mono font-bold tabular-nums", pnlColor(value))}>{fmt(value)}</p>
+            <p className={cn("text-sm sm:text-base font-mono font-bold tabular-nums", pnlColor(value))}>{fmt(value)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{note}</p>
           </div>
         ))}
-        <div className="px-5 py-3">
+        <div className="px-3 sm:px-5 py-3">
           <p className="text-[11px] text-muted-foreground mb-1">Open Positions</p>
-          <p className="text-base font-mono font-bold tabular-nums">{openAll.length}</p>
+          <p className="text-sm sm:text-base font-mono font-bold tabular-nums">{openAll.length}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
             {intraday.length} intraday · {carryFwd.length} carryforward
           </p>
@@ -269,17 +274,19 @@ export default function Positions() {
       )}
 
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Tabs value={tab} onValueChange={v => setTab(v as TabKey)}>
-          <TabsList className="h-8">
-            <TabsTrigger value="open"        className="text-xs px-3 gap-1">All Open        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{openAll.length}</Badge></TabsTrigger>
-            <TabsTrigger value="intraday"    className="text-xs px-3 gap-1">Intraday        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{intraday.length}</Badge></TabsTrigger>
-            <TabsTrigger value="carryforward"className="text-xs px-3 gap-1">Carryforward    <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{carryFwd.length}</Badge></TabsTrigger>
-            <TabsTrigger value="closed"      className="text-xs px-3 gap-1">Closed          <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{closed.length}</Badge></TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <div className="overflow-x-auto -mx-0.5 px-0.5">
+          <Tabs value={tab} onValueChange={v => setTab(v as TabKey)}>
+            <TabsList className="h-8 shrink-0">
+              <TabsTrigger value="open"        className="text-xs px-2.5 sm:px-3 gap-1">All Open        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{openAll.length}</Badge></TabsTrigger>
+              <TabsTrigger value="intraday"    className="text-xs px-2.5 sm:px-3 gap-1">Intraday        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{intraday.length}</Badge></TabsTrigger>
+              <TabsTrigger value="carryforward"className="text-xs px-2.5 sm:px-3 gap-1">Carryforward    <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{carryFwd.length}</Badge></TabsTrigger>
+              <TabsTrigger value="closed"      className="text-xs px-2.5 sm:px-3 gap-1">Closed          <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{closed.length}</Badge></TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:ml-auto">
           {lastUpdated && (
             <span className="text-[10px] text-muted-foreground hidden md:inline">
               Updated {lastUpdated.toLocaleTimeString("en-IN")}

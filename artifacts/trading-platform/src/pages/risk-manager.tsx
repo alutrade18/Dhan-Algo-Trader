@@ -148,11 +148,11 @@ export default function RiskManager() {
   if (isLoading) {
     return (
       <div className="space-y-4 w-full">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Skeleton className="h-56 rounded-2xl" />
           <Skeleton className="h-56 rounded-2xl" />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Skeleton className="h-52 rounded-2xl" />
           <Skeleton className="h-52 rounded-2xl" />
         </div>
@@ -260,7 +260,7 @@ export default function RiskManager() {
       )}
 
       {/* ── Row 1: Risk Management | Auto Square-Off ── */}
-      <div className="grid grid-cols-2 gap-4 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         {/* Risk Management */}
         <div className="flex flex-col rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
@@ -331,7 +331,7 @@ export default function RiskManager() {
       </div>
 
       {/* ── Row 2: Emergency Kill Switch | Kill Switch PIN ── */}
-      <div className="grid grid-cols-2 gap-4 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         {/* Emergency Kill Switch */}
         <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-all ${killSwitchActive ? "border-destructive/50 bg-destructive/5" : "border-border/50 bg-card"}`}>
