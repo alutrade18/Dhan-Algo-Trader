@@ -611,7 +611,7 @@ export default function OptionChain() {
           <div className="flex items-center gap-2 min-w-0 px-3 py-1.5 rounded-lg border border-warning/25 bg-warning/8">
             <Clock className="w-3.5 h-3.5 text-warning shrink-0" />
             <p className="text-xs font-medium text-warning leading-snug">
-              Market closed Showing Last Clsoing Value - Live resumes at 8:00 AM IST
+              Market closed · Showing last closing values · Live resumes at 9:15 AM IST
             </p>
           </div>
         ) : (
