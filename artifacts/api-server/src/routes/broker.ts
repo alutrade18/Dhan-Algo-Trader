@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, settingsTable } from "@workspace/db";
+import { db, settingsTable, equityCurveCacheTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { marketFeedWS } from "../lib/market-feed-ws";
 import { orderUpdateWS } from "../lib/order-update-ws";
@@ -129,6 +129,93 @@ router.post("/broker/disconnect", async (req, res): Promise<void> => {
   }
 
   res.json({ success: true, message: "Disconnected from broker" });
+});
+
+// POST /broker/generate-token — Generate a new Dhan access token via Client ID + PIN + TOTP
+router.post("/broker/generate-token", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  const pin = String(body.pin ?? "").trim();
+  const totp = String(body.totp ?? "").trim();
+  let clientId = String(body.clientId ?? "").trim();
+
+  if (!pin || !/^\d{6}$/.test(pin)) {
+    res.status(400).json({ success: false, error: "PIN must be exactly 6 digits" });
+    return;
+  }
+  if (!totp || !/^\d{6}$/.test(totp)) {
+    res.status(400).json({ success: false, error: "TOTP must be exactly 6 digits" });
+    return;
+  }
+
+  // Fall back to stored client ID if not provided
+  if (!clientId) {
+    const settings = await getOrCreateSettings();
+    clientId = settings.brokerClientId ?? "";
+  }
+  if (!clientId) {
+    res.status(400).json({ success: false, error: "Client ID is required — enter it in the form or connect first" });
+    return;
+  }
+
+  try {
+    const url = `https://auth.dhan.co/app/generateAccessToken?dhanClientId=${encodeURIComponent(clientId)}&pin=${encodeURIComponent(pin)}&totp=${encodeURIComponent(totp)}`;
+    const response = await fetch(url, { method: "POST", headers: { "Accept": "application/json" } });
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (!response.ok || !data.accessToken) {
+      req.log.warn({ status: response.status, data }, "TOTP token generation failed");
+      res.status(200).json({
+        success: false,
+        error: String(data.errorMessage ?? data.message ?? `Dhan returned HTTP ${response.status}`),
+        raw: data,
+      });
+      return;
+    }
+
+    const accessToken = String(data.accessToken);
+    const returnedClientId = String(data.dhanClientId ?? clientId);
+
+    // Configure all clients with new credentials
+    dhanClient.configure(returnedClientId, accessToken);
+    marketFeedWS.configure(returnedClientId, accessToken);
+    orderUpdateWS.configure(returnedClientId, accessToken);
+    marketFeedWS.reset();
+    orderUpdateWS.reset();
+    marketFeedWS.connect();
+    orderUpdateWS.connect();
+
+    const settings = await getOrCreateSettings();
+    await db
+      .update(settingsTable)
+      .set({
+        brokerClientId: returnedClientId,
+        brokerAccessToken: encryptToken(accessToken),
+        tokenGeneratedAt: new Date(),
+      })
+      .where(eq(settingsTable.id, settings.id));
+
+    req.log.info({ clientId: "****" + returnedClientId.slice(-4) }, "TOTP token generated and saved");
+
+    // Fetch fund limits for a rich success response (same as /broker/connect)
+    try {
+      const funds = (await dhanClient.getFundLimits()) as Record<string, unknown>;
+      res.json({
+        success: true,
+        dhanClientId: returnedClientId,
+        dhanClientName: String(data.dhanClientName ?? ""),
+        expiryTime: String(data.expiryTime ?? ""),
+        availableBalance: Number(funds.availabelBalance ?? funds.availableBalance ?? 0),
+        sodLimit: Number(funds.sodLimit ?? 0),
+        utilizedAmount: Number(funds.utilizedAmount ?? 0),
+        withdrawableBalance: Number(funds.withdrawableBalance ?? 0),
+      });
+    } catch {
+      res.json({ success: true, dhanClientId: returnedClientId, dhanClientName: String(data.dhanClientName ?? ""), expiryTime: String(data.expiryTime ?? "") });
+    }
+  } catch (e) {
+    req.log.error({ err: e }, "TOTP generate-token request failed");
+    res.status(500).json({ success: false, error: "Network error — could not reach Dhan auth server" });
+  }
 });
 
 // POST /broker/renew-token — Renew Dhan access token

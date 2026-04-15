@@ -219,6 +219,13 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **app-layout.tsx / dashboard.tsx**: Added `queryKey` to Orval hook options to satisfy TanStack Query v5 `UseQueryOptions` type requirement
 - Full `pnpm run typecheck` passes with zero errors across all packages
 
+### Phase 7 — TOTP Token Generation
+- **Backend** (`broker.ts`): `POST /broker/generate-token` endpoint — takes `{ pin, totp, clientId? }`, calls Dhan's `https://auth.dhan.co/app/generateAccessToken?dhanClientId=...&pin=...&totp=...`, saves the returned token (encrypted) + `tokenGeneratedAt`, reconfigures `dhanClient`/`marketFeedWS`/`orderUpdateWS`, returns fund limits
+- **Backend** (`broker.ts`): Fixed missing `equityCurveCacheTable` import (used in `/broker/disconnect` but was not imported)
+- **Frontend** (`settings.tsx`): "Or Generate via TOTP" section added inside Broker Connection card — PIN field (masked/numeric), TOTP field (6-digit), "Generate Token & Connect" button auto-enables when both fields are 6 digits, shows success/error inline
+- **Flow**: TOTP → backend calls Dhan auth → token saved + all clients reconfigured + WS reconnected → frontend cache invalidated → broker shown as connected with balance
+- **Security**: PIN and TOTP are never stored — used once to call Dhan auth, discarded immediately
+
 ### Phase 6 — Frontend Bug Fixes & Theme Standardization
 - **App.tsx**: `AppInitializer` now shows an error state with retry button when `/api/settings` fetch fails (previously showed infinite spinner)
 - **market-socket.ts**: Added `socket.on("connect", resubscribeAll)` — on socket.io reconnect, all subscriptions are replayed to the server so live ticks resume automatically

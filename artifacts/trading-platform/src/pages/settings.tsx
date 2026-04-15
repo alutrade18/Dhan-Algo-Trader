@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
-  Bell, AlertTriangle, Send, Server, Copy, RefreshCw,
+  Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Sparkles,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -93,7 +93,7 @@ function TokenExpiryBanner({ onReconnect }: { onReconnect: () => void }) {
             {expired ? "Access token expired — orders will fail" : `Token expires in ~${Math.max(0, Math.floor(hoursLeft))}h ${Math.floor((hoursLeft % 1) * 60)}m`}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Dhan tokens are valid for 24 hours. Generate a new token from <span className="font-semibold">Dhan Web → My Profile → Access Token</span> and paste it below.
+            Dhan tokens expire after 24 hours. Use <span className="font-semibold">Generate Token via TOTP</span> below (if TOTP is set up), or generate manually from <span className="font-semibold">Dhan Web → My Profile → Access Token</span>.
           </p>
         </div>
       </div>
@@ -254,6 +254,9 @@ export default function Settings() {
   const [connectResult, setConnectResult] = useState<ConnectResult | null>(null);
   const [showToken, setShowToken] = useState(false);
   const [showBotToken, setShowBotToken] = useState(false);
+  const [totpPin, setTotpPin] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [generateResult, setGenerateResult] = useState<{ success: boolean; error?: string; dhanClientName?: string; expiryTime?: string } | null>(null);
 
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
@@ -305,6 +308,31 @@ export default function Settings() {
     mutationFn: async () => { const r = await fetch(`${BASE}api/broker/disconnect`, { method: "POST" }); if (!r.ok) throw new Error("Failed"); return r.json(); },
     onSuccess: () => { setConnectResult(null); brokerForm.reset({ clientId: "", accessToken: "" }); toast({ title: "Disconnected from broker" }); queryClient.invalidateQueries({ queryKey: ["healthz"] }); queryClient.invalidateQueries({ queryKey: ["/api/settings"] }); },
     onError: () => toast({ title: "Failed to disconnect", variant: "destructive" }),
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const clientId = brokerForm.getValues("clientId").replace(/\*/g, "").trim() || "";
+      const res = await fetch(`${BASE}api/broker/generate-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: totpPin, totp: totpCode, clientId }),
+      });
+      return res.json() as Promise<{ success: boolean; error?: string; dhanClientName?: string; expiryTime?: string; availableBalance?: number }>;
+    },
+    onSuccess: (result) => {
+      setGenerateResult(result);
+      if (result.success) {
+        setTotpPin(""); setTotpCode("");
+        toast({ title: "Token generated & connected", description: result.dhanClientName ? `Welcome, ${result.dhanClientName}` : "Broker connected successfully" });
+        queryClient.invalidateQueries({ queryKey: ["healthz"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+        queryClient.invalidateQueries({ queryKey: ["broker-status"] });
+      } else {
+        toast({ title: "Token generation failed", description: result.error, variant: "destructive" });
+      }
+    },
+    onError: () => toast({ title: "Network error during token generation", variant: "destructive" }),
   });
   const telegramMutation = useMutation({
     mutationFn: async (data: { telegramBotToken: string; telegramChatId: string }) => {
@@ -410,6 +438,71 @@ export default function Settings() {
               <span><span className="font-semibold">{connectResult.errorCode}:</span> {connectResult.errorMessage}</span>
             </div>
           )}
+
+          {/* ── TOTP Token Generator ── */}
+          <div className="relative flex items-center gap-2 py-1">
+            <div className="flex-1 h-px bg-border/50" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-1 whitespace-nowrap flex items-center gap-1">
+              <KeyRound className="w-2.5 h-2.5" />Or generate via TOTP
+            </span>
+            <div className="flex-1 h-px bg-border/50" />
+          </div>
+          <p className="text-[10px] text-muted-foreground -mt-1">
+            If TOTP is enabled on your Dhan account, enter your 6-digit PIN and the current TOTP code from your authenticator app to generate a fresh token automatically.
+          </p>
+          <div className="flex gap-2">
+            <div className="flex-1 space-y-1">
+              <SectionLabel>Dhan PIN</SectionLabel>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="••••••"
+                className="h-9 font-mono text-center tracking-widest bg-background/60"
+                value={totpPin}
+                onChange={e => { setTotpPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setGenerateResult(null); }}
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <SectionLabel>TOTP Code</SectionLabel>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="000000"
+                className="h-9 font-mono text-center tracking-widest bg-background/60"
+                value={totpCode}
+                onChange={e => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setGenerateResult(null); }}
+                autoComplete="one-time-code"
+              />
+            </div>
+          </div>
+          {generateResult && !generateResult.success && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl border border-destructive/30 bg-destructive/8 text-destructive text-xs">
+              <XCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>{generateResult.error}</span>
+            </div>
+          )}
+          {generateResult?.success && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl border border-success/30 bg-success/8 text-success text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Token generated — broker connected{generateResult.expiryTime ? ` · expires ${generateResult.expiryTime.replace("T", " ")}` : ""}</span>
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 w-full border-primary/30 text-primary hover:bg-primary/8"
+            disabled={generateMutation.isPending || totpPin.length !== 6 || totpCode.length !== 6}
+            onClick={() => generateMutation.mutate()}
+          >
+            {generateMutation.isPending
+              ? <><span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />Generating…</>
+              : <><Sparkles className="w-3.5 h-3.5" />Generate Token & Connect</>}
+          </Button>
+
           <div className="flex gap-2.5 mt-auto pt-1">
             <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1" disabled={connectMutation.isPending}>
               {connectMutation.isPending
