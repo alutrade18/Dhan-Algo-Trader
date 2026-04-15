@@ -164,7 +164,7 @@ function ServerIpInfo() {
   };
 
   return (
-    <div className="col-span-2 rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+    <div className="col-span-full rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
       <div className="px-5 py-3.5 border-b border-border/30 bg-muted/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">

@@ -49,18 +49,18 @@ function StatCard({
   return (
     <Card className="bg-card">
       <CardContent className="p-3 md:p-4">
-        <div className="flex items-start justify-between mb-1.5 gap-1">
-          <span className="text-xs text-muted-foreground font-medium leading-tight">
-            {title}
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-start justify-between mb-1.5 gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground font-medium leading-tight">
+              {title}
+            </p>
             {inlineTag && (
-              <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+              <p className="text-[10px] text-muted-foreground font-mono mt-0.5 leading-tight">
                 {inlineTag}
-              </span>
+              </p>
             )}
-            <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           </div>
+          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
         </div>
         {isLoading ? (
           <Skeleton className="h-6 w-[100px] mt-1" />
@@ -221,7 +221,7 @@ export default function Dashboard() {
       )}
 
       {(widgets.todayPnl || widgets.availableBalance || widgets.activeStrategies) && (
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {widgets.todayPnl && (
             <StatCard
               title="Today P&L"
