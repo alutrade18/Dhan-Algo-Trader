@@ -332,7 +332,9 @@ export default function Settings() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const clientId = brokerForm.getValues("clientId").replace(/\*/g, "").trim() || "";
+      const rawClientId = brokerForm.getValues("clientId").trim();
+      // If the field shows a masked value (****XXXX), send empty so the backend uses the stored ID
+      const clientId = rawClientId.includes("*") ? "" : rawClientId;
       const res = await fetch(`${BASE}api/broker/generate-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
