@@ -139,10 +139,19 @@ export default function RiskManager() {
   }
 
   async function handleConfirmDelete() {
-    await genericSaveMutation.mutateAsync({ clearKillSwitchPin: true });
+    const res = await fetch(`${BASE}api/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clearKillSwitchPin: true, currentPin: deletePinFirst }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: string };
+      toast({ title: "Could not remove PIN", description: err.error ?? "Incorrect PIN entered.", variant: "destructive" });
+      return;
+    }
     toast({ title: "PIN removed" });
     closeDeleteModal();
-    queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    void queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
   }
 
   if (isLoading) {

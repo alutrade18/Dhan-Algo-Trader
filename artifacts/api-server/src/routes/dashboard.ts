@@ -6,6 +6,7 @@ import { getCachedEquityCurve } from "../lib/equity-scheduler";
 import { cachedGetLedger, cachedGetAllLedger } from "../lib/ledger-cache";
 
 let _recentActivityCache: { data: unknown; ts: number } | null = null;
+let _recentActivityFetchInProgress = false;
 const RECENT_ACTIVITY_TTL_MS = 30_000;
 
 const router: IRouter = Router();
@@ -21,13 +22,14 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
     const todayStr = now.toISOString().split("T")[0];
 
-    const [fundsResult, ledgerResult, settingsResult, killSwitchResult, strategiesResult] =
+    const [fundsResult, ledgerResult, settingsResult, killSwitchResult, strategiesResult, positionsResult] =
       await Promise.allSettled([
         dhanClient.getFundLimits(),
         cachedGetAllLedger(allTimeStartStr, todayStr),
         db.select().from(settingsTable),
         dhanClient.getKillSwitchStatus(),
         db.select({ count: sql<number>`count(*)::int` }).from(strategiesTable).where(eq(strategiesTable.active, true)),
+        dhanClient.getPositions(),
       ]);
 
     let availableBalance = 0, usedMargin = 0;
@@ -81,12 +83,21 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       ? (strategiesResult.value[0]?.count ?? 0)
       : 0;
 
+    // Compute win rate from today's closed positions (netQty === 0, realizedProfit defined)
+    let winRate = 0;
+    if (positionsResult.status === "fulfilled") {
+      const positions = Array.isArray(positionsResult.value) ? (positionsResult.value as Array<Record<string, unknown>>) : [];
+      const closed = positions.filter(p => Number(p.netQty ?? 1) === 0 && Number(p.realizedProfit ?? 0) !== 0);
+      const wins = closed.filter(p => Number(p.realizedProfit ?? 0) > 0).length;
+      winRate = closed.length > 0 ? Math.round((wins / closed.length) * 100) : 0;
+    }
+
     res.json({
       totalPnl,
       availableBalance,
       usedMargin,
       activeStrategies,
-      winRate: 0,
+      winRate,
       killSwitchEnabled,
       maxDailyLoss,
     });
@@ -374,6 +385,13 @@ router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
       res.json(cached.slice(0, limit));
       return;
     }
+    // Prevent thundering herd: if a fetch is already in progress, serve stale cache (or empty)
+    if (_recentActivityFetchInProgress) {
+      const stale = (_recentActivityCache?.data as Array<Record<string, unknown>>) ?? [];
+      res.json(stale.slice(0, limit));
+      return;
+    }
+    _recentActivityFetchInProgress = true;
 
     const activities: Array<{
       id: string;
@@ -413,9 +431,11 @@ router.get("/dashboard/recent-activity", async (req, res): Promise<void> => {
     );
 
     _recentActivityCache = { data: activities, ts: Date.now() };
+    _recentActivityFetchInProgress = false;
 
     res.json(activities.slice(0, limit));
   } catch (e) {
+    _recentActivityFetchInProgress = false;
     req.log.error({ err: e }, "Recent activity error");
     res.status(500).json({ error: "Failed to fetch recent activity" });
   }

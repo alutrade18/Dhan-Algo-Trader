@@ -37,8 +37,6 @@ import {
   Settings,
   TrendingDown,
 } from "lucide-react";
-import * as XLSX from "xlsx";
-
 const BASE = import.meta.env.BASE_URL;
 
 function formatSegment(seg: string): { label: string; color: string } {
@@ -672,7 +670,7 @@ export default function OrdersPage() {
     }
   }
 
-  function exportTodayOrders() {
+  async function exportTodayOrders() {
     if (orders.length === 0) {
       toast({
         title: "No data to export",
@@ -696,6 +694,7 @@ export default function OrdersPage() {
       "Update Time": o.updateTime,
       "OMS Error": o.omsErrorDescription ?? "",
     }));
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Orders");
@@ -706,7 +705,7 @@ export default function OrdersPage() {
     });
   }
 
-  function exportHistory() {
+  async function exportHistory() {
     if (tradeHistory.length === 0) {
       toast({
         title: "No data to export",
@@ -731,6 +730,7 @@ export default function OrdersPage() {
       "Security ID":  t.securityId,
       "Client ID":    t.dhanClientId || "",
     }));
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Trade History");

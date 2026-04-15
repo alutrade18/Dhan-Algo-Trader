@@ -7,16 +7,9 @@ import { orderUpdateWS } from "../lib/order-update-ws";
 import { getRateLimitStats } from "../lib/rate-limiter";
 import { encryptToken, decryptToken } from "../lib/crypto-utils";
 import { clearLedgerCache } from "../lib/ledger-cache";
+import { getOrCreateSettings } from "./settings";
 
 const router: IRouter = Router();
-
-async function getOrCreateSettings() {
-  let [settings] = await db.select().from(settingsTable);
-  if (!settings) {
-    [settings] = await db.insert(settingsTable).values({}).returning();
-  }
-  return settings;
-}
 
 router.post("/broker/connect", async (req, res): Promise<void> => {
   const { clientId, accessToken } = req.body as Record<string, unknown>;

@@ -76,9 +76,8 @@ interface OptionEntry {
 // MCX Commodity F&O        : Mon-Fri 09:00 → 23:30
 function getISTMinutes(): { mins: number; day: number } {
   const now = new Date();
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60_000;
-  const ist = new Date(utcMs + 5.5 * 3_600_000);
-  return { mins: ist.getHours() * 60 + ist.getMinutes(), day: ist.getDay() };
+  const ist = new Date(now.getTime() + 5.5 * 3_600_000);
+  return { mins: ist.getUTCHours() * 60 + ist.getUTCMinutes(), day: ist.getUTCDay() };
 }
 
 function computeMarketStatus(exchange: Exchange): {

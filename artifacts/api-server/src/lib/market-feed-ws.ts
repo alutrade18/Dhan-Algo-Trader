@@ -210,6 +210,10 @@ class MarketFeedWS extends EventEmitter {
     this.ws?.close();
     this.ws = null;
     this.connected = false;
+    // Clear all subscriptions so a subsequent connect() starts fresh.
+    // This prevents stale subscriptions from a previous broker session
+    // being replayed to a new broker's WebSocket on reconnect.
+    this.subscriptions.clear();
   }
 
   reset() {

@@ -207,6 +207,15 @@ router.put("/settings", async (req, res): Promise<void> => {
   }
 
   if (body.clearKillSwitchPin === true) {
+    // Require the current PIN to be verified server-side before clearing it.
+    // Prevents anyone with device access from deleting the PIN by entering any two identical digits.
+    if (existing.killSwitchPin) {
+      const currentPin = typeof body.currentPin === "string" ? body.currentPin : "";
+      if (!currentPin || hashPin(currentPin) !== existing.killSwitchPin) {
+        res.status(403).json({ error: "Incorrect PIN. Please enter your current PIN to delete it." });
+        return;
+      }
+    }
     updateData.killSwitchPin = null;
     auditEntries.push({ field: "killSwitchPin", old: "****", new: null });
   }

@@ -3,7 +3,7 @@ import { not, inArray, eq } from "drizzle-orm";
 import { dhanClient } from "./dhan-client";
 import { sendTelegramAlertIfEnabled } from "./telegram";
 import { logger } from "./logger";
-import { isNseHolidayToday } from "./equity-scheduler";
+import { getMarketStatus } from "./market-calendar";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
@@ -11,30 +11,25 @@ let monitorInterval: ReturnType<typeof setInterval> | null = null;
 
 const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "TARGET_HIT", "STOP_LOSS_HIT"];
 
-function nowIST(): { hours: number; minutes: number; dateStr: string } {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  return {
-    hours: ist.getUTCHours(),
-    minutes: ist.getUTCMinutes(),
-    dateStr: ist.toISOString().slice(0, 10),
-  };
+/**
+ * Returns true if at least one market (NSE or MCX) is currently open.
+ * Covers: NSE 09:15–15:30, MCX 09:00–23:30 IST.
+ * Holiday awareness is handled by getMarketStatus() via the DB-backed calendar.
+ */
+function isAnyMarketOpen(): boolean {
+  const status = getMarketStatus();
+  return status.nseOpen || status.mcxOpen;
 }
 
-async function isMarketHours(): Promise<boolean> {
-  const { hours, minutes, dateStr } = nowIST();
-  const d = new Date(dateStr + "T00:00:00Z");
-  const day = d.getUTCDay();
-  if (day === 0 || day === 6) return false;
-  if (await isNseHolidayToday()) return false;
-  const totalMinutes = hours * 60 + minutes;
-  const open = 9 * 60 + 15;
-  const close = 15 * 60 + 25;
-  return totalMinutes >= open && totalMinutes <= close;
+interface DhanOrderSummary {
+  orderId?: string;
+  orderNo?: string;
+  orderStatus?: string;
+  [key: string]: unknown;
 }
 
 async function checkSuperOrders(): Promise<void> {
-  if (!await isMarketHours()) return;
+  if (!isAnyMarketOpen()) return;
   if (!dhanClient.isConfigured()) return;
 
   try {
@@ -48,8 +43,34 @@ async function checkSuperOrders(): Promise<void> {
     const ordersWithPriceTargets = openOrders.filter(o => o.dhanOrderId && (o.targetPrice || o.stopLossPrice));
     if (ordersWithPriceTargets.length === 0) return;
 
+    // ── Fetch live order statuses from Dhan to confirm entry is TRADED ────────
+    let dhanOrderStatusMap: Map<string, string> = new Map();
+    try {
+      const dhanOrders = (await dhanClient.getOrders()) as DhanOrderSummary[];
+      if (Array.isArray(dhanOrders)) {
+        for (const o of dhanOrders) {
+          const id = o.orderId ?? o.orderNo;
+          if (id && o.orderStatus) dhanOrderStatusMap.set(String(id), String(o.orderStatus));
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, "SuperOrderMonitor: could not fetch Dhan orders — skipping fill-status check this cycle");
+    }
+
+    // Only monitor orders where the entry order is confirmed TRADED (filled)
+    const filledOrders = ordersWithPriceTargets.filter(o => {
+      if (!o.dhanOrderId) return false;
+      const dhanStatus = dhanOrderStatusMap.get(o.dhanOrderId);
+      // If we could not fetch Dhan orders, dhanOrderStatusMap is empty → skip all (safe)
+      // If we fetched successfully, only proceed if status is TRADED
+      if (dhanOrderStatusMap.size === 0) return false;
+      return dhanStatus === "TRADED";
+    });
+
+    if (filledOrders.length === 0) return;
+
     const bySegment: Record<string, string[]> = {};
-    for (const order of ordersWithPriceTargets) {
+    for (const order of filledOrders) {
       if (!bySegment[order.exchangeSegment]) bySegment[order.exchangeSegment] = [];
       bySegment[order.exchangeSegment].push(order.securityId);
     }
@@ -73,7 +94,7 @@ async function checkSuperOrders(): Promise<void> {
       return;
     }
 
-    for (const order of ordersWithPriceTargets) {
+    for (const order of filledOrders) {
       const ltpKey = `${order.exchangeSegment}:${order.securityId}`;
       const ltp = ltpMap[ltpKey] ?? 0;
       if (!ltp || ltp <= 0) continue;
@@ -139,7 +160,7 @@ async function checkSuperOrders(): Promise<void> {
 export function startSuperOrderMonitor(): void {
   if (monitorInterval) return;
   monitorInterval = setInterval(() => void checkSuperOrders(), 5_000);
-  logger.info("SuperOrderMonitor: started (checks every 5s during market hours 09:15–15:25 IST)");
+  logger.info("SuperOrderMonitor: started (checks every 5s during NSE 09:15–15:30 or MCX 09:00–23:30 IST)");
 }
 
 export function stopSuperOrderMonitor(): void {

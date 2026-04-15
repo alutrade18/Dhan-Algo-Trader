@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRefreshInterval } from "@/hooks/use-refresh-interval";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -171,6 +172,8 @@ export default function SuperOrders() {
     }
   }
 
+  const refreshInterval = useRefreshInterval(15);
+
   const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery<SuperOrder[]>({
     queryKey: ["super-orders"],
     queryFn: async () => {
@@ -181,8 +184,8 @@ export default function SuperOrders() {
       }
       return res.json() as Promise<SuperOrder[]>;
     },
-    refetchInterval: 15000,
-    staleTime: 10000,
+    refetchInterval: refreshInterval,
+    staleTime: refreshInterval * 0.66,
   });
 
   const placeMutation = useMutation({
@@ -219,20 +222,52 @@ export default function SuperOrders() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: async ({ orderId, leg }: { orderId: string; leg: string }) => {
-      const res = await fetch(`${BASE}api/super-orders/${orderId}?leg=${leg}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Cancel failed");
+    mutationFn: async (orderId: string) => {
+      const res = await fetch(`${BASE}api/super-orders/${orderId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? "Cancel failed");
+      }
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Super Order Cancelled" });
       void queryClient.invalidateQueries({ queryKey: ["super-orders"] });
     },
-    onError: () => toast({ title: "Cancel Failed", variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Cancel Failed", description: e.message, variant: "destructive" }),
   });
 
   const notConnected = (error as Error | null)?.message === "Broker not connected";
   const canPlace = !insufficientFunds && !!form.security_id && !!form.quantity && !!form.price && !placeMutation.isPending && !ltpLoading;
+
+  function handlePlaceOrder() {
+    const ep = parseFloat(form.price);
+    const tp = parseFloat(form.target_price);
+    const sl = parseFloat(form.stop_loss_price);
+    const isBuy = form.transaction_type === "BUY";
+
+    if (form.target_price && !isNaN(tp)) {
+      if (isBuy && tp <= ep) {
+        toast({ title: "Invalid Target Price", description: "For BUY orders, target must be above entry price.", variant: "destructive" });
+        return;
+      }
+      if (!isBuy && tp >= ep) {
+        toast({ title: "Invalid Target Price", description: "For SELL orders, target must be below entry price.", variant: "destructive" });
+        return;
+      }
+    }
+    if (form.stop_loss_price && !isNaN(sl)) {
+      if (isBuy && sl >= ep) {
+        toast({ title: "Invalid Stop Loss", description: "For BUY orders, stop loss must be below entry price.", variant: "destructive" });
+        return;
+      }
+      if (!isBuy && sl <= ep) {
+        toast({ title: "Invalid Stop Loss", description: "For SELL orders, stop loss must be above entry price.", variant: "destructive" });
+        return;
+      }
+    }
+    placeMutation.mutate();
+  }
 
   return (
     <div className="space-y-4">
@@ -405,7 +440,7 @@ export default function SuperOrders() {
               <Button
                 size="sm"
                 className={form.transaction_type === "SELL" ? "bg-red-500 hover:bg-red-600" : ""}
-                onClick={() => placeMutation.mutate()}
+                onClick={handlePlaceOrder}
                 disabled={!canPlace}
                 title={insufficientFunds ? "Insufficient balance" : ""}
               >
@@ -486,7 +521,7 @@ export default function SuperOrders() {
                         <Button
                           variant="ghost" size="sm"
                           className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                          onClick={() => cancelMutation.mutate({ orderId: id, leg: "ENTRY_LEG" })}
+                          onClick={() => cancelMutation.mutate(id)}
                           disabled={cancelMutation.isPending}
                         >
                           <X className="w-3 h-3" />

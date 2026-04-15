@@ -1,0 +1,57 @@
+Complete App Audit — Issues Found
+🔴 HIGH — Functional Bugs
+1. Super Order Monitor stops at 15:25 IST (NSE-only hours)
+super-order-monitor.ts hardcodes market hours as 09:15–15:25 IST. MCX trades until 23:30 IST. Any MCX Super Order placed will have zero SL/Target protection after 15:25 PM.
+
+2. Super Order Monitor fires exit even if entry order was never filled
+The monitor checks LTP vs Target/SL for any order that has dhanOrderId — it never verifies that the entry order orderStatus === "TRADED". If an order is still PENDING/OPEN and LTP crosses the target, an exit MARKET order is fired, creating a naked reverse position.
+
+3. tradingSymbol is never stored in the super_orders DB table
+When a super order is inserted (super-orders.ts POST route), the tradingSymbol field is missing from the .values({...}) call. The column exists in the DB schema but is always null. When Dhan's live order data is unavailable, the orders table shows the raw securityId number instead of a readable symbol name.
+
+4. Kill Switch guard reads DB flag only — not live Dhan status
+order-guards.ts checks settings.killSwitchEnabled (DB boolean). If the kill switch is activated directly on the Dhan mobile app or website (not through this platform), the DB flag never gets updated and new orders will still pass through the guard.
+
+🟠 MEDIUM — Logic / UX Issues
+5. Super Order PIN delete — Step 1 PIN is never verified server-side
+The "Delete Kill Switch PIN" modal validates deletePinFirst === deletePinSecond locally but never calls /api/settings/verify-pin for the first entry. Anyone with access to the device can delete the PIN by entering any 4 digits twice identically.
+
+6. Win Rate is permanently 0.0%
+dashboard.ts returns winRate: 0 — hardcoded. The "Win Rate: 0.0%" shown on the Active Strategies card is never computed.
+
+7. Auto Square-Off checks NSE holidays only
+auto-square-off.ts calls isNseHolidayToday() to skip holidays. On NSE-only holidays where MCX evening session is still open, MCX positions will still get an auto square-off trigger even though the market is technically live.
+
+8. Super Order form has no price direction validation
+No validation that target_price > entry_price for BUY or target_price < entry_price for SELL. A user can accidentally set a target below entry or SL above entry with no warning or error.
+
+9. Frontend market calendar is hardcoded — not DB-backed
+artifacts/trading-platform/src/lib/market-calendar.ts uses a hardcoded holiday list. The Option Chain page's computeMarketStatus() calls this local version. The API server's health endpoint uses the DB-backed calendar (more accurate). They can diverge — e.g., the backend correctly shows NSE CLOSED on an emergency holiday but the frontend Option Chain may still show OPEN.
+
+10. refreshIntervalSeconds setting is saved and displayed but never used
+The setting exists in DB, appears in Settings UI, but every polling query uses hardcoded refetchInterval values. Changing this setting has zero effect.
+
+11. Cancel Super Order sends ?leg=ENTRY_LEG but backend ignores it
+super-orders.tsx line 223 sends DELETE /super-orders/:id?leg=ENTRY_LEG. The backend route never reads the leg query param — it always cancels the whole order. The parameter is dead code and will mislead future development.
+
+🟡 LOW — Code Quality / SaaS Readiness
+12. getOrCreateSettings() is defined twice
+Both broker.ts and settings.ts have their own private copy of this function. The broker version should import the exported one from settings.
+
+13. XLSX library eagerly imported on Orders page
+import * as XLSX from "xlsx" at the top of orders.tsx loads a large library (~800 KB) on every Orders page visit, even when the user never downloads an export.
+
+14. WebSocket subscriptions not cleared on broker disconnect
+market-feed-ws.ts disconnect() does not clear the subscriptions Map. On broker switch, old subscriptions from the previous session are resubscribed immediately on reconnect to the new broker's WebSocket.
+
+15. user_id column in super_orders and settings tables always null
+SaaS-ready schema columns that serve no purpose in single-user mode. Minor DB clutter.
+
+16. _recentActivityCache has no concurrency guard (thundering herd)
+The module-level cache in dashboard.ts has no mutex. If 3 requests arrive simultaneously at cache expiry, all 3 call Dhan's /orders API at once.
+
+17. /broker/renew-token uses GET /v2/RenewToken — unverified Dhan endpoint
+Standard Dhan API v2 docs don't document a GET /RenewToken path. If this endpoint doesn't exist, the renew button will silently fail with a non-200 response.
+
+18. Strategies and Backtesting are "Coming Soon" stubs
+Both pages are placeholder components with no functionality, but they appear as full sidebar menu items — no visual distinction (e.g., lock icon, disabled state) to indicate they are not yet available.

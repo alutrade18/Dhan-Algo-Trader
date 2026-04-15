@@ -1,3 +1,4 @@
+import React from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -17,7 +18,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const NAV_SECTIONS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
+}
+
+const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: "TRADING",
     items: [
@@ -32,8 +40,8 @@ const NAV_SECTIONS = [
   {
     label: "AUTOMATION",
     items: [
-      { href: "/strategies", label: "Strategies", icon: TerminalSquare },
-      { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
+      { href: "/strategies", label: "Strategies", icon: TerminalSquare, comingSoon: true },
+      { href: "/backtesting", label: "Backtesting", icon: FlaskConical, comingSoon: true },
     ],
   },
   {
@@ -122,6 +130,21 @@ export function Sidebar({ isOpen, onClose, brokerConnected }: SidebarProps) {
               <div className="space-y-0.5">
                 {section.items.map((item) => {
                   const isActive = location === item.href;
+                  if (item.comingSoon) {
+                    return (
+                      <div
+                        key={item.href}
+                        title="Coming soon"
+                        className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground/35 cursor-not-allowed select-none"
+                      >
+                        <item.icon className="w-4 h-4 shrink-0" />
+                        {item.label}
+                        <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground/60 border border-border/40">
+                          Soon
+                        </span>
+                      </div>
+                    );
+                  }
                   return (
                     <Link key={item.href} href={item.href}>
                       <div

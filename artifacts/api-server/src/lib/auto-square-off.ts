@@ -2,7 +2,7 @@ import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "./dhan-client";
 import { sendTelegramAlertIfEnabled } from "./telegram";
 import { logger } from "./logger";
-import { isNseHolidayToday } from "./equity-scheduler";
+import { getMarketStatus } from "./market-calendar";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
@@ -35,7 +35,13 @@ async function checkAndSquareOff(): Promise<void> {
     const { hours, minutes, timeStr, dateStr } = nowIST();
     if (!isWeekday(dateStr)) return;
     if (lastSquareOffDate === dateStr) return;
-    if (await isNseHolidayToday()) return;
+
+    // Use the market calendar (DB-backed) to check if at least one market is open.
+    // This correctly handles NSE-only holidays (where MCX may still be open)
+    // and full-market holidays (both closed). Auto square-off is skipped only when
+    // ALL markets are closed for the day.
+    const marketStatus = getMarketStatus();
+    if (!marketStatus.nseOpen && !marketStatus.mcxOpen) return;
 
     const targetTime = settings.autoSquareOffTime ?? "15:14";
     const [targetH, targetM] = targetTime.split(":").map(Number);

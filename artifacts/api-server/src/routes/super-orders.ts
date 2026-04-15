@@ -172,6 +172,7 @@ router.post("/super-orders", async (req, res): Promise<void> => {
       dhanOrderId,
       securityId: security_id,
       exchangeSegment: exchange_segment,
+      tradingSymbol: String(tradingSymbol),
       transactionType: transaction_type,
       orderType: order_type ?? "LIMIT",
       productType: product_type,
