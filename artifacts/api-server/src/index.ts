@@ -68,6 +68,19 @@ async function loadSavedCredentials() {
       orderUpdateWS.configure(settings.brokerClientId, token);
       marketFeedWS.connect();
       orderUpdateWS.connect();
+      // Validate token immediately in background — sets tokenExpired=true on 401
+      setTimeout(() => {
+        dhanClient.getFundLimits().then(() => {
+          logger.info("Startup token validation: OK");
+        }).catch((err: unknown) => {
+          const status = (err as { status?: number })?.status;
+          if (status === 401) {
+            logger.warn("Startup token validation: expired (DH-901) — broker will show as disconnected");
+          } else {
+            logger.warn({ status }, "Startup token validation: non-auth error (token may still be valid)");
+          }
+        });
+      }, 2_000);
     } else {
       logger.info("No saved broker credentials found in database");
     }

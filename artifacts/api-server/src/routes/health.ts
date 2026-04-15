@@ -11,7 +11,7 @@ router.get("/healthz", (_req, res) => {
   refreshHolidayCacheIfStale();
 
   const market = getMarketStatus();
-  const brokerConnected = dhanClient.isConfigured();
+  const brokerConnected = dhanClient.isConnected();
 
   res.json({
     status: "ok",

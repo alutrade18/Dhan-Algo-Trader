@@ -75,11 +75,16 @@ export async function getOrCreateSettings() {
 }
 
 function serializeSettings(s: typeof settingsTable.$inferSelect) {
+  const connected = dhanClient.isConnected();
+  const tokenExpired = dhanClient.isTokenExpired();
   return {
     id: s.id,
+    // Always return masked clientId from DB (so user can re-authenticate without retyping)
     dhanClientId: s.brokerClientId ? "****" + s.brokerClientId.slice(-4) : "",
-    dhanAccessToken: s.brokerAccessToken ? "****" + decryptToken(s.brokerAccessToken).slice(-4) : "",
-    apiConnected: dhanClient.isConfigured(),
+    // Clear masked token when expired — forces the frontend form field to empty
+    dhanAccessToken: connected && s.brokerAccessToken ? "****" + decryptToken(s.brokerAccessToken).slice(-4) : "",
+    apiConnected: connected,
+    tokenExpired,
     maxDailyLoss: s.maxDailyLoss !== null && s.maxDailyLoss !== undefined ? Number(s.maxDailyLoss) : 0,
     theme: s.theme,
     hasTelegramToken: !!s.telegramBotToken,

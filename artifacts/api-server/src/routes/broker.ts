@@ -221,7 +221,7 @@ router.post("/broker/generate-token", async (req, res): Promise<void> => {
 // POST /broker/renew-token — Renew Dhan access token
 router.post("/broker/renew-token", async (req, res): Promise<void> => {
   if (!dhanClient.isConfigured()) {
-    res.status(401).json({ error: "Broker not connected" });
+    res.status(401).json({ error: "Broker not connected — connect or generate a token first" });
     return;
   }
   try {
@@ -293,7 +293,7 @@ router.get("/broker/server-ip", async (_req, res): Promise<void> => {
 
 // POST /broker/set-ip — Whitelist the server's own IP via Dhan API
 router.post("/broker/set-ip", async (req, res): Promise<void> => {
-  if (!dhanClient.isConfigured()) {
+  if (!dhanClient.isConnected()) {
     res.status(401).json({ success: false, error: "Broker not connected. Save your credentials first." });
     return;
   }
@@ -347,7 +347,7 @@ router.post("/broker/set-ip", async (req, res): Promise<void> => {
 });
 
 router.get("/broker/status", async (_req, res): Promise<void> => {
-  if (!dhanClient.isConfigured()) {
+  if (!dhanClient.isConnected()) {
     res.json({
       connected: false,
       availableBalance: null,

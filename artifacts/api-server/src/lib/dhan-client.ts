@@ -37,6 +37,7 @@ function getApiCategory(method: string, path: string): ApiCategory {
 const credentials = {
   clientId: process.env.DHAN_CLIENT_ID || "",
   accessToken: process.env.DHAN_ACCESS_TOKEN || "",
+  tokenExpired: false,
 };
 
 async function dhanRequest(
@@ -97,6 +98,11 @@ async function dhanRequest(
       { status: response.status, path, data, errorCode: errorInfo?.code },
       `Dhan API error: ${errorInfo?.code ?? response.status} — ${errorInfo?.message ?? "Unknown error"}`,
     );
+    // Mark token as expired on auth failures (only for the main credentials, not override calls)
+    if (response.status === 401 && !overrideCredentials) {
+      credentials.tokenExpired = true;
+      logger.warn({ path }, "Dhan 401 — marking token as expired, broker will show as disconnected");
+    }
     throw new DhanApiError(response.status, data, errorInfo ?? undefined);
   }
 
@@ -147,11 +153,21 @@ export const dhanClient = {
   configure(clientId: string, accessToken: string) {
     credentials.clientId = clientId;
     credentials.accessToken = accessToken;
+    credentials.tokenExpired = false;
   },
 
   disconnect() {
     credentials.clientId = "";
     credentials.accessToken = "";
+    credentials.tokenExpired = false;
+  },
+
+  isConnected(): boolean {
+    return !!credentials.clientId && !!credentials.accessToken && !credentials.tokenExpired;
+  },
+
+  isTokenExpired(): boolean {
+    return credentials.tokenExpired;
   },
 
   getCredentialsMasked() {

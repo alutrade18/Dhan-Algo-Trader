@@ -1,4 +1,4 @@
-import { useGetSettings } from "@workspace/api-client-react";
+import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
-  Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Sparkles,
+  Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Sparkles, Clock,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -27,6 +27,7 @@ interface FundDetails { dhanClientId?: string; availableBalance?: number; sodLim
 interface ConnectResult extends FundDetails { success: boolean; errorCode?: string; errorMessage?: string }
 interface SettingsData {
   id: number; dhanClientId: string; dhanAccessToken: string; apiConnected: boolean;
+  tokenExpired: boolean;
   telegramBotToken: string; telegramChatId: string;
   hasTelegramToken: boolean; hasTelegramChatId: boolean;
 }
@@ -247,7 +248,7 @@ function ServerIpInfo() {
 }
 
 export default function Settings() {
-  const { data: settings, isLoading } = useGetSettings();
+  const { data: settings, isLoading } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey(), refetchInterval: 30_000, staleTime: 0 } });
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -260,6 +261,7 @@ export default function Settings() {
 
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
+  const tokenExpired = settingsData?.tokenExpired ?? false;
   const maskedClientId = settingsData?.dhanClientId ?? "";
   const maskedAccessToken = settingsData?.dhanAccessToken ?? "";
 
@@ -276,7 +278,9 @@ export default function Settings() {
       if (maskedClientId) brokerForm.setValue("clientId", maskedClientId, { shouldValidate: false });
       if (maskedAccessToken) brokerForm.setValue("accessToken", maskedAccessToken, { shouldValidate: false });
     } else {
-      brokerForm.reset({ clientId: "", accessToken: "" });
+      // When expired/disconnected: keep clientId so user doesn't retype it, but clear the access token
+      brokerForm.setValue("clientId", maskedClientId || "", { shouldValidate: false });
+      brokerForm.setValue("accessToken", "", { shouldValidate: false });
     }
   }, [isConnected, maskedClientId, maskedAccessToken]);
 
@@ -380,18 +384,30 @@ export default function Settings() {
       <TokenExpiryBanner onReconnect={() => brokerForm.setFocus("accessToken")} />
 
       {/* ── Broker Connection ── */}
-      <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${isConnected ? "border-success/30 bg-card" : "border-border/50 bg-card"}`}>
+      <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${
+        isConnected ? "border-success/30 bg-card" : tokenExpired ? "border-destructive/30 bg-card" : "border-border/50 bg-card"
+      }`}>
 
         {/* Header */}
-        <div className={`px-5 py-3.5 flex items-center justify-between border-b ${isConnected ? "bg-success/8 border-success/20" : "bg-muted/10 border-border/30"}`}>
+        <div className={`px-5 py-3.5 flex items-center justify-between border-b ${
+          isConnected ? "bg-success/8 border-success/20" : tokenExpired ? "bg-destructive/8 border-destructive/20" : "bg-muted/10 border-border/30"
+        }`}>
           <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isConnected ? "bg-success/15" : "bg-muted/30"}`}>
-              {isConnected ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              isConnected ? "bg-success/15" : tokenExpired ? "bg-destructive/10" : "bg-muted/30"
+            }`}>
+              {isConnected
+                ? <Wifi className="w-4 h-4 text-success" />
+                : tokenExpired
+                  ? <Clock className="w-4 h-4 text-destructive" />
+                  : <WifiOff className="w-4 h-4 text-muted-foreground" />}
             </div>
             <div>
               <p className="text-sm font-semibold">Broker Connection</p>
-              <p className={`text-[10px] font-medium ${isConnected ? "text-success" : "text-muted-foreground"}`}>
-                {isConnected ? "Connected" : "Not connected to Dhan"}
+              <p className={`text-[10px] font-medium ${
+                isConnected ? "text-success" : tokenExpired ? "text-destructive" : "text-muted-foreground"
+              }`}>
+                {isConnected ? "Connected" : tokenExpired ? "Token expired — re-authenticate below" : "Not connected to Dhan"}
               </p>
             </div>
           </div>
@@ -399,6 +415,12 @@ export default function Settings() {
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
               <span className="text-[10px] font-semibold text-success uppercase tracking-wider">Live</span>
+            </div>
+          )}
+          {tokenExpired && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+              <span className="text-[10px] font-semibold text-destructive uppercase tracking-wider">Offline</span>
             </div>
           )}
         </div>
