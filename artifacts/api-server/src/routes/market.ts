@@ -146,7 +146,8 @@ router.post("/market/ltp-batch", async (req, res): Promise<void> => {
     return;
   }
   const body = req.body as { securities?: Record<string, unknown> };
-  if (!body.securities || typeof body.securities !== "object") {
+  if (!body.securities || typeof body.securities !== "object" || Array.isArray(body.securities)) {
+    req.log.warn({ bodyKeys: Object.keys(body ?? {}), securitiesType: typeof body?.securities }, "ltp-batch: invalid body");
     res.status(400).json({ error: "securities object required" });
     return;
   }

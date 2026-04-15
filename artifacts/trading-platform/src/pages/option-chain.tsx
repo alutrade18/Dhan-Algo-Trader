@@ -61,16 +61,40 @@ interface OptionEntry {
   strikePrice: number;
   callSecId?: number;
   putSecId?: number;
+  // Price
   callLTP: number;
-  callOI: number;
-  callVolume: number;
-  callIV: number;
   callPrevClose: number;
+  // OI
+  callOI: number;
+  callPrevOI: number;
+  // Volume
+  callVolume: number;
+  // Greeks
+  callIV: number;
+  callDelta: number;
+  callTheta: number;
+  callGamma: number;
+  callVega: number;
+  // Bid/Ask
+  callBidPrice: number;
+  callBidQty: number;
+  callAskPrice: number;
+  callAskQty: number;
+  // Put side mirrors
   putLTP: number;
+  putPrevClose: number;
   putOI: number;
+  putPrevOI: number;
   putVolume: number;
   putIV: number;
-  putPrevClose: number;
+  putDelta: number;
+  putTheta: number;
+  putGamma: number;
+  putVega: number;
+  putBidPrice: number;
+  putBidQty: number;
+  putAskPrice: number;
+  putAskQty: number;
 }
 
 // ── Market Hours (IST) ──────────────────────────────────────────────
@@ -466,20 +490,46 @@ export default function OptionChain() {
     if (putOI > maxOI) maxOI = putOI;
     const callSecId = Number(ce.security_id ?? ce.securityId ?? ce.SecurityId ?? 0) || undefined;
     const putSecId  = Number(pe.security_id ?? pe.securityId ?? pe.SecurityId ?? 0) || undefined;
+    // Greeks are nested under ce.greeks / pe.greeks per Dhan API spec
+    const ceG = (ce.greeks as Record<string, number> | undefined) ?? {};
+    const peG = (pe.greeks as Record<string, number> | undefined) ?? {};
     entries.push({
       strikePrice: strike,
       callSecId,
       putSecId,
-      callLTP: Number(ce.last_price ?? ce.ltp ?? 0),
+      // Price — Dhan field: last_price, prev: previous_close_price
+      callLTP:       Number(ce.last_price ?? ce.ltp ?? 0),
+      callPrevClose: Number(ce.previous_close_price ?? ce.prev_close ?? 0),
+      // OI — Dhan fields: oi, previous_oi
       callOI,
-      callVolume: Number(ce.volume ?? 0),
-      callIV: Number(ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0),
-      callPrevClose: Number(ce.prev_close ?? ce.prevClose ?? ce.previous_close ?? 0),
-      putLTP: Number(pe.last_price ?? pe.ltp ?? 0),
+      callPrevOI:  Number(ce.previous_oi ?? 0),
+      callVolume:  Number(ce.volume ?? 0),
+      // Greeks — Dhan fields: greeks.{delta,theta,gamma,vega}, implied_volatility
+      callIV:    Number(ce.implied_volatility ?? 0),
+      callDelta: Number(ceG.delta ?? 0),
+      callTheta: Number(ceG.theta ?? 0),
+      callGamma: Number(ceG.gamma ?? 0),
+      callVega:  Number(ceG.vega ?? 0),
+      // Bid/Ask — Dhan fields: top_bid_price, top_bid_quantity, top_ask_price, top_ask_quantity
+      callBidPrice: Number(ce.top_bid_price ?? 0),
+      callBidQty:   Number(ce.top_bid_quantity ?? 0),
+      callAskPrice: Number(ce.top_ask_price ?? 0),
+      callAskQty:   Number(ce.top_ask_quantity ?? 0),
+      // ── Put side ────────────────────────────────────────────────────
+      putLTP:       Number(pe.last_price ?? pe.ltp ?? 0),
+      putPrevClose: Number(pe.previous_close_price ?? pe.prev_close ?? 0),
       putOI,
-      putVolume: Number(pe.volume ?? 0),
-      putIV: Number(pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0),
-      putPrevClose: Number(pe.prev_close ?? pe.prevClose ?? pe.previous_close ?? 0),
+      putPrevOI:  Number(pe.previous_oi ?? 0),
+      putVolume:  Number(pe.volume ?? 0),
+      putIV:    Number(pe.implied_volatility ?? 0),
+      putDelta: Number(peG.delta ?? 0),
+      putTheta: Number(peG.theta ?? 0),
+      putGamma: Number(peG.gamma ?? 0),
+      putVega:  Number(peG.vega ?? 0),
+      putBidPrice: Number(pe.top_bid_price ?? 0),
+      putBidQty:   Number(pe.top_bid_quantity ?? 0),
+      putAskPrice: Number(pe.top_ask_price ?? 0),
+      putAskQty:   Number(pe.top_ask_quantity ?? 0),
     });
   }
 
@@ -947,7 +997,7 @@ export default function OptionChain() {
               {/* Section labels — solid background so scrolled rows don't bleed through */}
               <tr className="border-b border-border">
                 <th
-                  colSpan={5}
+                  colSpan={7}
                   className="py-2 text-center text-[11px] font-semibold tracking-wide text-red-400 bg-card border-r border-border"
                 >
                   CALLS (CE) &nbsp;·&nbsp;
@@ -956,7 +1006,7 @@ export default function OptionChain() {
                   STRIKE
                 </th>
                 <th
-                  colSpan={5}
+                  colSpan={7}
                   className="py-2 text-center text-[11px] font-semibold tracking-wide text-emerald-400 bg-card border-l border-border"
                 >
                   PUTS (PE) &nbsp;·&nbsp;
@@ -964,14 +1014,14 @@ export default function OptionChain() {
               </tr>
               {/* Column headers — solid background */}
               <tr className="border-b border-border text-muted-foreground">
-                {["OI Bar", "OI", "Volume", "IV%", "LTP"].map((h) => (
-                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium bg-muted">
+                {["OI Bar", "OI", "Volume", "IV%", "Δ", "Bid × Ask", "LTP"].map((h) => (
+                  <th key={`ce-${h}`} className="px-2.5 py-1.5 text-right font-medium bg-muted whitespace-nowrap">
                     {h}
                   </th>
                 ))}
                 <th className="px-3 py-1.5 text-center font-medium bg-muted border-x border-border">₹</th>
-                {["LTP", "IV%", "Volume", "OI", "OI Bar"].map((h) => (
-                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium bg-muted">
+                {["LTP", "Bid × Ask", "Δ", "IV%", "Volume", "OI", "OI Bar"].map((h) => (
+                  <th key={`pe-${h}`} className="px-2.5 py-1.5 text-right font-medium bg-muted whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -995,26 +1045,64 @@ export default function OptionChain() {
                         : "hover:bg-muted/15"
                     }`}
                   >
-                    {/* ── CALL side ── */}
-                    {/* OI Bar */}
+                    {/* ── CALL side (7 cols) ── */}
+
+                    {/* 1. OI Bar */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
                       <div className="flex justify-end">
                         <OIBar value={e.callOI} max={maxOI} side="ce" />
                       </div>
                     </td>
-                    {/* OI */}
-                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}>
-                      <span className="text-red-400">{formatOI(e.callOI)}</span>
+
+                    {/* 2. OI + ΔOI */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                      <div className="flex flex-col items-end leading-tight gap-px">
+                        <span className="font-mono text-red-400">{formatOI(e.callOI)}</span>
+                        {e.callPrevOI > 0 && (() => {
+                          const d = e.callOI - e.callPrevOI;
+                          return d !== 0 ? (
+                            <span className={`text-[9px] tabular-nums ${d > 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
+                              {d > 0 ? "▲" : "▼"}{formatOI(Math.abs(d))}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </td>
-                    {/* Volume */}
+
+                    {/* 3. Volume */}
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
                       {formatOI(e.callVolume)}
                     </td>
-                    {/* IV */}
+
+                    {/* 4. IV% */}
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
                       {e.callIV > 0 ? e.callIV.toFixed(1) : "—"}
                     </td>
-                    {/* LTP — live via REST (5s) + WebSocket, flashes on price change */}
+
+                    {/* 5. Delta */}
+                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-red-400/5" : ""}`}>
+                      {e.callDelta !== 0 ? (
+                        <span className="text-sky-400/90">{e.callDelta.toFixed(3)}</span>
+                      ) : "—"}
+                    </td>
+
+                    {/* 6. Bid × Ask */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
+                      {e.callBidPrice > 0 || e.callAskPrice > 0 ? (
+                        <div className="flex flex-col items-end leading-tight gap-px font-mono text-[10px]">
+                          <span className="text-emerald-400/80">
+                            {e.callBidPrice.toFixed(2)}
+                            {e.callBidQty > 0 && <span className="text-muted-foreground/60 ml-0.5">({e.callBidQty})</span>}
+                          </span>
+                          <span className="text-red-400/80">
+                            {e.callAskPrice.toFixed(2)}
+                            {e.callAskQty > 0 && <span className="text-muted-foreground/60 ml-0.5">({e.callAskQty})</span>}
+                          </span>
+                        </div>
+                      ) : "—"}
+                    </td>
+
+                    {/* 7. LTP + Chg% + θ — live via REST 5s + WebSocket */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
                       {(() => {
                         const ltp = e.callSecId ? (liveLtps.get(e.callSecId) ?? e.callLTP) : e.callLTP;
@@ -1029,6 +1117,11 @@ export default function OptionChain() {
                             {chgPct !== null && (
                               <span className={`text-[9px] font-medium tabular-nums ${chgPct >= 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
                                 {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%
+                              </span>
+                            )}
+                            {e.callTheta !== 0 && (
+                              <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+                                θ {e.callTheta.toFixed(1)}
                               </span>
                             )}
                           </div>
@@ -1052,8 +1145,9 @@ export default function OptionChain() {
                       )}
                     </td>
 
-                    {/* ── PUT side ── */}
-                    {/* LTP — live via REST (5s) + WebSocket, flashes on price change */}
+                    {/* ── PUT side (7 cols) ── */}
+
+                    {/* 1. LTP + Chg% + θ — live via REST 5s + WebSocket */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
                       {(() => {
                         const ltp = e.putSecId ? (liveLtps.get(e.putSecId) ?? e.putLTP) : e.putLTP;
@@ -1070,23 +1164,65 @@ export default function OptionChain() {
                                 {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%
                               </span>
                             )}
+                            {e.putTheta !== 0 && (
+                              <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+                                θ {e.putTheta.toFixed(1)}
+                              </span>
+                            )}
                           </div>
                         );
                       })()}
                     </td>
-                    {/* IV */}
+
+                    {/* 2. Bid × Ask */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      {e.putBidPrice > 0 || e.putAskPrice > 0 ? (
+                        <div className="flex flex-col items-end leading-tight gap-px font-mono text-[10px]">
+                          <span className="text-emerald-400/80">
+                            {e.putBidPrice.toFixed(2)}
+                            {e.putBidQty > 0 && <span className="text-muted-foreground/60 ml-0.5">({e.putBidQty})</span>}
+                          </span>
+                          <span className="text-red-400/80">
+                            {e.putAskPrice.toFixed(2)}
+                            {e.putAskQty > 0 && <span className="text-muted-foreground/60 ml-0.5">({e.putAskQty})</span>}
+                          </span>
+                        </div>
+                      ) : "—"}
+                    </td>
+
+                    {/* 3. Delta */}
+                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      {e.putDelta !== 0 ? (
+                        <span className="text-sky-400/90">{e.putDelta.toFixed(3)}</span>
+                      ) : "—"}
+                    </td>
+
+                    {/* 4. IV% */}
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
                       {e.putIV > 0 ? e.putIV.toFixed(1) : "—"}
                     </td>
-                    {/* Volume */}
+
+                    {/* 5. Volume */}
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
                       {formatOI(e.putVolume)}
                     </td>
-                    {/* OI */}
-                    <td className={`px-2.5 py-2 text-right font-mono ${isATM ? "bg-emerald-400/5" : ""}`}>
-                      <span className="text-emerald-400">{formatOI(e.putOI)}</span>
+
+                    {/* 6. OI + ΔOI */}
+                    <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
+                      <div className="flex flex-col items-end leading-tight gap-px">
+                        <span className="font-mono text-emerald-400">{formatOI(e.putOI)}</span>
+                        {e.putPrevOI > 0 && (() => {
+                          const d = e.putOI - e.putPrevOI;
+                          return d !== 0 ? (
+                            <span className={`text-[9px] tabular-nums ${d > 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
+                              {d > 0 ? "▲" : "▼"}{formatOI(Math.abs(d))}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </td>
-                    {/* OI Bar */}
+
+                    {/* 7. OI Bar */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
                       <div className="flex justify-start">
                         <OIBar value={e.putOI} max={maxOI} side="pe" />
@@ -1118,11 +1254,15 @@ export default function OptionChain() {
           <span className="flex items-center gap-1">
             <span className="text-emerald-400 text-[10px]">▲</span>
             <span className="text-red-400 text-[10px]">▼</span>
-            LTP up / down (WebSocket live)
+            LTP flash up/down · OI ΔOI change from prev close
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-sky-400/90 font-mono text-[10px]">Δ</span>
+            Delta greek · θ Theta below LTP · Bid(qty)×Ask(qty)
           </span>
           <span className="flex items-center gap-1">
             <Wifi className="w-3 h-3 text-emerald-400" />
-            LTP: WebSocket (real-time) + REST 5s poll · OI/IV/Vol refreshes every 30 s
+            LTP: WebSocket real-time + REST 5s fallback · OI/Greeks/Vol refresh every 30 s
           </span>
         </div>
       )}
