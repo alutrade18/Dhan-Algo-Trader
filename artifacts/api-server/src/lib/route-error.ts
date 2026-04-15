@@ -3,7 +3,7 @@ import { DhanApiError } from "./dhan-client";
 import { logger } from "./logger";
 import { sendTelegramAlertIfEnabled } from "./telegram";
 
-const ALERT_CODES = new Set(["DH-901", "DH-905"]);
+const ALERT_CODES = new Set(["DH-901", "DH-911"]);
 const alertCooldown = new Map<string, number>();
 const COOLDOWN_MS = 15 * 60 * 1_000; // 15 min — don't spam
 
@@ -18,10 +18,10 @@ function maybeSendCriticalAlert(errorCode: string, context: string) {
       "criticalErrors",
       "🔴 *TOKEN EXPIRED (DH\\-901)*\n\nYour Dhan access token has expired\\. Orders and live data will fail until you reconnect\\.\n\n*Action:* Go to Settings → paste a new access token\\.",
     );
-  } else if (errorCode === "DH-905") {
+  } else if (errorCode === "DH-911") {
     void sendTelegramAlertIfEnabled(
       "criticalErrors",
-      "🔴 *IP NOT WHITELISTED (DH\\-905)*\n\nYour server IP is not whitelisted in the Dhan portal\\. Order APIs are blocked\\.\n\n*Action:* Dhan Portal → My Profile → Manage App → whitelist your server IP\\.",
+      "🔴 *IP NOT WHITELISTED (DH\\-911)*\n\nYour server IP is not whitelisted in the Dhan portal\\. Order APIs are blocked\\.\n\n*Action:* Dhan Portal → My Profile → Manage App → whitelist your server IP\\.",
     );
   }
 }

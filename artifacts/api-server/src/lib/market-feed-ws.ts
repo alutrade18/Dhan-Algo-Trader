@@ -132,6 +132,20 @@ class MarketFeedWS extends EventEmitter {
       this.onValidPacketReceived();
       this.emit("quote", quote);
       this.emit("tick", { securityId: quote.securityId, exchangeSegment: exchSeg, ltp, ltt });
+    } else if (responseCode === 8) {
+      // Full Packet — same OHLCV layout as Quote (code 4) for the first 36 bytes
+      if (buf.length < 40) return;
+      const ltp = buf.readFloatLE(8);
+      const ltt = buf.readInt32LE(12);
+      const open = buf.readFloatLE(16);
+      const high = buf.readFloatLE(20);
+      const low = buf.readFloatLE(24);
+      const close = buf.readFloatLE(28);
+      const volume = buf.readInt32LE(32);
+      const fullQuote: QuoteData = { securityId: Math.abs(securityId), exchangeSegment: exchSeg, ltp, ltt, open, high, low, close, volume };
+      this.onValidPacketReceived();
+      this.emit("quote", fullQuote);
+      this.emit("tick", { securityId: fullQuote.securityId, exchangeSegment: exchSeg, ltp, ltt });
     } else if (responseCode === 50) {
       logger.warn("MarketFeedWS: server sent disconnect packet");
       this.ws?.close();

@@ -200,7 +200,7 @@ router.post("/super-orders", async (req, res): Promise<void> => {
   }
 });
 
-const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "TARGET_HIT", "STOP_LOSS_HIT"] as const;
+const TERMINAL_STATUSES = ["CANCELLED", "COMPLETED", "TARGET_HIT", "STOP_LOSS_HIT", "CLOSED", "REJECTED"] as const;
 type TerminalStatus = typeof TERMINAL_STATUSES[number];
 
 router.delete("/super-orders/:orderId", async (req, res): Promise<void> => {

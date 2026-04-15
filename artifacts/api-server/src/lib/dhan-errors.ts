@@ -34,7 +34,7 @@ export const TRADING_API_ERRORS: Record<string, DhanErrorInfo> = {
   "DH-905": {
     code: "DH-905",
     httpStatus: 400,
-    message: "IP not whitelisted or invalid request. Go to Dhan Portal → My Profile → Manage App → whitelist your server IP, then retry.",
+    message: "Input exception — missing required fields or invalid parameter values in the request.",
     retryable: false,
   },
   "DH-906": {

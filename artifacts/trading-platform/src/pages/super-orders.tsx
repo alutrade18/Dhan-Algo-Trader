@@ -56,17 +56,32 @@ const BLANK_FORM: FormState = {
 };
 
 const TERMINAL_STATUSES = new Set([
-  "TARGET_HIT", "STOP_LOSS_HIT", "COMPLETED", "CANCELLED", "REJECTED",
+  // Dhan API super order statuses
+  "CLOSED", "REJECTED", "CANCELLED",
+  // Internal statuses set by our super-order monitor
+  "TARGET_HIT", "STOP_LOSS_HIT", "COMPLETED",
 ]);
 
 function statusColor(status: string) {
   const s = status?.toUpperCase();
-  if (s === "TRADED" || s === "PARTIALLY_TRADED" || s === "TARGET_HIT" || s === "COMPLETED")
+  // Success: fully executed or target hit
+  if (s === "TRADED" || s === "TARGET_HIT" || s === "COMPLETED" || s === "CLOSED")
     return "text-success border-success/30 bg-success/10";
-  if (s === "STOP_LOSS_HIT" || s === "REJECTED" || s === "CANCELLED")
+  // Partial fill
+  if (s === "PART_TRADED")
+    return "text-amber-400 border-amber-400/30 bg-amber-400/10";
+  // Error / loss
+  if (s === "STOP_LOSS_HIT" || s === "REJECTED")
     return "text-destructive border-destructive/30 bg-destructive/10";
-  if (s === "PENDING" || s === "TRANSIT" || s === "OPEN")
+  // Cancelled
+  if (s === "CANCELLED")
+    return "text-muted-foreground border-muted/50 bg-muted/10";
+  // Active exit in flight
+  if (s === "TRIGGERED")
     return "text-warning border-warning/30 bg-warning/10";
+  // Awaiting entry execution
+  if (s === "PENDING" || s === "TRANSIT" || s === "OPEN")
+    return "text-blue-400 border-blue-400/30 bg-blue-400/10";
   return "text-muted-foreground border-muted";
 }
 
