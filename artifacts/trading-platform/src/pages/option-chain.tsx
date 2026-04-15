@@ -59,8 +59,8 @@ interface OptionEntry {
 }
 
 // ── Market Hours (IST) ──────────────────────────────────────────────
-// NSE F&O / Stock Options  : Mon-Fri 08:50 → 18:40
-// MCX F&O                  : Mon-Fri 08:50 → 23:59
+// NSE Equity F&O           : Mon-Fri 09:15 → 15:30
+// MCX Commodity F&O        : Mon-Fri 09:00 → 23:30
 function getISTMinutes(): { mins: number; day: number } {
   const now = new Date();
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60_000;
@@ -89,9 +89,9 @@ function computeMarketStatus(exchange: Exchange): {
       color: "text-muted-foreground",
     };
   }
-  const open = 8 * 60 + 50; // 08:50
-  const close = exchange === "MCX" ? 23 * 60 + 59 : 18 * 60 + 40;
-  const closeLabel = exchange === "MCX" ? "11:59 PM" : "6:40 PM";
+  const open = exchange === "MCX" ? 9 * 60 : 9 * 60 + 15;      // MCX 09:00, NSE 09:15
+  const close = exchange === "MCX" ? 23 * 60 + 30 : 15 * 60 + 30; // MCX 23:30, NSE 15:30
+  const closeLabel = exchange === "MCX" ? "11:30 PM" : "3:30 PM";
 
   if (mins < open) {
     return {
@@ -290,6 +290,8 @@ export default function OptionChain() {
   const [indexUnderlying, setIndexUnderlying] = useState<IndexUnderlying | null>(null);
   const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
   const [expiry, setExpiry] = useState("");
+  // Live spot price from WS (overrides REST ltp when available)
+  const [liveSpot, setLiveSpot] = useState<number>(0);
 
   // Load index underlyings from DB (instrument="INDEX")
   const { data: indexList = [], isLoading: indexListLoading } = useQuery<IndexUnderlying[]>({
@@ -369,6 +371,7 @@ export default function OptionChain() {
 
   useEffect(() => {
     setExpiry("");
+    setLiveSpot(0); // clear stale live spot when underlying changes
   }, [activeDhanSecId, activeSegment]);
   useEffect(() => {
     if (expiryList.length > 0 && !expiry) setExpiry(expiryList[0]);
@@ -407,6 +410,8 @@ export default function OptionChain() {
   // ── Parse chain data ─────────────────────────────────────────────
   const rawChain = chain?.data ?? {};
   const underlyingLtp = Number(chain?.ltp ?? 0);
+  // displaySpot: prefer live WS price, fall back to REST snapshot
+  const displaySpot = liveSpot > 0 ? liveSpot : underlyingLtp;
   const entries: OptionEntry[] = [];
 
   const strikeKeys = Object.keys(rawChain);
@@ -444,9 +449,9 @@ export default function OptionChain() {
 
   // ── ATM & display slice ─────────────────────────────────────────
   const atmStrike =
-    underlyingLtp > 0 && strikes.length > 0
+    displaySpot > 0 && strikes.length > 0
       ? strikes.reduce((prev, curr) =>
-          Math.abs(curr - underlyingLtp) < Math.abs(prev - underlyingLtp) ? curr : prev,
+          Math.abs(curr - displaySpot) < Math.abs(prev - displaySpot) ? curr : prev,
         )
       : 0;
 
@@ -457,7 +462,7 @@ export default function OptionChain() {
   const displayEntries = (() => {
     if (entries.length === 0) return entries;
     const atmIdx = entries.findIndex((e) => e.strikePrice === atmStrike);
-    if (atmIdx < 0 || underlyingLtp <= 0) {
+    if (atmIdx < 0 || displaySpot <= 0) {
       const mid = Math.floor(entries.length / 2);
       return entries.slice(Math.max(0, mid - 20), Math.min(entries.length, mid + 21));
     }
@@ -484,9 +489,19 @@ export default function OptionChain() {
     return () => clearInterval(id);
   }, []);
 
-  // Subscribe to WS when the visible strikes change
+  // Subscribe to underlying index/stock for live Spot price
   useEffect(() => {
-    if (!marketStatus.isOpen || displayEntries.length === 0) return;
+    if (!activeDhanSecId || !activeSegment) return;
+    const cb = (tick: { securityId: number; ltp: number }) => {
+      if (tick.securityId === activeDhanSecId) setLiveSpot(tick.ltp);
+    };
+    const unsub = marketSocket.subscribe(activeSegment, activeDhanSecId, cb, "quote");
+    return unsub;
+  }, [activeDhanSecId, activeSegment]);
+
+  // Subscribe to option strikes via WS (always active — market-closed instruments simply send no ticks)
+  useEffect(() => {
+    if (displayEntries.length === 0) return;
 
     const ceIds = displayEntries.map((e) => e.callSecId).filter((id): id is number => !!id);
     const peIds = displayEntries.map((e) => e.putSecId).filter((id): id is number => !!id);
@@ -504,7 +519,7 @@ export default function OptionChain() {
       setWsConnected(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayEntries, marketStatus.isOpen, optionSegment]);
+  }, [displayEntries, optionSegment]);
 
   // ── Live LTP flash tracking ──────────────────────────────────────
   // prevPricesRef: prices from previous render cycle (REST or WS)
@@ -679,12 +694,15 @@ export default function OptionChain() {
       {/* ── Stats bar ── */}
       {hasData && (
         <div className="flex items-center gap-6 flex-wrap text-xs">
-          {underlyingLtp > 0 && (
+          {displaySpot > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">Spot:</span>
               <span className="font-mono font-bold text-foreground">
-                ₹{underlyingLtp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                ₹{displaySpot.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </span>
+              {liveSpot > 0 && (
+                <span className="text-[9px] text-emerald-400 font-medium">LIVE</span>
+              )}
             </div>
           )}
           {atmStrike > 0 && (
