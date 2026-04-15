@@ -651,60 +651,38 @@ export default function OptionChain() {
           <div />
         )}
 
-        {/* Right: controls — progressive disclosure */}
+        {/* Right: controls */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
 
-          {/* ── Step 1: Market selector NSE / MCX — always visible ── */}
-          <div className="flex rounded-md overflow-hidden border border-border text-xs">
-            <button
-              className={`px-4 py-1.5 font-semibold tracking-wide transition-colors ${market === "NSE" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => {
-                setMarket("NSE");
-                setExpiry("");
-                setLiveSpot(0);
-              }}
-            >
-              NSE
-            </button>
-            <button
-              className={`px-4 py-1.5 font-semibold tracking-wide transition-colors ${market === "MCX" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => {
-                setMarket("MCX");
-                setExpiry("");
-                setLiveSpot(0);
-              }}
-            >
-              MCX
-            </button>
-          </div>
-
-          {/* ── Step 2: NSE sub-controls (appear after NSE selected) ── */}
+          {/* ── NSE controls (only when NSE selected) ── */}
           {market === "NSE" && (
             <>
+              {/* Market chip — click to switch market */}
+              <button
+                onClick={() => { setMarket(null); setExpiry(""); setLiveSpot(0); }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/15 text-primary text-xs font-semibold border border-primary/30 hover:bg-primary/25 transition-colors"
+                title="Switch market"
+              >
+                NSE <X className="w-3 h-3" />
+              </button>
+
               {/* Index / Stock toggle */}
               <div className="flex rounded-md overflow-hidden border border-border text-xs">
                 <button
                   className={`px-3 py-1.5 ${mode === "index" ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => {
-                    setMode("index");
-                    setStockUnderlying(null);
-                    setExpiry("");
-                  }}
+                  onClick={() => { setMode("index"); setStockUnderlying(null); setExpiry(""); }}
                 >
                   Index
                 </button>
                 <button
                   className={`px-3 py-1.5 ${mode === "stock" ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => {
-                    setMode("stock");
-                    setExpiry("");
-                  }}
+                  onClick={() => { setMode("stock"); setExpiry(""); }}
                 >
                   Stock
                 </button>
               </div>
 
-              {/* Index dropdown / Stock search */}
+              {/* Index dropdown or Stock search */}
               {mode === "index" ? (
                 <Select
                   value={activeIndex ? String(activeIndex.dhanSecId) : ""}
@@ -726,37 +704,35 @@ export default function OptionChain() {
                   </SelectContent>
                 </Select>
               ) : (
-                <StockSearch
-                  onSelect={(s) => {
-                    setStockUnderlying(s);
-                    setExpiry("");
-                  }}
-                />
+                <StockSearch onSelect={(s) => { setStockUnderlying(s); setExpiry(""); }} />
               )}
 
-              {/* Expiry — appears after underlying selected */}
+              {/* Expiry — shows once underlying is selected */}
               {(mode === "index" ? !!activeIndex : !!stockUnderlying) && (
-                <Select
-                  value={expiry}
-                  onValueChange={setExpiry}
-                  disabled={expiryLoading || expiryList.length === 0}
-                >
+                <Select value={expiry} onValueChange={setExpiry} disabled={expiryLoading || expiryList.length === 0}>
                   <SelectTrigger className="w-32 text-xs font-mono h-9">
                     <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {expiryList.map((e) => (
-                      <SelectItem key={e} value={e}>{e}</SelectItem>
-                    ))}
+                    {expiryList.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
             </>
           )}
 
-          {/* ── Step 2: MCX sub-controls (appear after MCX selected) ── */}
+          {/* ── MCX controls (only when MCX selected) ── */}
           {market === "MCX" && (
             <>
+              {/* Market chip — click to switch market */}
+              <button
+                onClick={() => { setMarket(null); setExpiry(""); setLiveSpot(0); }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-400 text-xs font-semibold border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+                title="Switch market"
+              >
+                MCX <X className="w-3 h-3" />
+              </button>
+
               {/* Commodity dropdown */}
               <Select
                 value={mcxUnderlying.symbol}
@@ -766,34 +742,27 @@ export default function OptionChain() {
                 }}
               >
                 <SelectTrigger className="w-36 text-xs h-9">
-                  <SelectValue placeholder="Select Commodity" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {MCX_UNDERLYINGS.map((u) => (
-                    <SelectItem key={u.symbol} value={u.symbol}>
-                      {u.label}
-                    </SelectItem>
+                    <SelectItem key={u.symbol} value={u.symbol}>{u.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
-              {/* Expiry — appears after commodity selected (mcxUnderlying always set) */}
-              <Select
-                value={expiry}
-                onValueChange={setExpiry}
-                disabled={expiryLoading || expiryList.length === 0}
-              >
+              {/* Expiry */}
+              <Select value={expiry} onValueChange={setExpiry} disabled={expiryLoading || expiryList.length === 0}>
                 <SelectTrigger className="w-32 text-xs font-mono h-9">
                   <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {expiryList.map((e) => (
-                    <SelectItem key={e} value={e}>{e}</SelectItem>
-                  ))}
+                  {expiryList.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                 </SelectContent>
               </Select>
             </>
           )}
+
         </div>
       </div>
 
