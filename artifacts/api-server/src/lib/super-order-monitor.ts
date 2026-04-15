@@ -1,7 +1,7 @@
 import { db, superOrdersTable } from "@workspace/db";
 import { not, inArray, eq } from "drizzle-orm";
 import { dhanClient } from "./dhan-client";
-import { sendTelegramAlert } from "./telegram";
+import { sendTelegramAlertIfEnabled } from "./telegram";
 import { logger } from "./logger";
 import { isNseHolidayToday } from "./equity-scheduler";
 
@@ -124,7 +124,7 @@ async function checkSuperOrders(): Promise<void> {
             .set({ status: triggered })
             .where(eq(superOrdersTable.id, order.id));
 
-          void sendTelegramAlert(alertMsg + `\n\n_${APP_NAME} — Super Order Monitor_`);
+          void sendTelegramAlertIfEnabled("superOrders", alertMsg + `\n\n_${APP_NAME} — Super Order Monitor_`);
           logger.info({ orderId: order.id, triggered, ltp }, "SuperOrderMonitor: exit triggered");
         } catch (exitErr) {
           logger.error({ err: exitErr, orderId: order.id }, "SuperOrderMonitor: failed to place exit order — will retry next cycle");

@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
   Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Sparkles, Clock,
+  ShieldAlert, Target, Zap, Timer, MessageCircle,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -25,12 +26,25 @@ const telegramSchema = z.object({
 
 interface FundDetails { dhanClientId?: string; availableBalance?: number; sodLimit?: number; utilizedAmount?: number; withdrawableBalance?: number }
 interface ConnectResult extends FundDetails { success: boolean; errorCode?: string; errorMessage?: string }
+interface TelegramAlerts {
+  orderFills: boolean;
+  superOrders: boolean;
+  killSwitch: boolean;
+  autoSquareOff: boolean;
+  criticalErrors: boolean;
+}
+
 interface SettingsData {
   id: number; dhanClientId: string; dhanAccessToken: string; apiConnected: boolean;
   tokenExpired: boolean;
   telegramBotToken: string; telegramChatId: string;
   hasTelegramToken: boolean; hasTelegramChatId: boolean;
+  telegramAlerts: TelegramAlerts;
 }
+
+const DEFAULT_TELEGRAM_ALERTS: TelegramAlerts = {
+  orderFills: true, superOrders: true, killSwitch: true, autoSquareOff: true, criticalErrors: true,
+};
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{children}</p>;
@@ -368,6 +382,50 @@ export default function Settings() {
     onError: () => toast({ title: "Failed to reset", variant: "destructive" }),
   });
 
+  const [alertToggles, setAlertToggles] = useState<TelegramAlerts>(DEFAULT_TELEGRAM_ALERTS);
+  useEffect(() => {
+    if (settingsData?.telegramAlerts) setAlertToggles(settingsData.telegramAlerts);
+  }, [settingsData?.telegramAlerts]);
+
+  const alertToggleMutation = useMutation({
+    mutationFn: async (alerts: TelegramAlerts) => {
+      const res = await fetch(`${BASE}api/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ telegramAlerts: alerts }) });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onError: () => {
+      if (settingsData?.telegramAlerts) setAlertToggles(settingsData.telegramAlerts);
+      toast({ title: "Failed to save alert preference", variant: "destructive" });
+    },
+  });
+
+  const [testMsgState, setTestMsgState] = useState<"idle" | "sending" | "ok" | "fail">("idle");
+  const sendTestMessage = async () => {
+    setTestMsgState("sending");
+    try {
+      const res = await fetch(`${BASE}api/telegram/test`, { method: "POST" });
+      const d = await res.json() as { ok: boolean; error?: string };
+      if (d.ok) {
+        setTestMsgState("ok");
+        toast({ title: "Test message sent!", description: "Check your Telegram chat." });
+      } else {
+        setTestMsgState("fail");
+        toast({ title: "Failed to send", description: d.error, variant: "destructive" });
+      }
+    } catch {
+      setTestMsgState("fail");
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setTimeout(() => setTestMsgState("idle"), 3000);
+    }
+  };
+
+  function toggleAlert(key: keyof TelegramAlerts) {
+    const next = { ...alertToggles, [key]: !alertToggles[key] };
+    setAlertToggles(next);
+    alertToggleMutation.mutate(next);
+  }
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 w-full">
@@ -563,7 +621,7 @@ export default function Settings() {
           )}
         </div>
 
-        <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="flex-1 flex flex-col px-5 py-4 space-y-4">
+        <form onSubmit={telegramForm.handleSubmit(v => telegramMutation.mutate(v))} className="flex-1 flex flex-col px-5 py-4 gap-4">
           <div className="space-y-1.5">
             <SectionLabel>Bot Token</SectionLabel>
             <div className="relative">
@@ -579,7 +637,62 @@ export default function Settings() {
             <Input type="text" className="h-10 font-mono bg-background/60" autoComplete="off" {...telegramForm.register("telegramChatId")} />
             {telegramForm.formState.errors.telegramChatId && <p className="text-[10px] text-destructive">{telegramForm.formState.errors.telegramChatId.message}</p>}
           </div>
-          <div className="flex gap-2.5 mt-auto pt-1">
+
+          {/* Test Message */}
+          {settingsData?.hasTelegramToken && (
+            <button
+              type="button"
+              onClick={sendTestMessage}
+              disabled={testMsgState === "sending"}
+              className={`w-full flex items-center justify-center gap-2 h-9 rounded-xl border text-xs font-semibold transition-all
+                ${testMsgState === "ok" ? "border-success/40 bg-success/10 text-success" :
+                  testMsgState === "fail" ? "border-destructive/40 bg-destructive/10 text-destructive" :
+                  "border-border/50 bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground"}`}
+            >
+              {testMsgState === "sending" ? (
+                <><span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />Sending…</>
+              ) : testMsgState === "ok" ? (
+                <><CheckCircle2 className="w-3.5 h-3.5" />Message Delivered</>
+              ) : testMsgState === "fail" ? (
+                <><XCircle className="w-3.5 h-3.5" />Send Failed</>
+              ) : (
+                <><MessageCircle className="w-3.5 h-3.5" />Send Test Message</>
+              )}
+            </button>
+          )}
+
+          {/* Alert Toggles */}
+          <div className="space-y-1">
+            <SectionLabel>Notify me for</SectionLabel>
+            <div className="rounded-xl border border-border/40 bg-muted/10 divide-y divide-border/30 overflow-hidden">
+              {([
+                { key: "orderFills",    icon: Zap,         label: "Order fills & rejections" },
+                { key: "superOrders",   icon: Target,      label: "Super order target / stop-loss hit" },
+                { key: "killSwitch",    icon: ShieldAlert, label: "Kill switch activated / deactivated" },
+                { key: "autoSquareOff", icon: Timer,       label: "Auto square-off executed" },
+                { key: "criticalErrors",icon: AlertTriangle,label: "Critical errors (token expired, IP blocked)" },
+              ] as const).map(({ key, icon: Icon, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleAlert(key)}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-muted/20 transition-colors text-left"
+                >
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${alertToggles[key] ? "text-primary" : "text-muted-foreground/50"}`} />
+                  <span className={`flex-1 text-xs ${alertToggles[key] ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+                  {/* Toggle pill */}
+                  <span className={`relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full transition-colors duration-200
+                    ${alertToggles[key] ? "bg-primary" : "bg-muted-foreground/25"}`}
+                    style={{ height: "18px", width: "32px" }}>
+                    <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform duration-200
+                      ${alertToggles[key] ? "translate-x-[16px]" : "translate-x-[2px]"}`} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2.5 mt-auto">
             <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1" disabled={telegramMutation.isPending}>
               {telegramMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>

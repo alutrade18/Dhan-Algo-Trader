@@ -2,35 +2,104 @@ import { db, settingsTable } from "@workspace/db";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
-async function getTelegramConfig(): Promise<{ botToken: string; chatId: string } | null> {
+export type TelegramAlertCategory = "orderFills" | "superOrders" | "killSwitch" | "autoSquareOff" | "criticalErrors";
+
+interface TelegramConfig {
+  botToken: string;
+  chatId: string;
+  alerts: {
+    orderFills: boolean;
+    superOrders: boolean;
+    killSwitch: boolean;
+    autoSquareOff: boolean;
+    criticalErrors: boolean;
+  };
+}
+
+async function getTelegramConfig(): Promise<TelegramConfig | null> {
   try {
     const [settings] = await db.select().from(settingsTable);
     if (!settings?.telegramBotToken || !settings?.telegramChatId) return null;
-    return { botToken: settings.telegramBotToken, chatId: settings.telegramChatId };
+    return {
+      botToken: settings.telegramBotToken,
+      chatId: settings.telegramChatId,
+      alerts: settings.telegramAlerts ?? {
+        orderFills: true,
+        superOrders: true,
+        killSwitch: true,
+        autoSquareOff: true,
+        criticalErrors: true,
+      },
+    };
   } catch {
     return null;
   }
 }
 
-export async function sendTelegramAlert(message: string): Promise<void> {
-  const config = await getTelegramConfig();
-  if (!config) return;
-
+async function sendRaw(botToken: string, chatId: string, text: string): Promise<boolean> {
   try {
-    const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: config.chatId,
-        text: `🤖 *${APP_NAME}*\n${message}`,
-        parse_mode: "Markdown",
-      }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
     });
     if (!response.ok) {
-      console.warn("[Telegram] Failed to send alert:", await response.text());
+      console.warn("[Telegram] Failed to send:", await response.text());
+      return false;
     }
+    return true;
   } catch (err) {
-    console.warn("[Telegram] Error sending alert:", err);
+    console.warn("[Telegram] Error sending:", err);
+    return false;
+  }
+}
+
+/** Unconditional send — used only for test messages and credential pings */
+export async function sendTelegramAlert(message: string): Promise<void> {
+  const config = await getTelegramConfig();
+  if (!config) return;
+  await sendRaw(config.botToken, config.chatId, `🤖 *${APP_NAME}*\n${message}`);
+}
+
+/** Gated send — checks the per-category toggle before sending */
+export async function sendTelegramAlertIfEnabled(category: TelegramAlertCategory, message: string): Promise<void> {
+  const config = await getTelegramConfig();
+  if (!config) return;
+  if (!config.alerts[category]) return;
+  await sendRaw(config.botToken, config.chatId, `🤖 *${APP_NAME}*\n${message}`);
+}
+
+/** Direct test send using explicit credentials (for test-message endpoint) */
+export async function sendTelegramTest(botToken: string, chatId: string): Promise<{ ok: boolean; error?: string }> {
+  const now = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: true,
+  });
+  const text = [
+    `🤖 *${APP_NAME} — Test Message*`,
+    "",
+    "✅ Your Telegram alerts are working correctly\\!",
+    `🕐 Sent at: ${now} IST`,
+    "",
+    "_This is a test message — no action required\\._",
+  ].join("\n");
+
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "MarkdownV2" }),
+    });
+    if (!res.ok) {
+      const body = await res.json() as { description?: string };
+      return { ok: false, error: body.description ?? "Telegram API error" };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
   }
 }

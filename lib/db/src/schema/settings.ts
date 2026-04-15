@@ -30,6 +30,20 @@ export const settingsTable = pgTable("settings", {
   }),
 
   refreshIntervalSeconds: integer("refresh_interval_seconds").notNull().default(15),
+
+  telegramAlerts: jsonb("telegram_alerts").$type<{
+    orderFills: boolean;
+    superOrders: boolean;
+    killSwitch: boolean;
+    autoSquareOff: boolean;
+    criticalErrors: boolean;
+  }>().default({
+    orderFills: true,
+    superOrders: true,
+    killSwitch: true,
+    autoSquareOff: true,
+    criticalErrors: true,
+  }),
 });
 
 export const insertSettingsSchema = createInsertSchema(settingsTable).omit({

@@ -1,6 +1,6 @@
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "./dhan-client";
-import { sendTelegramAlert } from "./telegram";
+import { sendTelegramAlertIfEnabled } from "./telegram";
 import { logger } from "./logger";
 import { isNseHolidayToday } from "./equity-scheduler";
 
@@ -55,7 +55,8 @@ async function checkAndSquareOff(): Promise<void> {
       description: `Auto square-off triggered at ${timeStr} IST on ${dateStr}`,
     });
 
-    void sendTelegramAlert(
+    void sendTelegramAlertIfEnabled(
+      "autoSquareOff",
       `⏰ *Auto Square-Off Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_${APP_NAME} — Auto Square-Off_`
     );
   } catch (e) {

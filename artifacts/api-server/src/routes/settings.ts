@@ -3,7 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
-import { sendTelegramAlert } from "../lib/telegram";
+import { sendTelegramAlert, sendTelegramAlertIfEnabled, sendTelegramTest } from "../lib/telegram";
 import { decryptToken } from "../lib/crypto-utils";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
@@ -97,6 +97,13 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     updatedAt: s.updatedAt?.toISOString(),
     autoSquareOffEnabled: s.autoSquareOffEnabled,
     autoSquareOffTime: s.autoSquareOffTime,
+    telegramAlerts: s.telegramAlerts ?? {
+      orderFills: true,
+      superOrders: true,
+      killSwitch: true,
+      autoSquareOff: true,
+      criticalErrors: true,
+    },
     dashboardWidgets: s.dashboardWidgets ?? {
       todayPnl: true,
       totalPnl: true,
@@ -151,6 +158,10 @@ router.put("/settings", async (req, res): Promise<void> => {
     updateData.dashboardWidgets = body.dashboardWidgets;
   }
 
+  if (body.telegramAlerts !== undefined && typeof body.telegramAlerts === "object") {
+    updateData.telegramAlerts = body.telegramAlerts;
+  }
+
 
   // Telegram token handling: null = explicit clear; non-empty real value = update; empty/masked = skip
   const rawToken = body.telegramBotToken;
@@ -182,10 +193,10 @@ router.put("/settings", async (req, res): Promise<void> => {
   if (body.killSwitchEnabled !== undefined) {
     updateData.killSwitchEnabled = Boolean(body.killSwitchEnabled);
     if (Boolean(body.killSwitchEnabled) && !existing.killSwitchEnabled) {
-      void sendTelegramAlert("🚨 *Emergency Kill Switch ACTIVATED* — All trading halted");
+      void sendTelegramAlertIfEnabled("killSwitch", "🚨 *Emergency Kill Switch ACTIVATED* — All trading halted");
       auditEntries.push({ field: "killSwitchEnabled", old: "false", new: "true" });
     } else if (!Boolean(body.killSwitchEnabled) && existing.killSwitchEnabled) {
-      void sendTelegramAlert("✅ Kill switch deactivated — Trading resumed");
+      void sendTelegramAlertIfEnabled("killSwitch", "✅ Kill switch deactivated — Trading resumed");
       auditEntries.push({ field: "killSwitchEnabled", old: "true", new: "false" });
     }
   }
@@ -227,6 +238,25 @@ router.post("/settings/verify-pin", async (req, res): Promise<void> => {
     res.json({ valid: true });
   } else {
     res.status(401).json({ valid: false, error: "Incorrect PIN" });
+  }
+});
+
+router.post("/telegram/test", async (req, res): Promise<void> => {
+  try {
+    const settings = await getOrCreateSettings();
+    if (!settings.telegramBotToken || !settings.telegramChatId) {
+      res.status(400).json({ ok: false, error: "Telegram is not configured. Save Bot Token and Chat ID first." });
+      return;
+    }
+    const result = await sendTelegramTest(settings.telegramBotToken, settings.telegramChatId);
+    if (result.ok) {
+      res.json({ ok: true });
+    } else {
+      res.status(502).json({ ok: false, error: result.error ?? "Telegram API error" });
+    }
+  } catch (e) {
+    req.log.error({ err: e }, "Telegram test failed");
+    res.status(500).json({ ok: false, error: "Internal server error" });
   }
 });
 

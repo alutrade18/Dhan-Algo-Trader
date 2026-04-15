@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
-import { sendTelegramAlert } from "../lib/telegram";
+import { sendTelegramAlertIfEnabled } from "../lib/telegram";
 import { eq, and, gte } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
@@ -99,7 +99,7 @@ async function autoDeactivateKillSwitch() {
     }
     deactivationTracker.date = getISTDateString();
     deactivationTracker.count = 0;
-    void sendTelegramAlert("🟢 *Midnight Reset* — Kill switch automatically deactivated. Fresh trading allowed for the new day.");
+    void sendTelegramAlertIfEnabled("killSwitch", "🟢 *Midnight Reset* — Kill switch automatically deactivated. Fresh trading allowed for the new day.");
   } catch {
     // silent
   }
@@ -179,7 +179,8 @@ router.post("/risk/killswitch", async (req, res): Promise<void> => {
     if (status === "DEACTIVATE") {
       recordDeactivation();
     }
-    void sendTelegramAlert(
+    void sendTelegramAlertIfEnabled(
+      "killSwitch",
       status === "ACTIVATE"
         ? "🛑 Kill Switch ACTIVATED — All order placement blocked."
         : "✅ Kill Switch DEACTIVATED — Trading resumed normally.",

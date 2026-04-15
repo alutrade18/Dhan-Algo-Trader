@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import type { Server as SocketIOServer } from "socket.io";
 import { logger } from "../lib/logger";
-import { sendTelegramAlert } from "../lib/telegram";
+import { sendTelegramAlertIfEnabled } from "../lib/telegram";
 
 export function createPostbackRouter(io: SocketIOServer): IRouter {
   const router: IRouter = Router();
@@ -34,12 +34,14 @@ export function createPostbackRouter(io: SocketIOServer): IRouter {
       const orderNo = String(payload.orderId ?? payload.OrderNo ?? "");
 
       if (status === "TRADED") {
-        void sendTelegramAlert(
+        void sendTelegramAlertIfEnabled(
+          "orderFills",
           `✅ *ORDER EXECUTED*\nSymbol: ${symbol}\nSide: ${side} | Qty: ${qty}\nPrice: ₹${price}\nOrder: ${orderNo}`,
         );
       } else if (status === "REJECTED") {
         const reason = String(payload.omsErrorDescription ?? payload.OmsErrorDescription ?? "Unknown");
-        void sendTelegramAlert(
+        void sendTelegramAlertIfEnabled(
+          "orderFills",
           `❌ *ORDER REJECTED*\nSymbol: ${symbol}\nReason: ${reason}\nOrder: ${orderNo}`,
         );
       }
