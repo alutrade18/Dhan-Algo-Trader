@@ -11,15 +11,26 @@ interface TickData {
 
 type TickCallback = (data: TickData) => void;
 type OrderUpdateCallback = (data: Record<string, unknown>) => void;
+type Mode = "ticker" | "quote" | "full";
+
+// Tracks all active subscriptions so we can resubscribe on reconnect
+// key = `${exchange}:${mode}` → Set of security IDs
+interface SubEntry {
+  exchange: string;
+  mode: Mode;
+  securityIds: Set<number>;
+}
 
 class MarketSocket {
   private socket: Socket;
   private tickListeners = new Map<string, Set<TickCallback>>();
   private orderUpdateListeners = new Set<OrderUpdateCallback>();
+  // subscription registry: keyed by `${exchange}:${mode}`
+  private subRegistry = new Map<string, SubEntry>();
 
   constructor() {
     this.socket = io(window.location.origin, {
-      path: `${BASE}socket.io`.replace(/\/\//g, "/"),
+      path: `${BASE}api/socket.io`.replace(/\/\//g, "/"),
       transports: ["websocket", "polling"],
     });
 
@@ -35,6 +46,8 @@ class MarketSocket {
       const key = `${data.exchangeSegment}:${data.securityId}`;
       const listeners = this.tickListeners.get(key);
       if (listeners) listeners.forEach(cb => cb(data));
+      const anyListeners = this.tickListeners.get("*");
+      if (anyListeners) anyListeners.forEach(cb => cb(data));
     });
 
     this.socket.on("order:update", (data: Record<string, unknown>) => {
@@ -46,39 +59,59 @@ class MarketSocket {
     });
   }
 
-  private resubscribeAll() {
-    const byKey = new Map<string, { exchange: string; securityIds: number[] }>();
-    for (const key of this.tickListeners.keys()) {
-      if (key === "*") continue;
-      const [exchange, secIdStr] = key.split(":");
-      const securityId = parseInt(secIdStr, 10);
-      if (!byKey.has(exchange)) byKey.set(exchange, { exchange, securityIds: [] });
-      byKey.get(exchange)!.securityIds.push(securityId);
+  private registryKey(exchange: string, mode: Mode) {
+    return `${exchange}:${mode}`;
+  }
+
+  private registerIds(exchange: string, securityIds: number[], mode: Mode) {
+    const key = this.registryKey(exchange, mode);
+    if (!this.subRegistry.has(key)) {
+      this.subRegistry.set(key, { exchange, mode, securityIds: new Set() });
     }
-    for (const { exchange, securityIds } of byKey.values()) {
-      if (securityIds.length > 0) {
-        this.socket.emit("market:subscribe", { exchange, securityIds, mode: "ticker" });
+    const entry = this.subRegistry.get(key)!;
+    securityIds.forEach(id => entry.securityIds.add(id));
+  }
+
+  private deregisterIds(exchange: string, securityIds: number[], mode?: Mode) {
+    const modes: Mode[] = mode ? [mode] : ["ticker", "quote", "full"];
+    for (const m of modes) {
+      const key = this.registryKey(exchange, m);
+      const entry = this.subRegistry.get(key);
+      if (entry) {
+        securityIds.forEach(id => entry.securityIds.delete(id));
+        if (entry.securityIds.size === 0) this.subRegistry.delete(key);
       }
     }
   }
 
-  subscribe(exchange: string, securityId: number, cb: TickCallback, mode: "ticker" | "quote" | "full" = "ticker") {
-    const key = `${exchange}:${securityId}`;
-    if (!this.tickListeners.has(key)) {
-      this.tickListeners.set(key, new Set());
+  private resubscribeAll() {
+    for (const { exchange, mode, securityIds } of this.subRegistry.values()) {
+      const ids = Array.from(securityIds);
+      if (ids.length > 0) {
+        this.socket.emit("market:subscribe", { exchange, securityIds: ids, mode });
+      }
+    }
+  }
+
+  subscribe(exchange: string, securityId: number, cb: TickCallback, mode: Mode = "ticker") {
+    const listenerKey = `${exchange}:${securityId}`;
+    if (!this.tickListeners.has(listenerKey)) {
+      this.tickListeners.set(listenerKey, new Set());
+      this.registerIds(exchange, [securityId], mode);
       this.socket.emit("market:subscribe", { exchange, securityIds: [securityId], mode });
     }
-    this.tickListeners.get(key)!.add(cb);
+    this.tickListeners.get(listenerKey)!.add(cb);
     return () => this.unsubscribe(exchange, securityId, cb);
   }
 
   unsubscribe(exchange: string, securityId: number, cb: TickCallback) {
-    const key = `${exchange}:${securityId}`;
-    const listeners = this.tickListeners.get(key);
+    const listenerKey = `${exchange}:${securityId}`;
+    const listeners = this.tickListeners.get(listenerKey);
     if (listeners) {
       listeners.delete(cb);
       if (listeners.size === 0) {
-        this.tickListeners.delete(key);
+        this.tickListeners.delete(listenerKey);
+        this.deregisterIds(exchange, [securityId]);
         this.socket.emit("market:unsubscribe", { exchange, securityIds: [securityId] });
       }
     }
@@ -90,27 +123,29 @@ class MarketSocket {
     exchange: string,
     securityIds: number[],
     cb: TickCallback,
-    mode: "ticker" | "quote" | "full" = "quote",
+    mode: Mode = "quote",
   ): () => void {
     if (securityIds.length === 0) return () => {};
 
     securityIds.forEach((secId) => {
-      const key = `${exchange}:${secId}`;
-      if (!this.tickListeners.has(key)) this.tickListeners.set(key, new Set());
-      this.tickListeners.get(key)!.add(cb);
+      const listenerKey = `${exchange}:${secId}`;
+      if (!this.tickListeners.has(listenerKey)) this.tickListeners.set(listenerKey, new Set());
+      this.tickListeners.get(listenerKey)!.add(cb);
     });
 
+    this.registerIds(exchange, securityIds, mode);
     this.socket.emit("market:subscribe", { exchange, securityIds, mode });
 
     return () => {
       securityIds.forEach((secId) => {
-        const key = `${exchange}:${secId}`;
-        const listeners = this.tickListeners.get(key);
+        const listenerKey = `${exchange}:${secId}`;
+        const listeners = this.tickListeners.get(listenerKey);
         if (listeners) {
           listeners.delete(cb);
-          if (listeners.size === 0) this.tickListeners.delete(key);
+          if (listeners.size === 0) this.tickListeners.delete(listenerKey);
         }
       });
+      this.deregisterIds(exchange, securityIds, mode);
       this.socket.emit("market:unsubscribe", { exchange, securityIds });
     };
   }

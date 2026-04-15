@@ -31,7 +31,7 @@ const httpServer = http.createServer(app);
 
 const io = new SocketIO(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  path: "/socket.io",
+  path: "/api/socket.io",
 });
 
 setIO(io);
