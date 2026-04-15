@@ -241,28 +241,6 @@ router.post("/market/option-chain", async (req, res): Promise<void> => {
     const ltp = Number(inner.last_price ?? 0);
     // Expose oc directly as data so frontend can iterate strike keys
     const oc = (inner.oc ?? inner) as Record<string, unknown>;
-    const ocKeys = Object.keys(oc);
-    // Sample a strike near the ATM to see the actual CE/PE structure
-    const atmIdx = ocKeys.findIndex(k => parseFloat(k) >= ltp * 0.99);
-    const sampleKey = ocKeys[Math.max(0, atmIdx)] ?? ocKeys[Math.floor(ocKeys.length / 2)];
-    const sampleEntry = sampleKey ? (oc[sampleKey] as Record<string, unknown>) : null;
-    const sampleCe = sampleEntry ? (sampleEntry["ce"] ?? sampleEntry["CE"] ?? null) : null;
-    req.log.info({
-      underSecurityId: parsed.data.underSecurityId,
-      underExchangeSegment: parsed.data.underExchangeSegment,
-      expiry: parsed.data.expiry,
-      ltp,
-      topLevelKeys: Object.keys(r),
-      innerKeys: Object.keys(inner),
-      ocKeyCount: ocKeys.length,
-      sampleOcKeys: ocKeys.slice(0, 3),
-      atmIdx,
-      sampleKey,
-      sampleEntryKeys: sampleEntry ? Object.keys(sampleEntry) : null,
-      sampleCeKeys: sampleCe ? Object.keys(sampleCe as Record<string, unknown>).slice(0, 10) : null,
-      sampleCeSecId: sampleCe ? (sampleCe as Record<string, unknown>)["security_id"] : null,
-      sampleCeLtp: sampleCe ? (sampleCe as Record<string, unknown>)["last_price"] : null,
-    }, "option-chain: raw response shape");
     res.json({ data: oc, ltp });
   } catch (e: unknown) {
     req.log.error({ err: e }, "Failed to fetch option chain");

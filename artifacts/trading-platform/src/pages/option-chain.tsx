@@ -20,6 +20,7 @@ import {
   TrendingUp,
   TrendingDown,
   Wifi,
+  AlertTriangle,
 } from "lucide-react";
 import { marketSocket } from "@/lib/market-socket";
 
@@ -473,18 +474,6 @@ export default function OptionChain() {
   const entries: OptionEntry[] = [];
 
   const strikeKeys = Object.keys(rawChain);
-  if (strikeKeys.length > 0 || chain !== undefined) {
-    console.log("[OC DEBUG]", {
-      chainExists: !!chain,
-      chainLtp: chain?.ltp,
-      chainDataType: typeof chain?.data,
-      strikeKeysCount: strikeKeys.length,
-      first3Keys: strikeKeys.slice(0, 3),
-      activeDhanSecId,
-      activeSegment,
-      expiry,
-    });
-  }
   const strikes = strikeKeys
     .map((k) => parseFloat(k))
     .filter((n) => !isNaN(n) && n > 0)
@@ -928,6 +917,16 @@ export default function OptionChain() {
         </div>
       )}
 
+      {/* ── Thin-market notice ── */}
+      {hasData && totalCallOI + totalPutOI < 50 && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-amber-400/20 bg-amber-400/5 text-xs">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+          <span className="text-amber-300/90 leading-snug">
+            <strong>Thin market</strong> — Option premiums shown are last-traded reference prices (OI is very low or zero). Live bid/ask unavailable. Exercise caution when placing orders.
+          </span>
+        </div>
+      )}
+
       {/* ── States ── */}
       {market === null ? (
         <Card className="border-dashed">
@@ -1118,16 +1117,21 @@ export default function OptionChain() {
                     {/* 7. LTP + Chg% + θ — live via REST 5s + WebSocket */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
                       {(() => {
-                        const ltp = e.callSecId ? (liveLtps.get(e.callSecId) ?? e.callLTP) : e.callLTP;
+                        const liveLtp = e.callSecId ? liveLtps.get(e.callSecId) : undefined;
+                        const ltp = liveLtp !== undefined ? liveLtp : e.callLTP;
+                        if (ltp === 0) return <span className="font-mono text-muted-foreground/40">—</span>;
                         const chgPct = e.callPrevClose > 0 ? ((ltp - e.callPrevClose) / e.callPrevClose * 100) : null;
+                        const isRef = e.callOI === 0 && e.callBidPrice === 0 && liveLtp === undefined;
                         return (
                           <div className="flex flex-col items-end leading-tight gap-px">
                             <span className={`font-mono font-semibold transition-colors duration-300 ${
+                              isRef ? "text-foreground/50" :
                               callDir > 0 ? "text-emerald-400" : callDir < 0 ? "text-red-400" : "text-foreground"
                             }`}>
                               ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              {isRef && <span className="text-[8px] text-muted-foreground/50 ml-0.5">ref</span>}
                             </span>
-                            {chgPct !== null && (
+                            {chgPct !== null && !isRef && (
                               <span className={`text-[9px] font-medium tabular-nums ${chgPct >= 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
                                 {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%
                               </span>
@@ -1163,16 +1167,21 @@ export default function OptionChain() {
                     {/* 1. LTP + Chg% + θ — live via REST 5s + WebSocket */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
                       {(() => {
-                        const ltp = e.putSecId ? (liveLtps.get(e.putSecId) ?? e.putLTP) : e.putLTP;
+                        const liveLtp = e.putSecId ? liveLtps.get(e.putSecId) : undefined;
+                        const ltp = liveLtp !== undefined ? liveLtp : e.putLTP;
+                        if (ltp === 0) return <span className="font-mono text-muted-foreground/40">—</span>;
                         const chgPct = e.putPrevClose > 0 ? ((ltp - e.putPrevClose) / e.putPrevClose * 100) : null;
+                        const isRef = e.putOI === 0 && e.putBidPrice === 0 && liveLtp === undefined;
                         return (
                           <div className="flex flex-col items-end leading-tight gap-px">
                             <span className={`font-mono font-semibold transition-colors duration-300 ${
+                              isRef ? "text-foreground/50" :
                               putDir > 0 ? "text-emerald-400" : putDir < 0 ? "text-red-400" : "text-foreground"
                             }`}>
                               ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              {isRef && <span className="text-[8px] text-muted-foreground/50 ml-0.5">ref</span>}
                             </span>
-                            {chgPct !== null && (
+                            {chgPct !== null && !isRef && (
                               <span className={`text-[9px] font-medium tabular-nums ${chgPct >= 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
                                 {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%
                               </span>
