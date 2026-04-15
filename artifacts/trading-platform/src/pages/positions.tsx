@@ -86,10 +86,16 @@ export default function Positions() {
   const _h = healthRaw as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
   const anyMarketOpen = (_h?.nseOpen ?? false) || (_h?.mcxOpen ?? false);
 
+  const [brokerAuthError, setBrokerAuthError] = useState(false);
   const { data: positions = [], isLoading, isError, dataUpdatedAt } = useQuery<DhanPosition[]>({
     queryKey: ["positions"],
     queryFn: async () => {
       const res = await fetch(`${BASE}api/positions`);
+      if (res.status === 401) {
+        setBrokerAuthError(true);
+        return [];
+      }
+      setBrokerAuthError(false);
       if (!res.ok) throw new Error("Failed");
       const raw = await res.json();
       return Array.isArray(raw) ? raw : [];
@@ -189,7 +195,7 @@ export default function Positions() {
   const totalRealized   = positions.reduce((s, p) => s + (p.realizedProfit ?? 0), 0);
   const totalPnl        = totalUnrealized + totalRealized;
 
-  const pnlColor = (v: number) => v >= 0 ? "text-emerald-400" : "text-red-400";
+  const pnlColor = (v: number) => v >= 0 ? "text-success" : "text-destructive";
 
   return (
     <div className="flex flex-col gap-4">
@@ -255,7 +261,15 @@ export default function Positions() {
       </div>
 
       {/* ── Error banner ── */}
-      {isError && (
+      {brokerAuthError && (
+        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          Broker not connected — enter your Dhan credentials in{" "}
+          <a href="../settings" className="underline font-medium hover:no-underline">Settings</a>{" "}
+          to view positions.
+        </div>
+      )}
+      {isError && !brokerAuthError && (
         <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" />
           Failed to fetch positions from Dhan. Retrying in {REFETCH_MS / 1000}s…
@@ -347,7 +361,7 @@ export default function Positions() {
                       {(expiry || strike || optType) && (
                         <div className="flex items-center gap-1 mt-0.5">
                           {optType && (
-                            <span className={cn("text-[9px] font-bold px-1 rounded border", optType === "CALL" ? "border-emerald-500/40 text-emerald-400" : "border-red-500/40 text-red-400")}>
+                            <span className={cn("text-[9px] font-bold px-1 rounded border", optType === "CALL" ? "border-success/40 text-success" : "border-destructive/40 text-destructive")}>
                               {optType === "CALL" ? "CE" : "PE"}
                             </span>
                           )}
@@ -378,11 +392,11 @@ export default function Positions() {
                           <Minus className="h-3 w-3" /> CLOSED
                         </span>
                       ) : isLong ? (
-                        <span className="inline-flex items-center gap-0.5 text-emerald-400 font-semibold">
+                        <span className="inline-flex items-center gap-0.5 text-success font-semibold">
                           <TrendingUp className="h-3 w-3" /> LONG
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-0.5 text-red-400 font-semibold">
+                        <span className="inline-flex items-center gap-0.5 text-destructive font-semibold">
                           <TrendingDown className="h-3 w-3" /> SHORT
                         </span>
                       )}
@@ -401,7 +415,7 @@ export default function Positions() {
                       {closed_ ? (
                         <span className="text-muted-foreground">—</span>
                       ) : ltp != null ? (
-                        <span className={cn(ltp > avg ? "text-emerald-400" : ltp < avg ? "text-red-400" : "")}>{fmt(ltp)}</span>
+                        <span className={cn(ltp > avg ? "text-success" : ltp < avg ? "text-destructive" : "")}>{fmt(ltp)}</span>
                       ) : (
                         <span className="text-muted-foreground animate-pulse text-[10px]">live…</span>
                       )}
@@ -441,7 +455,7 @@ export default function Positions() {
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="outline" size="sm" disabled={exiting_}
-                              className="h-6 text-[10px] px-2.5 border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 gap-1">
+                              className="h-6 text-[10px] px-2.5 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive gap-1">
                               <LogOut className="h-3 w-3" />
                               {exiting_ ? "…" : "Exit"}
                             </Button>
@@ -458,7 +472,7 @@ export default function Positions() {
                                     <strong className="text-foreground">{pos.tradingSymbol}</strong> at market price.</p>
                                   <div className="flex gap-3 text-xs border border-border/50 rounded-lg px-3 py-2 bg-muted/20">
                                     <span>Product: <strong>{pos.productType}</strong></span>
-                                    <span>Side: <strong className={isLong ? "text-emerald-400" : "text-red-400"}>{isLong ? "LONG → SELL" : "SHORT → BUY"}</strong></span>
+                                    <span>Side: <strong className={isLong ? "text-success" : "text-destructive"}>{isLong ? "LONG → SELL" : "SHORT → BUY"}</strong></span>
                                     {ltp != null && <span>LTP: <strong>₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>}
                                   </div>
                                 </div>

@@ -178,38 +178,36 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   const map: Record<OrderStatus, { label: string; className: string }> = {
     TRADED: {
       label: "TRADED",
-      className: "bg-green-500/20 text-green-400 border border-green-500/30",
+      className: "bg-success/15 text-success border border-success/30",
     },
     PENDING: {
       label: "PENDING",
-      className:
-        "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+      className: "bg-warning/15 text-warning border border-warning/30",
     },
     TRANSIT: {
       label: "TRANSIT",
-      className:
-        "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+      className: "bg-warning/15 text-warning border border-warning/30",
     },
     PART_TRADED: {
       label: "PART TRADED",
-      className: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
+      className: "bg-primary/15 text-primary border border-primary/30",
     },
     REJECTED: {
       label: "REJECTED",
-      className: "bg-red-500/20 text-red-400 border border-red-500/30",
+      className: "bg-destructive/15 text-destructive border border-destructive/30",
     },
     CANCELLED: {
       label: "CANCELLED",
-      className: "bg-gray-500/20 text-gray-400 border border-gray-500/30",
+      className: "bg-muted text-muted-foreground border border-border",
     },
     EXPIRED: {
       label: "EXPIRED",
-      className: "bg-gray-500/20 text-gray-400 border border-gray-500/30",
+      className: "bg-muted text-muted-foreground border border-border",
     },
   };
   const cfg = map[status] ?? {
     label: status,
-    className: "bg-gray-500/20 text-gray-400 border border-gray-500/30",
+    className: "bg-muted text-muted-foreground border border-border",
   };
   return (
     <span
@@ -225,8 +223,8 @@ function SideBadge({ side }: { side: TransactionType }) {
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
         side === "BUY"
-          ? "bg-green-500/20 text-green-400"
-          : "bg-red-500/20 text-red-400"
+          ? "bg-success/15 text-success"
+          : "bg-destructive/15 text-destructive"
       }`}
     >
       {side}
@@ -476,7 +474,7 @@ function CancelConfirm({
   loading,
 }: CancelConfirmProps) {
   return (
-    <div className="flex items-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-400 whitespace-nowrap">
+    <div className="flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs text-destructive whitespace-nowrap">
       <span>Cancel …{orderId.slice(-6)}?</span>
       <Button
         size="sm"
@@ -798,19 +796,19 @@ export default function OrdersPage() {
             icon={<CheckCircle2 className="h-4 w-4" />}
             label="Traded"
             value={tradedCount}
-            color="text-green-400"
+            color="text-success"
           />
           <StatCard
             icon={<Clock className="h-4 w-4" />}
             label="Pending / Transit"
             value={pendingCount}
-            color="text-yellow-400"
+            color="text-warning"
           />
           <StatCard
             icon={<XCircle className="h-4 w-4" />}
             label="Rejected / Cancelled"
             value={rejCancelCount}
-            color="text-red-400"
+            color="text-destructive"
           />
         </div>
 
@@ -920,7 +918,7 @@ export default function OrdersPage() {
                               {order.omsErrorDescription && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <AlertCircle className="inline-block ml-1.5 h-3 w-3 text-red-400 align-middle cursor-help" />
+                                    <AlertCircle className="inline-block ml-1.5 h-3 w-3 text-destructive align-middle cursor-help" />
                                   </TooltipTrigger>
                                   <TooltipContent className="max-w-xs text-xs">
                                     {order.omsErrorDescription}
@@ -982,7 +980,7 @@ export default function OrdersPage() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-6 px-2 text-[11px] border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                                    className="h-6 px-2 text-[11px] border-primary/50 text-primary hover:bg-primary/10"
                                     onClick={() => setModifyOrder(order)}
                                   >
                                     Modify
@@ -990,7 +988,7 @@ export default function OrdersPage() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-6 px-2 text-[11px] border-red-500/50 text-red-400 hover:bg-red-500/10"
+                                    className="h-6 px-2 text-[11px] border-destructive/50 text-destructive hover:bg-destructive/10"
                                     onClick={() =>
                                       setCancelConfirmId(order.orderId)
                                     }
@@ -1182,7 +1180,7 @@ export default function OrdersPage() {
                           <td className="px-2.5 py-2 text-xs font-semibold whitespace-nowrap">
                             {optType ? (
                               <span className={optType === "CALL" || optType === "CE"
-                                ? "text-green-400" : "text-red-400"}>
+                                ? "text-success" : "text-destructive"}>
                                 {optType}
                               </span>
                             ) : <span className="text-muted-foreground/40">—</span>}

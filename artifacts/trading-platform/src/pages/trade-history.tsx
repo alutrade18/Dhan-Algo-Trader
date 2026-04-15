@@ -62,9 +62,11 @@ function formatDisplayDate(raw: string) {
 
 // ── Indian FY helpers ─────────────────────────────────────────────────────────
 function currentFYYear(): number {
+  // Use IST (UTC+5:30) for fiscal year boundary — same as all other date math in this codebase
   const now = new Date();
-  const month = now.getMonth() + 1;
-  return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  const month = ist.getUTCMonth() + 1;
+  return month >= 4 ? ist.getUTCFullYear() : ist.getUTCFullYear() - 1;
 }
 function fyStart(fyYear: number) { return new Date(fyYear, 3, 1); }  // Apr 1
 function fyEnd(fyYear: number) { return new Date(fyYear + 1, 2, 31); } // Mar 31
@@ -126,13 +128,13 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   const typeLabel = d.type === "DEPOSIT" ? "Deposit" : d.type === "WITHDRAWAL" ? "Withdrawal" : "P&L";
-  const typeClass = d.type === "DEPOSIT" ? "text-emerald-400 border-emerald-400/30" : d.type === "WITHDRAWAL" ? "text-red-400 border-red-400/30" : "text-primary border-primary/30";
+  const typeClass = d.type === "DEPOSIT" ? "text-success border-success/30" : d.type === "WITHDRAWAL" ? "text-destructive border-destructive/30" : "text-primary border-primary/30";
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-xl text-xs space-y-1.5 min-w-[200px]">
       <p className="font-medium">{label}</p>
       <div className="flex items-center justify-between gap-3">
         <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", typeClass)}>{typeLabel}</Badge>
-        <span className={cn("font-mono font-semibold", d.pnl >= 0 ? "text-emerald-400" : "text-red-400")}>{d.pnl >= 0 ? "+" : ""}{formatCurrency(d.pnl)}</span>
+        <span className={cn("font-mono font-semibold", d.pnl >= 0 ? "text-success" : "text-destructive")}>{d.pnl >= 0 ? "+" : ""}{formatCurrency(d.pnl)}</span>
       </div>
       {d.runbal !== undefined && (
         <div className="flex justify-between text-muted-foreground"><span>Balance</span><span className="font-mono">{formatCurrency(d.runbal)}</span></div>
@@ -505,9 +507,9 @@ export default function TradeHistory() {
   // ── Calendar helpers ─────────────────────────────────────────────────────────
   function cellClass(pnl: number | undefined) {
     if (pnl === undefined) return "bg-muted/20 text-muted-foreground";
-    if (pnl > 0) return "bg-emerald-500/10 border-emerald-500/40 text-emerald-500";
-    if (pnl < 0) return "bg-red-500/10 border-red-500/40 text-red-500";
-    return "bg-yellow-500/10 border-yellow-500/30 text-yellow-500";
+    if (pnl > 0) return "bg-success/10 border-success/40 text-success";
+    if (pnl < 0) return "bg-destructive/10 border-destructive/40 text-destructive";
+    return "bg-warning/10 border-warning/30 text-warning";
   }
 
   const todayStr = toYMD(new Date());
@@ -551,10 +553,10 @@ export default function TradeHistory() {
               {loading ? "Loading…" : "Fetch Ledger"}
             </Button>
             {closingBalance !== null && (
-              <div className="flex items-center gap-1.5 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 h-9 text-xs">
-                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="flex items-center gap-1.5 rounded-md border border-success/30 bg-success/10 px-3 h-9 text-xs">
+                <Wallet className="w-3.5 h-3.5 text-success" />
                 <span className="text-muted-foreground">Closing Balance:</span>
-                <span className="font-mono font-semibold text-emerald-400">₹{closingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                <span className="font-mono font-semibold text-success">₹{closingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
             )}
             <Button variant="outline" size="sm" className="gap-1.5 h-9 ml-auto" onClick={exportCSV} disabled={ledgerData.length === 0}>
@@ -644,8 +646,8 @@ export default function TradeHistory() {
           {ledgerData.length > 0 && (
             <div className="flex items-center gap-6 text-xs flex-wrap">
               <span className="text-muted-foreground">Entries: <span className="text-foreground font-semibold">{ledgerData.length}</span></span>
-              <span>Total Credit: <span className="text-emerald-400 font-mono font-semibold">₹{totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
-              <span>Total Debit: <span className="text-red-400 font-mono font-semibold">₹{totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
+              <span>Total Credit: <span className="text-success font-mono font-semibold">₹{totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
+              <span>Total Debit: <span className="text-destructive font-mono font-semibold">₹{totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
             </div>
           )}
 
@@ -684,9 +686,9 @@ export default function TradeHistory() {
                         <td className="px-3 py-2 text-xs max-w-[220px] truncate" title={String(row.narration ?? "")}>{String(row.narration ?? "—")}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{String(row.exchange ?? "—")}</td>
                         <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">{String(row.vouchernumber ?? "—")}</td>
-                        <td className="px-3 py-2 text-right font-mono text-xs text-red-400 whitespace-nowrap">{debit > 0 ? `₹${debit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono text-xs text-emerald-400 whitespace-nowrap">{credit > 0 ? `₹${credit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
-                        <td className={`px-3 py-2 text-right font-mono text-xs whitespace-nowrap ${balance >= 0 ? "text-foreground" : "text-red-400"}`}>₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-destructive whitespace-nowrap">{debit > 0 ? `₹${debit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-success whitespace-nowrap">{credit > 0 ? `₹${credit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
+                        <td className={`px-3 py-2 text-right font-mono text-xs whitespace-nowrap ${balance >= 0 ? "text-foreground" : "text-destructive"}`}>₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                       </tr>
                     );
                   })}
@@ -727,7 +729,7 @@ export default function TradeHistory() {
                 ) : (
                   <div className={cn(
                     "text-xl font-bold font-mono tracking-tight mb-2",
-                    pnlValue === null ? "text-muted-foreground" : pnlValue >= 0 ? "text-emerald-400" : "text-red-400"
+                    pnlValue === null ? "text-muted-foreground" : pnlValue >= 0 ? "text-success" : "text-destructive"
                   )}>
                     {pnlValue === null ? "—" : formatCurrency(pnlValue)}
                   </div>
@@ -779,7 +781,7 @@ export default function TradeHistory() {
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
                     <span>📈</span> Net Realised P&L:
                   </div>
-                  <div className={cn("font-bold text-lg font-mono", periodNetPnl >= 0 ? "text-emerald-500" : "text-red-500")}>
+                  <div className={cn("font-bold text-lg font-mono", periodNetPnl >= 0 ? "text-success" : "text-destructive")}>
                     {formatCurrency(periodNetPnl)}
                   </div>
                   <div className="text-[10px] text-muted-foreground">{diaryPeriod === "weekly" ? `${totalWeeks} Weeks of ${fyLabel(diaryFYYear)}` : periodLabel}</div>
@@ -789,7 +791,7 @@ export default function TradeHistory() {
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
                       <span>🏆</span> Most Profitable (this period):
                     </div>
-                    <div className={cn("font-bold text-lg font-mono", bestDay.overallPnl >= 0 ? "text-emerald-500" : "text-red-500")}>
+                    <div className={cn("font-bold text-lg font-mono", bestDay.overallPnl >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(bestDay.overallPnl)}
                     </div>
                     <div className="text-[10px] text-muted-foreground">on {formatDisplayDate(bestDay.date)}</div>
@@ -800,7 +802,7 @@ export default function TradeHistory() {
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
                       <span>🎯</span> Most Profitable (of all time):
                     </div>
-                    <div className={cn("font-bold text-lg font-mono", allTimeBestDay.pnl >= 0 ? "text-emerald-500" : "text-red-500")}>
+                    <div className={cn("font-bold text-lg font-mono", allTimeBestDay.pnl >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(allTimeBestDay.pnl)}
                     </div>
                     <div className="text-[10px] text-muted-foreground">on {formatDisplayDate(allTimeBestDay.date)}</div>
@@ -1016,7 +1018,7 @@ export default function TradeHistory() {
                       <div key={col.label}>
                         <p className="text-xs text-muted-foreground mb-1">{col.label}</p>
                         {col.isAmount ? (
-                          <p className={cn("font-mono font-semibold text-sm", (col.value as number) >= 0 ? "text-emerald-500" : "text-red-500")}>
+                          <p className={cn("font-mono font-semibold text-sm", (col.value as number) >= 0 ? "text-success" : "text-destructive")}>
                             {formatCurrency(col.value as number)}
                           </p>
                         ) : (
@@ -1073,8 +1075,8 @@ export default function TradeHistory() {
                                 <tr key={monthKey} className="border-b border-border/50 hover:bg-muted/20">
                                   <td className="px-4 py-2.5 text-xs">{label}</td>
                                   <td className="px-4 py-2.5 text-xs text-right font-mono">{total.trades}</td>
-                                  <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", total.overall >= 0 ? "text-emerald-500" : "text-red-500")}>{formatCurrency(total.overall)}</td>
-                                  <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", total.net >= 0 ? "text-emerald-500" : "text-red-500")}>{formatCurrency(total.net)}</td>
+                                  <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", total.overall >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(total.overall)}</td>
+                                  <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", total.net >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(total.net)}</td>
                                   <td className="px-4 py-2.5 text-xs text-right font-mono text-muted-foreground">{formatCurrency(total.brk)}</td>
                                 </tr>
                               );
@@ -1086,8 +1088,8 @@ export default function TradeHistory() {
                           <tr key={d.date} className="border-b border-border/50 hover:bg-muted/20">
                             <td className="px-4 py-2.5 text-xs font-mono text-muted-foreground">{formatDisplayDate(d.date)}</td>
                             <td className="px-4 py-2.5 text-xs text-right font-mono">{d.tradeCount}</td>
-                            <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", d.overallPnl >= 0 ? "text-emerald-500" : "text-red-500")}>{formatCurrency(d.overallPnl)}</td>
-                            <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", d.netPnl >= 0 ? "text-emerald-500" : "text-red-500")}>{formatCurrency(d.netPnl)}</td>
+                            <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", d.overallPnl >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(d.overallPnl)}</td>
+                            <td className={cn("px-4 py-2.5 text-xs text-right font-mono font-semibold", d.netPnl >= 0 ? "text-success" : "text-destructive")}>{formatCurrency(d.netPnl)}</td>
                             <td className="px-4 py-2.5 text-xs text-right font-mono text-muted-foreground">{formatCurrency(d.brokerage)}</td>
                           </tr>
                         ))

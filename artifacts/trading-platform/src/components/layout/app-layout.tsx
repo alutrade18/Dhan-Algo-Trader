@@ -19,8 +19,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/orders": "Order Book",
   "/super-orders": "Super Orders",
-  "/forever-orders": "Forever Orders",
-  "/conditional": "Conditional Triggers",
   "/option-chain": "Option Chain",
   "/positions": "Positions",
   "/trade-history": "Ledger Statement",
@@ -224,7 +222,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     ksStatus?.killSwitchStatus === "ACTIVE";
   const isDashboard = location === "/";
 
-  const pageTitle = PAGE_TITLES[location] ?? "Dashboard";
+  const pageTitle = PAGE_TITLES[location] ?? PAGE_TITLES[location.replace(/\/$/, "")] ?? "Rajesh Algo";
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
@@ -394,27 +392,27 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         )}
         {rateLimitMsg && (
-          <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2 flex items-center justify-between gap-3">
-            <p className="text-xs text-yellow-500 font-medium">
+          <div className="bg-warning/10 border-b border-warning/30 px-4 py-2 flex items-center justify-between gap-3">
+            <p className="text-xs text-warning font-medium">
               ⏱ {rateLimitMsg}
             </p>
-            <button className="text-xs text-yellow-500 underline underline-offset-2 hover:no-underline" onClick={() => setRateLimitMsg(null)}>
+            <button className="text-xs text-warning underline underline-offset-2 hover:no-underline" onClick={() => setRateLimitMsg(null)}>
               Dismiss
             </button>
           </div>
         )}
         {showBrokerBanner && (
-          <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
+          <div className="bg-warning/10 border-b border-warning/30 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              <Wifi className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
-              <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium truncate">
+              <Wifi className="w-3.5 h-3.5 text-warning shrink-0" />
+              <p className="text-xs text-warning font-medium truncate">
                 Broker not connected — enter your Dhan Client ID and Access Token to start trading
               </p>
             </div>
             <Button
               size="sm"
               variant="outline"
-              className="h-7 px-3 text-xs shrink-0 border-yellow-500/40 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/60"
+              className="h-7 px-3 text-xs shrink-0 border-warning/40 text-warning hover:bg-warning/10 hover:border-warning/60"
               onClick={() => navigate("/settings")}
             >
               Connect

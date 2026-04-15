@@ -96,8 +96,8 @@ export function Sidebar({ isOpen, onClose, brokerConnected }: SidebarProps) {
                   className={cn(
                     "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-sidebar ring-1 ring-sidebar",
                     brokerConnected
-                      ? "bg-green-500"
-                      : "bg-yellow-400"
+                      ? "bg-success"
+                      : "bg-warning"
                   )}
                   title={brokerConnected ? "Broker connected" : "Broker not connected"}
                 />

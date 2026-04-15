@@ -40,6 +40,26 @@ class MarketSocket {
     this.socket.on("order:update", (data: Record<string, unknown>) => {
       this.orderUpdateListeners.forEach(cb => cb(data));
     });
+
+    this.socket.on("connect", () => {
+      this.resubscribeAll();
+    });
+  }
+
+  private resubscribeAll() {
+    const byKey = new Map<string, { exchange: string; securityIds: number[] }>();
+    for (const key of this.tickListeners.keys()) {
+      if (key === "*") continue;
+      const [exchange, secIdStr] = key.split(":");
+      const securityId = parseInt(secIdStr, 10);
+      if (!byKey.has(exchange)) byKey.set(exchange, { exchange, securityIds: [] });
+      byKey.get(exchange)!.securityIds.push(securityId);
+    }
+    for (const { exchange, securityIds } of byKey.values()) {
+      if (securityIds.length > 0) {
+        this.socket.emit("market:subscribe", { exchange, securityIds, mode: "ticker" });
+      }
+    }
   }
 
   subscribe(exchange: string, securityId: number, cb: TickCallback, mode: "ticker" | "quote" | "full" = "ticker") {

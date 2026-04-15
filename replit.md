@@ -218,3 +218,15 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **positions.tsx / strategies.tsx**: Changed imports from `@workspace/api-zod/src/generated/types` (not in dep tree) to inline type aliases derived from `GetPositionsQueryResult` / `GetStrategiesQueryResult` exported by `@workspace/api-client-react`
 - **app-layout.tsx / dashboard.tsx**: Added `queryKey` to Orval hook options to satisfy TanStack Query v5 `UseQueryOptions` type requirement
 - Full `pnpm run typecheck` passes with zero errors across all packages
+
+### Phase 6 — Frontend Bug Fixes & Theme Standardization
+- **App.tsx**: `AppInitializer` now shows an error state with retry button when `/api/settings` fetch fails (previously showed infinite spinner)
+- **market-socket.ts**: Added `socket.on("connect", resubscribeAll)` — on socket.io reconnect, all subscriptions are replayed to the server so live ticks resume automatically
+- **super-orders.tsx**: `TERMINAL_STATUSES` set added; cancel button hidden for terminal-status orders (`TARGET_HIT`, `STOP_LOSS_HIT`, `COMPLETED`, `CANCELLED`); `statusColor()` maps all super-order statuses to semantic tokens; `parseInt` radix fixed
+- **positions.tsx**: 401 from broker API now shows "Broker not connected" warning (not a generic error); pnlColor uses `text-success`/`text-destructive`; LONG/SHORT/LTP/Exit button all use semantic tokens
+- **app-layout.tsx**: Removed dead `PAGE_TITLES` entries (`/forever-orders`, `/conditional`); added fallback title; broker-not-connected and rate-limit banners now use `text-warning`/`bg-warning` instead of hardcoded `yellow-*`
+- **orders.tsx**: `StatusBadge` uses `text-success`/`text-warning`/`text-destructive`/`text-primary`; `SideBadge` uses `text-success`/`text-destructive`; Modify/Cancel buttons use `text-primary`/`text-destructive`; stat cards use semantic colors
+- **trade-history.tsx**: `currentFYYear()` uses IST via UTC+5:30 offset; all P&L, credit/debit, equity curve tooltip colors standardized to `text-success`/`text-destructive`/`text-warning`
+- **symbol-search.tsx**: CE/PE badge and instrument type badges (INDEX, FUT) now use semantic tokens
+- **sidebar.tsx**: Broker status dot uses `bg-success`/`bg-warning` instead of `bg-green-500`/`bg-yellow-400`
+- **Color system invariant**: `text-success` (green profit), `text-destructive` (red loss/danger), `text-warning` (amber alerts) throughout all pages. Domain-specific colors kept: option-chain call/put (`emerald`/`red`) as trading convention, exchange badges (blue=EQUITY, purple=OPT) for segment identification

@@ -49,7 +49,7 @@ function AppRoutes() {
 
 /** Blocks the full layout render until the initial settings fetch resolves. */
 function AppInitializer() {
-  const { isLoading } = useQuery({
+  const { isLoading, isError, refetch } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
       const r = await fetch(`${BASE}api/settings`);
@@ -57,7 +57,7 @@ function AppInitializer() {
       return r.json();
     },
     staleTime: 30_000,
-    retry: 1,
+    retry: 2,
   });
 
   if (isLoading) {
@@ -68,6 +68,28 @@ function AppInitializer() {
           <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
         </div>
         <p className="text-sm text-muted-foreground tracking-wide">Initializing…</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-background px-4">
+        <div className="rounded-full bg-destructive/10 p-4">
+          <svg className="h-8 w-8 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-sm font-semibold text-foreground">Unable to connect to server</p>
+          <p className="text-xs text-muted-foreground max-w-xs">The API server is not responding. Check that the backend is running.</p>
+        </div>
+        <button
+          onClick={() => void refetch()}
+          className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }

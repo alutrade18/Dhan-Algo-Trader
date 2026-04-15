@@ -54,11 +54,18 @@ const BLANK_FORM: FormState = {
   stop_loss_price: "",
 };
 
+const TERMINAL_STATUSES = new Set([
+  "TARGET_HIT", "STOP_LOSS_HIT", "COMPLETED", "CANCELLED", "REJECTED",
+]);
+
 function statusColor(status: string) {
   const s = status?.toUpperCase();
-  if (s === "TRADED" || s === "PARTIALLY_TRADED") return "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
-  if (s === "PENDING" || s === "TRANSIT") return "text-amber-400 border-amber-400/30 bg-amber-400/10";
-  if (s === "REJECTED" || s === "CANCELLED") return "text-red-400 border-red-400/30 bg-red-400/10";
+  if (s === "TRADED" || s === "PARTIALLY_TRADED" || s === "TARGET_HIT" || s === "COMPLETED")
+    return "text-success border-success/30 bg-success/10";
+  if (s === "STOP_LOSS_HIT" || s === "REJECTED" || s === "CANCELLED")
+    return "text-destructive border-destructive/30 bg-destructive/10";
+  if (s === "PENDING" || s === "TRANSIT" || s === "OPEN")
+    return "text-warning border-warning/30 bg-warning/10";
   return "text-muted-foreground border-muted";
 }
 
@@ -88,7 +95,7 @@ export default function SuperOrders() {
   const availableBalance = Number(fundsData?.availableBalance ?? fundsData?.availabelBalance ?? 0);
 
   const entryPrice  = parseFloat(form.price)            || 0;
-  const qty         = parseInt(form.quantity)            || 0;
+  const qty         = parseInt(form.quantity, 10)        || 0;
   const marginRequired = entryPrice * qty;
   const shortfall      = marginRequired - availableBalance;
   const insufficientFunds = marginRequired > 0 && availableBalance > 0 && shortfall > 0;
@@ -257,7 +264,7 @@ export default function SuperOrders() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               Place Super Order
-              <Badge variant="outline" className="ml-auto text-[10px] text-amber-400 border-amber-400/30 bg-amber-400/10">INTRADAY</Badge>
+              <Badge variant="outline" className="ml-auto text-[10px] text-warning border-warning/30 bg-warning/10">INTRADAY</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -318,8 +325,8 @@ export default function SuperOrders() {
                 <label className="text-xs font-medium">
                   Entry Price ₹
                   {ltpLoading && <span className="text-muted-foreground font-normal ml-1">(fetching...)</span>}
-                  {!ltpLoading && ltpUnavailable && <span className="text-amber-400 font-normal ml-1">(enter manually)</span>}
-                  {!ltpLoading && !ltpUnavailable && form.price && <span className="text-emerald-400 font-normal ml-1">(live)</span>}
+                  {!ltpLoading && ltpUnavailable && <span className="text-warning font-normal ml-1">(enter manually)</span>}
+                  {!ltpLoading && !ltpUnavailable && form.price && <span className="text-success font-normal ml-1">(live)</span>}
                 </label>
                 <div className="relative">
                   <Input
@@ -335,42 +342,42 @@ export default function SuperOrders() {
                   )}
                 </div>
                 {ltpUnavailable && (
-                  <p className="text-[10px] text-amber-400/80">
+                  <p className="text-[10px] text-warning/80">
                     Live price unavailable — market may be closed or symbol not found. Enter price manually.
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-emerald-400">Target ₹ <span className="text-muted-foreground font-normal">({TARGET_PCT}%)</span></label>
+                <label className="text-xs font-medium text-success">Target ₹ <span className="text-muted-foreground font-normal">({TARGET_PCT}%)</span></label>
                 <Input
                   type="number"
                   step="0.05"
                   placeholder="0.00"
                   value={form.target_price}
                   onChange={e => setForm(p => ({ ...p, target_price: e.target.value }))}
-                  className="font-mono text-xs border-emerald-400/30 focus-visible:ring-emerald-400/50"
+                  className="font-mono text-xs border-success/30 focus-visible:ring-success/50"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-red-400">Stop Loss ₹ <span className="text-muted-foreground font-normal">({SL_PCT}%)</span></label>
+                <label className="text-xs font-medium text-destructive">Stop Loss ₹ <span className="text-muted-foreground font-normal">({SL_PCT}%)</span></label>
                 <Input
                   type="number"
                   step="0.05"
                   placeholder="0.00"
                   value={form.stop_loss_price}
                   onChange={e => setForm(p => ({ ...p, stop_loss_price: e.target.value }))}
-                  className="font-mono text-xs border-red-400/30 focus-visible:ring-red-400/50"
+                  className="font-mono text-xs border-destructive/30 focus-visible:ring-destructive/50"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-blue-400">Margin Required ₹</label>
+                <label className="text-xs font-medium text-primary">Margin Required ₹</label>
                 <div className={`px-3 py-2 rounded-md border text-xs font-mono min-h-[34px] flex items-center font-semibold ${
                   insufficientFunds
-                    ? "border-red-400/40 bg-red-400/10 text-red-400"
-                    : "border-blue-400/30 bg-blue-400/10 text-blue-400"
+                    ? "border-destructive/40 bg-destructive/10 text-destructive"
+                    : "border-primary/30 bg-primary/10 text-primary"
                 }`}>
                   {marginRequired > 0
                     ? `₹${marginRequired.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -381,11 +388,11 @@ export default function SuperOrders() {
             </div>
 
             {insufficientFunds && (
-              <div className="flex items-start gap-2.5 rounded-md border border-red-400/30 bg-red-400/10 px-3 py-2.5">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-red-400">
+              <div className="flex items-start gap-2.5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                <div className="text-xs text-destructive">
                   <p className="font-semibold">Insufficient Balance — Cannot Place Order</p>
-                  <p className="mt-0.5 text-red-400/80">
+                  <p className="mt-0.5 text-destructive/80">
                     Available: ₹{availableBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
                     Required: ₹{marginRequired.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
                     Shortfall: <span className="font-semibold">₹{shortfall.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span> — Please add funds to place this trade.
@@ -459,13 +466,13 @@ export default function SuperOrders() {
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{o.exchangeSegment ? segToExch(String(o.exchangeSegment)) : "—"}</td>
                     <td className="px-3 py-2.5">
                       {side === "BUY"
-                        ? <span className="flex items-center gap-1 text-emerald-400 text-xs font-medium"><TrendingUp className="w-3 h-3" />BUY</span>
-                        : <span className="flex items-center gap-1 text-red-400 text-xs font-medium"><TrendingDown className="w-3 h-3" />SELL</span>}
+                        ? <span className="flex items-center gap-1 text-success text-xs font-medium"><TrendingUp className="w-3 h-3" />BUY</span>
+                        : <span className="flex items-center gap-1 text-destructive text-xs font-medium"><TrendingDown className="w-3 h-3" />SELL</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs">{o.quantity ?? "—"}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs">₹{entryP.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs text-emerald-400">₹{Number(o.targetPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs text-red-400">₹{Number(o.stopLossPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-success">₹{Number(o.targetPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-xs text-destructive">₹{Number(o.stopLossPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-blue-400">
                       {orderMargin > 0 ? `₹${orderMargin.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` : "—"}
                     </td>
@@ -475,14 +482,16 @@ export default function SuperOrders() {
                       </Badge>
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      <Button
-                        variant="ghost" size="sm"
-                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                        onClick={() => cancelMutation.mutate({ orderId: id, leg: "ENTRY_LEG" })}
-                        disabled={cancelMutation.isPending}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
+                      {!TERMINAL_STATUSES.has(String(o.orderStatus ?? "").toUpperCase()) && (
+                        <Button
+                          variant="ghost" size="sm"
+                          className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                          onClick={() => cancelMutation.mutate({ orderId: id, leg: "ENTRY_LEG" })}
+                          disabled={cancelMutation.isPending}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 );

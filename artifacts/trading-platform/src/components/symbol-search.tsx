@@ -46,9 +46,9 @@ function segmentLabel(segment: string, exch: string) {
 
 function instrumentColor(instrument: string) {
   if (instrument === "EQUITY") return "text-blue-400 border-blue-400/30 bg-blue-400/10";
-  if (instrument.startsWith("FUT")) return "text-amber-400 border-amber-400/30 bg-amber-400/10";
+  if (instrument.startsWith("FUT")) return "text-warning border-warning/30 bg-warning/10";
   if (instrument.startsWith("OPT")) return "text-purple-400 border-purple-400/30 bg-purple-400/10";
-  if (instrument === "INDEX") return "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
+  if (instrument === "INDEX") return "text-success border-success/30 bg-success/10";
   return "text-muted-foreground border-muted";
 }
 
@@ -182,7 +182,7 @@ export function SymbolSearch({ value, onChange, placeholder = "Search symbol..."
                     <span className="font-mono text-xs font-semibold">{item.symbolName}</span>
                     <Badge variant="outline" className={`text-[9px] px-1 py-0 ${instrumentColor(item.instrument)}`}>{item.instrument}</Badge>
                     <Badge variant="outline" className="text-[9px] px-1 py-0">{segmentLabel(item.segment, item.exchId)}</Badge>
-                    {item.optionType && <Badge variant="outline" className={`text-[9px] px-1 py-0 ${item.optionType === "CE" ? "text-emerald-400" : "text-red-400"}`}>{item.optionType}</Badge>}
+                    {item.optionType && <Badge variant="outline" className={`text-[9px] px-1 py-0 ${item.optionType === "CE" ? "text-success" : "text-destructive"}`}>{item.optionType}</Badge>}
                   </div>
                   {item.displayName && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.displayName}</p>}
                   <div className="flex items-center gap-2 mt-0.5">
