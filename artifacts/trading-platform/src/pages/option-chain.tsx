@@ -65,10 +65,12 @@ interface OptionEntry {
   callOI: number;
   callVolume: number;
   callIV: number;
+  callPrevClose: number;
   putLTP: number;
   putOI: number;
   putVolume: number;
   putIV: number;
+  putPrevClose: number;
 }
 
 // ── Market Hours (IST) ──────────────────────────────────────────────
@@ -472,10 +474,12 @@ export default function OptionChain() {
       callOI,
       callVolume: Number(ce.volume ?? 0),
       callIV: Number(ce.implied_volatility ?? ce.iv ?? ce.impliedVolatility ?? 0),
+      callPrevClose: Number(ce.prev_close ?? ce.prevClose ?? ce.previous_close ?? 0),
       putLTP: Number(pe.last_price ?? pe.ltp ?? 0),
       putOI,
       putVolume: Number(pe.volume ?? 0),
       putIV: Number(pe.implied_volatility ?? pe.iv ?? pe.impliedVolatility ?? 0),
+      putPrevClose: Number(pe.prev_close ?? pe.prevClose ?? pe.previous_close ?? 0),
     });
   }
 
@@ -617,6 +621,46 @@ export default function OptionChain() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveLtps]);
+
+  // ── Batch REST LTP poll (POST /marketfeed/ltp) ───────────────────
+  // Provides fresh LTP every 5 s for ALL strikes via Dhan Market Quote API.
+  // WebSocket ticks remain primary — this is a reliable fallback + initialization.
+  const allSecIds = entries.flatMap(e =>
+    [e.callSecId, e.putSecId].filter((id): id is number => !!id)
+  );
+
+  const { data: batchLtpData } = useQuery<{ ltps: Record<string, number> }>({
+    queryKey: ["option-ltp-batch", optionSegment, expiry, allSecIds.slice(0, 4).join(",")],
+    queryFn: async () => {
+      if (allSecIds.length === 0) return { ltps: {} };
+      const res = await fetch(`${BASE}api/market/ltp-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ securities: { [optionSegment]: allSecIds } }),
+      });
+      if (!res.ok) throw new Error("ltp-batch failed");
+      return res.json() as Promise<{ ltps: Record<string, number> }>;
+    },
+    enabled: allSecIds.length > 0 && !!expiry && !!optionSegment,
+    refetchInterval: marketStatus.isOpen ? 5_000 : false,
+    staleTime: 4_000,
+    refetchOnWindowFocus: false,
+    retry: 0,
+  });
+
+  // Merge batch LTP into the shared live buffer so the 500 ms flush picks it up.
+  // WebSocket ticks written to the buffer more recently will naturally win.
+  useEffect(() => {
+    if (!batchLtpData?.ltps) return;
+    let changed = false;
+    for (const [secIdStr, ltp] of Object.entries(batchLtpData.ltps)) {
+      if (ltp > 0) {
+        liveBuffer.current.set(Number(secIdStr), ltp);
+        changed = true;
+      }
+    }
+    if (changed) setLiveLtps(new Map(liveBuffer.current));
+  }, [batchLtpData]);
 
   // ── Auto-scroll table to ATM row ─────────────────────────────────
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -813,9 +857,9 @@ export default function OptionChain() {
             {activeLabel} · {expiry}
           </Badge>
           {marketStatus.isOpen && (
-            <span className={`flex items-center gap-1 text-[10px] font-medium ${wsConnected ? "text-emerald-400" : "text-muted-foreground"}`}>
+            <span className={`flex items-center gap-1 text-[10px] font-medium ${wsConnected ? "text-emerald-400" : batchLtpData ? "text-sky-400" : "text-muted-foreground"}`}>
               <Wifi className="w-3 h-3" />
-              {wsConnected ? "Live LTP" : "Connecting…"}
+              {wsConnected ? "WS live" : batchLtpData ? "REST 5s" : "Connecting…"}
             </span>
           )}
         </div>
@@ -970,20 +1014,26 @@ export default function OptionChain() {
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-red-400/5" : ""}`}>
                       {e.callIV > 0 ? e.callIV.toFixed(1) : "—"}
                     </td>
-                    {/* LTP — live via WebSocket, flashes on price change */}
+                    {/* LTP — live via REST (5s) + WebSocket, flashes on price change */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-red-400/5" : ""}`}>
-                      <span
-                        className={`font-mono font-semibold transition-colors duration-300 ${
-                          callDir > 0
-                            ? "text-emerald-400"
-                            : callDir < 0
-                              ? "text-red-400"
-                              : "text-foreground"
-                        }`}
-                      >
-                        ₹{(e.callSecId ? (liveLtps.get(e.callSecId) ?? e.callLTP) : e.callLTP)
-                            .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </span>
+                      {(() => {
+                        const ltp = e.callSecId ? (liveLtps.get(e.callSecId) ?? e.callLTP) : e.callLTP;
+                        const chgPct = e.callPrevClose > 0 ? ((ltp - e.callPrevClose) / e.callPrevClose * 100) : null;
+                        return (
+                          <div className="flex flex-col items-end leading-tight gap-px">
+                            <span className={`font-mono font-semibold transition-colors duration-300 ${
+                              callDir > 0 ? "text-emerald-400" : callDir < 0 ? "text-red-400" : "text-foreground"
+                            }`}>
+                              ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                            {chgPct !== null && (
+                              <span className={`text-[9px] font-medium tabular-nums ${chgPct >= 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
+                                {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* ── STRIKE ── */}
@@ -1003,20 +1053,26 @@ export default function OptionChain() {
                     </td>
 
                     {/* ── PUT side ── */}
-                    {/* LTP — live via WebSocket, flashes on price change */}
+                    {/* LTP — live via REST (5s) + WebSocket, flashes on price change */}
                     <td className={`px-2.5 py-2 text-right ${isATM ? "bg-emerald-400/5" : ""}`}>
-                      <span
-                        className={`font-mono font-semibold transition-colors duration-300 ${
-                          putDir > 0
-                            ? "text-emerald-400"
-                            : putDir < 0
-                              ? "text-red-400"
-                              : "text-foreground"
-                        }`}
-                      >
-                        ₹{(e.putSecId ? (liveLtps.get(e.putSecId) ?? e.putLTP) : e.putLTP)
-                            .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </span>
+                      {(() => {
+                        const ltp = e.putSecId ? (liveLtps.get(e.putSecId) ?? e.putLTP) : e.putLTP;
+                        const chgPct = e.putPrevClose > 0 ? ((ltp - e.putPrevClose) / e.putPrevClose * 100) : null;
+                        return (
+                          <div className="flex flex-col items-end leading-tight gap-px">
+                            <span className={`font-mono font-semibold transition-colors duration-300 ${
+                              putDir > 0 ? "text-emerald-400" : putDir < 0 ? "text-red-400" : "text-foreground"
+                            }`}>
+                              ₹{ltp.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                            {chgPct !== null && (
+                              <span className={`text-[9px] font-medium tabular-nums ${chgPct >= 0 ? "text-emerald-400/70" : "text-red-400/70"}`}>
+                                {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     {/* IV */}
                     <td className={`px-2.5 py-2 text-right font-mono text-muted-foreground ${isATM ? "bg-emerald-400/5" : ""}`}>
@@ -1066,7 +1122,7 @@ export default function OptionChain() {
           </span>
           <span className="flex items-center gap-1">
             <Wifi className="w-3 h-3 text-emerald-400" />
-            LTP via real-time feed · OI/IV/Vol refreshes every 30 s
+            LTP: WebSocket (real-time) + REST 5s poll · OI/IV/Vol refreshes every 30 s
           </span>
         </div>
       )}

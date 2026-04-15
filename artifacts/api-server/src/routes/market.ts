@@ -134,6 +134,65 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
 const optionChainLastFetch = new Map<string, number>();
 const OPTION_CHAIN_MIN_INTERVAL_MS = 3_500; // slightly above 3s to be safe
 
+/**
+ * POST /api/market/ltp-batch
+ * Batch-fetch LTP for multiple option security IDs using Dhan POST /marketfeed/ltp.
+ * Rate limit: 10 req/s, 1000 instruments per request.
+ * Returns: { ltps: { "<secId>": <ltp number>, ... } }
+ */
+router.post("/market/ltp-batch", async (req, res): Promise<void> => {
+  if (!dhanClient.isConfigured()) {
+    res.status(401).json({ error: "Broker not connected" });
+    return;
+  }
+  const body = req.body as { securities?: Record<string, unknown> };
+  if (!body.securities || typeof body.securities !== "object") {
+    res.status(400).json({ error: "securities object required" });
+    return;
+  }
+
+  // Validate and sanitise: segment → integer[] only
+  const secStrings: Record<string, string[]> = {};
+  let totalIds = 0;
+  for (const [seg, raw] of Object.entries(body.securities)) {
+    if (!Array.isArray(raw)) continue;
+    const ids = (raw as unknown[]).map(Number).filter(n => !isNaN(n) && n > 0);
+    if (ids.length > 0) {
+      secStrings[seg] = ids.map(String);
+      totalIds += ids.length;
+    }
+  }
+  if (totalIds === 0) {
+    res.json({ ltps: {} });
+    return;
+  }
+  if (totalIds > 1000) {
+    res.status(400).json({ error: "Maximum 1000 instruments per request" });
+    return;
+  }
+
+  try {
+    const raw = await dhanClient.getMarketQuote(secStrings, "ltp") as Record<string, unknown>;
+    // Dhan v2 wraps: { data: { NSE_FNO: { "49081": { last_price: X }, ... } }, status: "success" }
+    const unwrapped = (raw.data && typeof raw.data === "object" ? raw.data : raw) as
+      Record<string, Record<string, { last_price?: number }>>;
+
+    const ltps: Record<string, number> = {};
+    for (const segData of Object.values(unwrapped)) {
+      if (!segData || typeof segData !== "object") continue;
+      for (const [secId, entry] of Object.entries(segData)) {
+        const ltp = Number((entry as { last_price?: number }).last_price ?? 0);
+        if (ltp > 0) ltps[secId] = ltp;
+      }
+    }
+
+    res.json({ ltps });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to fetch batch LTP");
+    res.status(500).json({ error: "Failed to fetch batch LTP" });
+  }
+});
+
 router.post("/market/option-chain", async (req, res): Promise<void> => {
   const parsed = GetOptionChainBody.safeParse(req.body);
   if (!parsed.success) {
