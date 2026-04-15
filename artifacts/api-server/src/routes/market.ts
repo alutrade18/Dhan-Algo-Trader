@@ -241,6 +241,17 @@ router.post("/market/option-chain", async (req, res): Promise<void> => {
     const ltp = Number(inner.last_price ?? 0);
     // Expose oc directly as data so frontend can iterate strike keys
     const oc = (inner.oc ?? inner) as Record<string, unknown>;
+    const ocKeys = Object.keys(oc);
+    req.log.info({
+      underSecurityId: parsed.data.underSecurityId,
+      underExchangeSegment: parsed.data.underExchangeSegment,
+      expiry: parsed.data.expiry,
+      ltp,
+      topLevelKeys: Object.keys(r),
+      innerKeys: Object.keys(inner),
+      ocKeyCount: ocKeys.length,
+      sampleOcKeys: ocKeys.slice(0, 3),
+    }, "option-chain: raw response shape");
     res.json({ data: oc, ltp });
   } catch (e: unknown) {
     req.log.error({ err: e }, "Failed to fetch option chain");
