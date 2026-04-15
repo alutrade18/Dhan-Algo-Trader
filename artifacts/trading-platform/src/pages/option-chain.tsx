@@ -473,6 +473,18 @@ export default function OptionChain() {
   const entries: OptionEntry[] = [];
 
   const strikeKeys = Object.keys(rawChain);
+  if (strikeKeys.length > 0 || chain !== undefined) {
+    console.log("[OC DEBUG]", {
+      chainExists: !!chain,
+      chainLtp: chain?.ltp,
+      chainDataType: typeof chain?.data,
+      strikeKeysCount: strikeKeys.length,
+      first3Keys: strikeKeys.slice(0, 3),
+      activeDhanSecId,
+      activeSegment,
+      expiry,
+    });
+  }
   const strikes = strikeKeys
     .map((k) => parseFloat(k))
     .filter((n) => !isNaN(n) && n > 0)
