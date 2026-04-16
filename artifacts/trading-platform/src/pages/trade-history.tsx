@@ -24,6 +24,13 @@ function getTodayIST(): string {
   return ist.toISOString().slice(0, 10);
 }
 function toYMD(d: Date) { return d.toISOString().slice(0, 10); }
+// Safe formatter for Date objects built with `new Date(y, m, d)` (local time).
+// toYMD() calls .toISOString() which converts to UTC first; for IST (+5:30)
+// a local midnight would become 18:30 the *previous* day in UTC, giving the
+// wrong YYYY-MM-DD.  localToYMD reads the local components directly.
+function localToYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d; }
 function ymdToDisplay(ymd: string) {
   if (!ymd || ymd.length !== 10) return ymd;
@@ -93,7 +100,9 @@ function weekRangeISO(weekNum: number, fyYear: number): { from: string; to: stri
   weekStart.setDate(mondayBefore.getDate() + (weekNum - 1) * 7);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
-  return { from: toYMD(weekStart), to: toYMD(weekEnd) };
+  // Use localToYMD — these Dates are created with local-time constructors;
+  // toYMD() would give the UTC date which is one day behind for IST (+5:30).
+  return { from: localToYMD(weekStart), to: localToYMD(weekEnd) };
 }
 
 // ── Equity curve helpers ──────────────────────────────────────────────────────
@@ -312,9 +321,10 @@ export default function TradeHistory() {
 
   // ── Equity curve state ──────────────────────────────────────────────────────
   const [eqFromInput, setEqFromInput] = useState(toYMD(daysAgo(364)));
-  const [eqToInput, setEqToInput] = useState(toYMD(new Date()));
+  // Use IST-aware today so this never shows yesterday when called before 05:30 IST
+  const [eqToInput, setEqToInput] = useState(getTodayIST);
   const [activeQuery, setActiveQuery] = useState<{ mode: DateMode; from: string; to: string }>({
-    mode: "30d", from: toYMD(daysAgo(29)), to: toYMD(new Date()),
+    mode: "30d", from: toYMD(daysAgo(29)), to: getTodayIST(),
   });
 
   const { data: equityCurve, isLoading: isEquityLoading } = useQuery<EquityPoint[]>({
@@ -415,17 +425,21 @@ export default function TradeHistory() {
     if (diaryPeriod === "monthly") {
       return `${diaryMonthYear}-01`;
     }
-    return toYMD(fyStart(diaryFYYear));
+    // fyStart() builds a local-time Date — use localToYMD, not toYMD(),
+    // because toYMD uses toISOString() (UTC) which gives the wrong day for IST.
+    return localToYMD(fyStart(diaryFYYear));
   }, [diaryPeriod, diaryMonthYear, diaryFYYear]);
 
   const diaryTo = useMemo(() => {
     if (diaryPeriod === "monthly") {
+      // Last day of month — also a local-time Date; use localToYMD.
       const lastDay = new Date(diaryMonth.getFullYear(), diaryMonth.getMonth() + 1, 0);
-      return toYMD(lastDay);
+      return localToYMD(lastDay);
     }
     const end = fyEnd(diaryFYYear);
-    const todayStr = toYMD(new Date());
-    return toYMD(end) > todayStr ? todayStr : toYMD(end);
+    const todayStr = getTodayIST(); // IST-aware today, never yesterday
+    const fyEndStr = localToYMD(end); // local-time Date → local components
+    return fyEndStr > todayStr ? todayStr : fyEndStr;
   }, [diaryPeriod, diaryMonthYear, diaryFYYear]);
 
   const { data: diaryTrades = [], isLoading: isDiaryLoading } = useQuery<TradeRecord[]>({
@@ -480,11 +494,15 @@ export default function TradeHistory() {
 
   const bestDay = diaryDays.reduce<DayStats | null>((best, d) => (!best || d.overallPnl > best.overallPnl) ? d : best, null);
 
-  const allTimeBestDay = useMemo<{ pnl: number; date: string } | null>(() => {
+  // Best day within the currently loaded period (renamed from allTimeBestDay —
+  // that name was misleading; this is NOT all-time, it's the current period best).
+  const periodBestDay = useMemo<{ pnl: number; date: string } | null>(() => {
     if (diaryDays.length === 0) return null;
     const best = diaryDays.reduce((b, d) => d.overallPnl > b.overallPnl ? d : b, diaryDays[0]);
     return { pnl: best.overallPnl, date: best.date };
   }, [diaryDays]);
+  // Whether the current streak is winning or losing (last traded day's sign)
+  const currentStreakIsWin = sortedDays.length > 0 && sortedDays[sortedDays.length - 1].overallPnl > 0;
 
   // ── Period labels ───────────────────────────────────────────────────────────
   function fyLabel(y: number) { return `FY ${y}-${String(y + 1).slice(2)}`; }
@@ -797,15 +815,15 @@ export default function TradeHistory() {
                     <div className="text-[10px] text-muted-foreground">on {formatDisplayDate(bestDay.date)}</div>
                   </div>
                 )}
-                {allTimeBestDay && (
+                {periodBestDay && (
                   <div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                      <span>🎯</span> Most Profitable (of all time):
+                      <span>🎯</span> Most Profitable (this period):
                     </div>
-                    <div className={cn("font-bold text-lg font-mono", allTimeBestDay.pnl >= 0 ? "text-success" : "text-destructive")}>
-                      {formatCurrency(allTimeBestDay.pnl)}
+                    <div className={cn("font-bold text-lg font-mono", periodBestDay.pnl >= 0 ? "text-success" : "text-destructive")}>
+                      {formatCurrency(periodBestDay.pnl)}
                     </div>
-                    <div className="text-[10px] text-muted-foreground">on {formatDisplayDate(allTimeBestDay.date)}</div>
+                    <div className="text-[10px] text-muted-foreground">on {formatDisplayDate(periodBestDay.date)}</div>
                   </div>
                 )}
               </div>
@@ -818,8 +836,14 @@ export default function TradeHistory() {
               { label: "Trading Days", value: tradingDaysTotal, color: "border-yellow-400/40 text-yellow-400 bg-yellow-400/10" },
               { label: "Traded On", value: tradedOn, color: "border-yellow-400/40 text-yellow-400 bg-yellow-400/10" },
               { label: "In-Profit Days", value: inProfitDays, color: "border-yellow-400/40 text-yellow-400 bg-yellow-400/10" },
-              { label: "Winning Streak", value: winningStreak, color: "border-blue-400/40 text-blue-400 bg-blue-400/10" },
-              { label: "Current Streak", value: sortedDays.length === 0 ? 0 : currentStreakCount, color: "border-blue-400/40 text-blue-400 bg-blue-400/10" },
+              { label: "Best Win Streak", value: winningStreak, color: "border-blue-400/40 text-blue-400 bg-blue-400/10" },
+              {
+                label: sortedDays.length === 0 ? "Current Streak" : currentStreakIsWin ? "🔥 Win Streak" : "❄️ Loss Streak",
+                value: sortedDays.length === 0 ? 0 : currentStreakCount,
+                color: sortedDays.length === 0 ? "border-blue-400/40 text-blue-400 bg-blue-400/10"
+                  : currentStreakIsWin ? "border-success/40 text-success bg-success/10"
+                  : "border-destructive/40 text-destructive bg-destructive/10",
+              },
             ].map(chip => (
               <div key={chip.label} className="flex flex-col items-center gap-1">
                 <div className={cn("w-10 h-10 rounded-lg border-2 flex items-center justify-center font-bold text-lg", chip.color)}>
