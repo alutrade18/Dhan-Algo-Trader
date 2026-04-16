@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { isHolidayToday } from "@/lib/market-calendar";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -421,8 +421,10 @@ export default function OptionChain() {
       return json.data ?? [];
     },
     enabled: !!activeDhanSecId && !!activeSegment,
-    staleTime: 24 * 60 * 60 * 1_000,
-    gcTime: 24 * 60 * 60 * 1_000,
+    // Refresh hourly — contracts expire intraday (e.g. CrudeOil on its expiry
+    // day), so a 24h stale window would keep expired contracts selectable.
+    staleTime: 60 * 60 * 1_000,
+    gcTime: 60 * 60 * 1_000,
     refetchOnWindowFocus: false,
     refetchInterval: false,
     retry: 1,
@@ -462,7 +464,10 @@ export default function OptionChain() {
     refetchInterval: marketStatus.isOpen ? 30_000 : false,
     staleTime: 25_000,
     refetchOnWindowFocus: false,
-    placeholderData: (prev) => prev,
+    // NOTE: no `placeholderData` — carrying over the previous instrument's
+    // chain while a new one loads briefly shows e.g. Gold strikes when the
+    // user has just switched to Silver. staleTime+refetchInterval already
+    // keep same-instrument background refreshes smooth, so we skip it.
     retry: 0,
   });
 
@@ -587,12 +592,22 @@ export default function OptionChain() {
   }, [activeDhanSecId, activeSegment]);
 
   // Subscribe to option strikes via WS (always active — market-closed instruments simply send no ticks)
-  useEffect(() => {
-    if (displayEntries.length === 0) return;
+  // displayEntries is a fresh array every render, so we derive a stable string key
+  // from the actual security IDs; the effect only re-runs when the IDs truly change.
+  const wsSubKey = useMemo(
+    () =>
+      displayEntries
+        .map((e) => `${e.callSecId ?? 0}.${e.putSecId ?? 0}`)
+        .join("|"),
+    [displayEntries],
+  );
+  const wsSubIdsRef = useRef<number[]>([]);
+  wsSubIdsRef.current = displayEntries.flatMap((e) =>
+    [e.callSecId, e.putSecId].filter((id): id is number => !!id),
+  );
 
-    const ceIds = displayEntries.map((e) => e.callSecId).filter((id): id is number => !!id);
-    const peIds = displayEntries.map((e) => e.putSecId).filter((id): id is number => !!id);
-    const allIds = [...ceIds, ...peIds];
+  useEffect(() => {
+    const allIds = wsSubIdsRef.current;
     if (allIds.length === 0) return;
 
     const cb = (tick: { securityId: number; ltp: number }) => {
@@ -605,8 +620,7 @@ export default function OptionChain() {
       unsubscribe();
       setWsConnected(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayEntries, optionSegment]);
+  }, [wsSubKey, optionSegment]);
 
   // ── Live LTP flash tracking ──────────────────────────────────────
   // prevPricesRef: prices from previous render cycle (REST or WS)
@@ -638,7 +652,9 @@ export default function OptionChain() {
     prevPricesRef.current = newPrices;
 
     if (newFlash.size > 0) {
-      setFlashDirs(newFlash);
+      // Merge, don't replace — otherwise each 30s REST poll wipes in-progress
+      // flashes triggered by WS ticks between polls.
+      setFlashDirs((prev) => new Map([...prev, ...newFlash]));
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       flashTimerRef.current = setTimeout(() => setFlashDirs(new Map()), 2_000);
     }
@@ -718,14 +734,17 @@ export default function OptionChain() {
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const atmRowRef = useRef<HTMLTableRowElement>(null);
 
+  // Only auto-scroll when the ATM strike or expiry actually changes.
+  // Previously depended on `displayEntries` (a fresh array every render),
+  // which snapped the scroll back to ATM on every LTP tick and trapped the
+  // user on the ATM row even while they tried to scroll to OTM strikes.
   useEffect(() => {
     if (!atmRowRef.current || !tableContainerRef.current) return;
     const container = tableContainerRef.current;
     const row = atmRowRef.current;
-    // Scroll table container (not page) so ATM row is centred
     const rowMid = row.offsetTop + row.offsetHeight / 2;
     container.scrollTop = rowMid - container.clientHeight / 2;
-  }, [displayEntries, atmStrike]);
+  }, [atmStrike, expiry, activeDhanSecId]);
 
   const isLoading = expiryLoading || chainLoading;
   const hasData = displayEntries.length > 0;
