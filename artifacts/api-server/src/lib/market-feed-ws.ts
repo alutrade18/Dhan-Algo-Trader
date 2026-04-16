@@ -160,8 +160,9 @@ class MarketFeedWS extends EventEmitter {
     const exchId = buf.readUInt8(3);
     const exchSeg = EXCHANGE_MAP[exchId] ?? "UNKNOWN";
 
-    // Security ID at bytes 4-7 (int32 LE; use abs to handle signed IDs)
-    const securityId = Math.abs(buf.readInt32LE(4));
+    // Security ID at bytes 4-7 — Dhan publishes this as an unsigned 32-bit LE
+    // integer. Parsing it as signed (and abs-ing) silently corrupts IDs >= 2^31.
+    const securityId = buf.readUInt32LE(4);
 
     // LTP at bytes 8-11 (float32 LE) — same position for all packet types
     if (buf.length < 12) return;

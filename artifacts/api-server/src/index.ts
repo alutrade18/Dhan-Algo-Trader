@@ -62,6 +62,13 @@ async function loadSavedCredentials() {
     const [settings] = await db.select().from(settingsTable);
     if (settings?.brokerClientId && settings?.brokerAccessToken) {
       const token = decryptToken(settings.brokerAccessToken);
+      if (token === null) {
+        logger.warn(
+          { clientId: "****" + settings.brokerClientId.slice(-4) },
+          "Saved broker access token could not be decrypted (ENCRYPTION_KEY may have changed). Broker will show as disconnected until user re-authenticates.",
+        );
+        return;
+      }
       dhanClient.configure(settings.brokerClientId, token);
       logger.info({ clientId: "****" + settings.brokerClientId.slice(-4) }, "Loaded broker credentials from database");
       marketFeedWS.configure(settings.brokerClientId, token);

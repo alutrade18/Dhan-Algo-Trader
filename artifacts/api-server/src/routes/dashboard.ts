@@ -280,10 +280,14 @@ function buildEquityCurvePoints(
 
   for (const d of sortedDates) {
     const info = dailyMap.get(d)!;
-    const pnl = Math.round((info.runbal - prevBal) * 100) / 100;
+    const rawDelta = Math.round((info.runbal - prevBal) * 100) / 100;
     const dominantType = info.types.includes("DEPOSIT") ? "DEPOSIT"
       : info.types.includes("WITHDRAWAL") ? "WITHDRAWAL" : "PNL";
 
+    // Only count real trading days in the per-point pnl AND the cumulative curve.
+    // Deposits/withdrawals move runbal but are NOT profits/losses — showing them
+    // as P&L in tooltips misleads the user and corrupts the equity curve shape.
+    const pnl = dominantType === "PNL" ? rawDelta : 0;
     if (dominantType === "PNL") tradingCumulative += pnl;
     points.push({
       date: d,

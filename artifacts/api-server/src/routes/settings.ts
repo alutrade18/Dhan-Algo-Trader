@@ -82,7 +82,11 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     // Always return masked clientId from DB (so user can re-authenticate without retyping)
     dhanClientId: s.brokerClientId ? "****" + s.brokerClientId.slice(-4) : "",
     // Clear masked token when expired — forces the frontend form field to empty
-    dhanAccessToken: connected && s.brokerAccessToken ? "****" + decryptToken(s.brokerAccessToken).slice(-4) : "",
+    dhanAccessToken: (() => {
+      if (!connected || !s.brokerAccessToken) return "";
+      const plain = decryptToken(s.brokerAccessToken);
+      return plain ? "****" + plain.slice(-4) : "";
+    })(),
     apiConnected: connected,
     tokenExpired,
     maxDailyLoss: s.maxDailyLoss !== null && s.maxDailyLoss !== undefined ? Number(s.maxDailyLoss) : 0,
