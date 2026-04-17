@@ -107,6 +107,8 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - "Pause All Strategies" quick action → calls POST /api/strategies/pause-all
 - "Emergency Stop" button → pauses all strategies AND enables kill switch
 - Recent Alerts panel with last 5 activity entries
+- **Market Index Cards** — 5 live index cards: NIFTY 50, BANK NIFTY, GOLD, SILVER, CRUDE OIL with live WebSocket LTP, OHLC change from open, high/low. MCX commodity security IDs resolved dynamically from nearest-expiry OPTFUT options via `/api/market/indices`
+- **Watchlist Panel** — Star button in header opens sliding drawer (max-w-2xl, right-side overlay). Left half: saved instruments with live LTP ticker. Right half: symbol search + instrument detail view. Backend: `watchlist` table, CRUD via GET/POST/DELETE `/api/watchlist`
 
 ### Settings (Major Expansion)
 - **Broker Connection** — credentials, balance display, refresh, disconnect

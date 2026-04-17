@@ -9,12 +9,24 @@ interface TickData {
   ltt?: number;
 }
 
+export interface QuoteData extends TickData {
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  volume?: number;
+  avgPrice?: number;
+  ltq?: number;
+  totalBuyQty?: number;
+  totalSellQty?: number;
+  oi?: number;
+}
+
 type TickCallback = (data: TickData) => void;
+type QuoteCallback = (data: QuoteData) => void;
 type OrderUpdateCallback = (data: Record<string, unknown>) => void;
 type Mode = "ticker" | "quote" | "full";
 
-// Tracks all active subscriptions so we can resubscribe on reconnect
-// key = `${exchange}:${mode}` → Set of security IDs
 interface SubEntry {
   exchange: string;
   mode: Mode;
@@ -24,8 +36,8 @@ interface SubEntry {
 class MarketSocket {
   private socket: Socket;
   private tickListeners = new Map<string, Set<TickCallback>>();
+  private quoteListeners = new Map<string, Set<QuoteCallback>>();
   private orderUpdateListeners = new Set<OrderUpdateCallback>();
-  // subscription registry: keyed by `${exchange}:${mode}`
   private subRegistry = new Map<string, SubEntry>();
 
   constructor() {
@@ -36,18 +48,18 @@ class MarketSocket {
 
     this.socket.on("market:tick", (data: TickData) => {
       const key = `${data.exchangeSegment}:${data.securityId}`;
-      const listeners = this.tickListeners.get(key);
-      if (listeners) listeners.forEach(cb => cb(data));
-      const anyListeners = this.tickListeners.get("*");
-      if (anyListeners) anyListeners.forEach(cb => cb(data));
+      this.tickListeners.get(key)?.forEach(cb => cb(data));
+      this.tickListeners.get("*")?.forEach(cb => cb(data));
     });
 
-    this.socket.on("market:quote", (data: TickData) => {
+    this.socket.on("market:quote", (data: QuoteData) => {
       const key = `${data.exchangeSegment}:${data.securityId}`;
-      const listeners = this.tickListeners.get(key);
-      if (listeners) listeners.forEach(cb => cb(data));
-      const anyListeners = this.tickListeners.get("*");
-      if (anyListeners) anyListeners.forEach(cb => cb(data));
+      // Dispatch to tick listeners (LTP only)
+      this.tickListeners.get(key)?.forEach(cb => cb(data));
+      this.tickListeners.get("*")?.forEach(cb => cb(data));
+      // Dispatch to quote listeners (full OHLCV data)
+      this.quoteListeners.get(key)?.forEach(cb => cb(data));
+      this.quoteListeners.get("*")?.forEach(cb => cb(data));
     });
 
     this.socket.on("order:update", (data: Record<string, unknown>) => {
@@ -104,6 +116,35 @@ class MarketSocket {
     return () => this.unsubscribe(exchange, securityId, cb);
   }
 
+  subscribeQuote(exchange: string, securityId: number, cb: QuoteCallback): () => void {
+    const listenerKey = `${exchange}:${securityId}`;
+    if (!this.quoteListeners.has(listenerKey)) {
+      this.quoteListeners.set(listenerKey, new Set());
+    }
+    this.quoteListeners.get(listenerKey)!.add(cb);
+
+    // Also ensure we have a "quote" mode subscription so quote data flows
+    if (!this.tickListeners.has(listenerKey)) {
+      this.registerIds(exchange, [securityId], "quote");
+      this.socket.emit("market:subscribe", { exchange, securityIds: [securityId], mode: "quote" });
+    }
+
+    return () => {
+      const listeners = this.quoteListeners.get(listenerKey);
+      if (listeners) {
+        listeners.delete(cb);
+        if (listeners.size === 0) {
+          this.quoteListeners.delete(listenerKey);
+          // Only unsubscribe from WS if no tick listeners either
+          if (!this.tickListeners.has(listenerKey)) {
+            this.deregisterIds(exchange, [securityId]);
+            this.socket.emit("market:unsubscribe", { exchange, securityIds: [securityId] });
+          }
+        }
+      }
+    };
+  }
+
   unsubscribe(exchange: string, securityId: number, cb: TickCallback) {
     const listenerKey = `${exchange}:${securityId}`;
     const listeners = this.tickListeners.get(listenerKey);
@@ -111,14 +152,14 @@ class MarketSocket {
       listeners.delete(cb);
       if (listeners.size === 0) {
         this.tickListeners.delete(listenerKey);
-        this.deregisterIds(exchange, [securityId]);
-        this.socket.emit("market:unsubscribe", { exchange, securityIds: [securityId] });
+        if (!this.quoteListeners.has(listenerKey)) {
+          this.deregisterIds(exchange, [securityId]);
+          this.socket.emit("market:unsubscribe", { exchange, securityIds: [securityId] });
+        }
       }
     }
   }
 
-  // Batch subscribe: subscribes ALL securityIds in a single WebSocket message.
-  // Returns a cleanup function that unsubscribes everything.
   subscribeBatch(
     exchange: string,
     securityIds: number[],

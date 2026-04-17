@@ -18,6 +18,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MarketIndexCards } from "@/components/market-index-cards";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -252,6 +253,8 @@ export default function Dashboard() {
           )}
         </div>
       )}
+
+      <MarketIndexCards />
     </div>
   );
 }
