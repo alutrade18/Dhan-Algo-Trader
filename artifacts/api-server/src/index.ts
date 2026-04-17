@@ -109,4 +109,34 @@ loadSavedCredentials().then(async () => {
   });
 });
 
+// Graceful shutdown — ensures port is released on workflow restart/stop
+function gracefulShutdown(signal: string) {
+  logger.info({ signal }, "Shutting down gracefully…");
+  // Stop accepting new connections immediately
+  httpServer.keepAliveTimeout = 0;
+  io.close();
+  httpServer.close(() => {
+    logger.info("HTTP server closed");
+    process.exit(0);
+  });
+  // Force exit after 5s if close hangs
+  setTimeout(() => {
+    logger.warn("Forced exit after timeout");
+    process.exit(1);
+  }, 5_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
+
+// If port is already in use (stale process), log clearly and exit so the workflow runner retries
+httpServer.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    logger.error({ port }, "Port already in use — exiting so runner can retry");
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
+
 export { io };
