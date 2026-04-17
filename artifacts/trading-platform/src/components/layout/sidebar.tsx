@@ -40,7 +40,7 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: "AUTOMATION",
     items: [
-      { href: "/strategies", label: "Strategies", icon: TerminalSquare, comingSoon: true },
+      { href: "/strategies", label: "Strategies", icon: TerminalSquare },
       { href: "/backtesting", label: "Backtesting", icon: FlaskConical, comingSoon: true },
     ],
   },
