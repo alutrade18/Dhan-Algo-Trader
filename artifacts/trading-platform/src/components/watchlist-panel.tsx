@@ -295,16 +295,18 @@ function SearchPanel({
               </div>
 
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                {[
-                  ["Exchange", selected.exchId],
-                  ["Instrument", selected.instrument],
-                  ["Security ID", String(selected.securityId)],
-                  ["Lot Size", String(selected.lotSize ?? 1)],
-                  selected.expiryDate ? ["Expiry", selected.expiryDate] : null,
-                ].filter(Boolean).map(([label, value]) => (
+                {(
+                  [
+                    ["Exchange", selected.exchId],
+                    ["Instrument", selected.instrument],
+                    ["Security ID", String(selected.securityId)],
+                    ["Lot Size", String(selected.lotSize ?? 1)],
+                    ...(selected.expiryDate ? [["Expiry", selected.expiryDate]] : []),
+                  ] as Array<[string, string | null]>
+                ).map(([label, value]) => (
                   <div key={label} className="flex flex-col gap-0.5">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
-                    <span className="font-medium text-foreground font-mono">{value}</span>
+                    <span className="font-medium text-foreground font-mono">{value ?? "—"}</span>
                   </div>
                 ))}
                 <div className="flex flex-col gap-0.5">
