@@ -503,9 +503,9 @@ export default function Settings() {
                   {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {tokenExpired && (
+              {tokenExpired && !totpPin && (
                 <p className="text-[10px] text-destructive font-medium flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" /> Paste your fresh Dhan access token here
+                  <AlertTriangle className="w-3 h-3 shrink-0" /> Paste your fresh Dhan access token here, or use TOTP below
                 </p>
               )}
             </div>

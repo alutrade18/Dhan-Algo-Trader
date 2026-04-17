@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -44,8 +44,12 @@ app.use(
     origin: (origin, callback) => {
       // Allow server-to-server / curl / Postman (no Origin header)
       if (!origin) return callback(null, true);
-      // Allow Replit preview domains (*.replit.dev, *.riker.replit.dev)
-      if (/\.replit\.dev$/.test(origin) || /\.riker\.replit\.dev$/.test(origin)) {
+      // Allow Replit preview and deployed app domains
+      if (
+        /\.replit\.dev$/.test(origin) ||
+        /\.riker\.replit\.dev$/.test(origin) ||
+        /\.replit\.app$/.test(origin)
+      ) {
         return callback(null, true);
       }
       if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
@@ -59,5 +63,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
 app.use("/api", router);
+
+// JSON error handler — ensures all errors (including CORS rejections) return JSON
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  logger.warn({ err: err.message }, "Unhandled middleware error");
+  res.status(500).json({ success: false, error: err.message ?? "Internal server error" });
+});
 
 export default app;
