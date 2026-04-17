@@ -38,6 +38,7 @@ class MarketSocket {
   private tickListeners = new Map<string, Set<TickCallback>>();
   private quoteListeners = new Map<string, Set<QuoteCallback>>();
   private orderUpdateListeners = new Set<OrderUpdateCallback>();
+  // registry tracks what we've actually subscribed to on the WS
   private subRegistry = new Map<string, SubEntry>();
 
   constructor() {
@@ -52,12 +53,11 @@ class MarketSocket {
       this.tickListeners.get("*")?.forEach(cb => cb(data));
     });
 
+    // market:quote carries full OHLCV data — dispatch to BOTH tick and quote listeners
     this.socket.on("market:quote", (data: QuoteData) => {
       const key = `${data.exchangeSegment}:${data.securityId}`;
-      // Dispatch to tick listeners (LTP only)
       this.tickListeners.get(key)?.forEach(cb => cb(data));
       this.tickListeners.get("*")?.forEach(cb => cb(data));
-      // Dispatch to quote listeners (full OHLCV data)
       this.quoteListeners.get(key)?.forEach(cb => cb(data));
       this.quoteListeners.get("*")?.forEach(cb => cb(data));
     });
@@ -73,6 +73,11 @@ class MarketSocket {
 
   private registryKey(exchange: string, mode: Mode) {
     return `${exchange}:${mode}`;
+  }
+
+  private isSubscribedInMode(exchange: string, securityId: number, mode: Mode): boolean {
+    const key = this.registryKey(exchange, mode);
+    return this.subRegistry.get(key)?.securityIds.has(securityId) ?? false;
   }
 
   private registerIds(exchange: string, securityIds: number[], mode: Mode) {
@@ -109,22 +114,29 @@ class MarketSocket {
     const listenerKey = `${exchange}:${securityId}`;
     if (!this.tickListeners.has(listenerKey)) {
       this.tickListeners.set(listenerKey, new Set());
+    }
+    this.tickListeners.get(listenerKey)!.add(cb);
+
+    // Only send WS subscribe if not already registered in this mode (or any mode)
+    if (!this.isSubscribedInMode(exchange, securityId, mode)) {
       this.registerIds(exchange, [securityId], mode);
       this.socket.emit("market:subscribe", { exchange, securityIds: [securityId], mode });
     }
-    this.tickListeners.get(listenerKey)!.add(cb);
+
     return () => this.unsubscribe(exchange, securityId, cb);
   }
 
+  // subscribeQuote: always requests "quote" mode to get OHLCV data
   subscribeQuote(exchange: string, securityId: number, cb: QuoteCallback): () => void {
     const listenerKey = `${exchange}:${securityId}`;
+
     if (!this.quoteListeners.has(listenerKey)) {
       this.quoteListeners.set(listenerKey, new Set());
     }
     this.quoteListeners.get(listenerKey)!.add(cb);
 
-    // Also ensure we have a "quote" mode subscription so quote data flows
-    if (!this.tickListeners.has(listenerKey)) {
+    // Always ensure a quote-mode WS subscription exists for this instrument
+    if (!this.isSubscribedInMode(exchange, securityId, "quote")) {
       this.registerIds(exchange, [securityId], "quote");
       this.socket.emit("market:subscribe", { exchange, securityIds: [securityId], mode: "quote" });
     }
@@ -135,9 +147,10 @@ class MarketSocket {
         listeners.delete(cb);
         if (listeners.size === 0) {
           this.quoteListeners.delete(listenerKey);
-          // Only unsubscribe from WS if no tick listeners either
-          if (!this.tickListeners.has(listenerKey)) {
-            this.deregisterIds(exchange, [securityId]);
+          // Unsubscribe only if tick listeners are also gone
+          if (!this.tickListeners.get(listenerKey)?.size) {
+            this.tickListeners.delete(listenerKey);
+            this.deregisterIds(exchange, [securityId], "quote");
             this.socket.emit("market:unsubscribe", { exchange, securityIds: [securityId] });
           }
         }
@@ -152,7 +165,9 @@ class MarketSocket {
       listeners.delete(cb);
       if (listeners.size === 0) {
         this.tickListeners.delete(listenerKey);
-        if (!this.quoteListeners.has(listenerKey)) {
+        // Only unsubscribe from WS if no quote listeners remain
+        if (!this.quoteListeners.get(listenerKey)?.size) {
+          this.quoteListeners.delete(listenerKey);
           this.deregisterIds(exchange, [securityId]);
           this.socket.emit("market:unsubscribe", { exchange, securityIds: [securityId] });
         }
@@ -168,14 +183,18 @@ class MarketSocket {
   ): () => void {
     if (securityIds.length === 0) return () => {};
 
+    const toSubscribe: number[] = [];
     securityIds.forEach((secId) => {
       const listenerKey = `${exchange}:${secId}`;
       if (!this.tickListeners.has(listenerKey)) this.tickListeners.set(listenerKey, new Set());
       this.tickListeners.get(listenerKey)!.add(cb);
+      if (!this.isSubscribedInMode(exchange, secId, mode)) toSubscribe.push(secId);
     });
 
-    this.registerIds(exchange, securityIds, mode);
-    this.socket.emit("market:subscribe", { exchange, securityIds, mode });
+    if (toSubscribe.length > 0) {
+      this.registerIds(exchange, toSubscribe, mode);
+      this.socket.emit("market:subscribe", { exchange, securityIds: toSubscribe, mode });
+    }
 
     return () => {
       securityIds.forEach((secId) => {
