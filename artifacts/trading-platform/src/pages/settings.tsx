@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
   Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Sparkles, Clock,
-  ShieldAlert, Target, Zap, Timer, MessageCircle,
+  ShieldAlert, Target, Zap, Timer, MessageCircle, ExternalLink, ListOrdered,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -275,6 +275,10 @@ export default function Settings() {
   const [totpCode, setTotpCode] = useState("");
   const [generateResult, setGenerateResult] = useState<{ success: boolean; error?: string; dhanClientName?: string; expiryTime?: string } | null>(null);
 
+  // Ref for scrolling the broker card into view from the expiry banner
+  const brokerCardRef = useRef<HTMLDivElement>(null);
+  const accessTokenRef = useRef<HTMLInputElement | null>(null);
+
   const settingsData = settings as SettingsData | undefined;
   const isConnected = settingsData?.apiConnected ?? false;
   const tokenExpired = settingsData?.tokenExpired ?? false;
@@ -443,10 +447,16 @@ export default function Settings() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-      <TokenExpiryBanner onReconnect={() => brokerForm.setFocus("accessToken")} />
+      <TokenExpiryBanner onReconnect={() => {
+        brokerCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        setTimeout(() => {
+          accessTokenRef.current?.focus();
+          accessTokenRef.current?.select();
+        }, 400);
+      }} />
 
       {/* ── Broker Connection ── */}
-      <div className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${
+      <div ref={brokerCardRef} className={`flex flex-col rounded-2xl border overflow-hidden shadow-sm transition-colors ${
         isConnected ? "border-success/30 bg-card" : tokenExpired ? "border-destructive/30 bg-card" : "border-border/50 bg-card"
       }`}>
 
@@ -510,12 +520,62 @@ export default function Settings() {
           <div className="space-y-1.5">
             <SectionLabel>Access Token</SectionLabel>
             <div className="relative">
-              <Input type={showToken ? "text" : "password"} className="h-10 pr-10 bg-background/60" autoComplete="current-password" {...brokerForm.register("accessToken")} />
+              {(() => {
+                const { ref: rhfRef, ...rest } = brokerForm.register("accessToken");
+                return (
+                  <Input
+                    type={showToken ? "text" : "password"}
+                    autoComplete="current-password"
+                    className={`h-10 pr-10 bg-background/60 transition-all ${tokenExpired ? "border-destructive ring-1 ring-destructive/40 animate-pulse" : ""}`}
+                    {...rest}
+                    ref={e => { rhfRef(e); accessTokenRef.current = e; }}
+                  />
+                );
+              })()}
               <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setShowToken(!showToken)}>
                 {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {tokenExpired && (
+              <p className="text-[10px] text-destructive font-medium flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" /> Paste your new Dhan access token here
+              </p>
+            )}
           </div>
+
+          {/* ── Token Renewal Guide (shown only when expired) ── */}
+          {tokenExpired && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <ListOrdered className="w-4 h-4 text-destructive shrink-0" />
+                <p className="text-xs font-semibold text-destructive">How to get a new Dhan Access Token</p>
+              </div>
+              <ol className="space-y-1.5 text-xs text-muted-foreground list-none">
+                {[
+                  "Open Dhan app or website and log in",
+                  "Tap your profile icon → My Profile",
+                  "Scroll to Access Token section",
+                  "Tap Generate Token — copy the new token",
+                  "Paste it in the Access Token field above",
+                  "Tap Save & Connect below",
+                ].map((step, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="shrink-0 w-4 h-4 rounded-full bg-destructive/20 text-destructive flex items-center justify-center text-[9px] font-bold mt-0.5">{i + 1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+              <a
+                href="https://web.dhan.co"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline mt-1"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open Dhan Web Portal
+              </a>
+            </div>
+          )}
           {connectResult && !connectResult.success && (
             <div className="flex items-center gap-2 p-3 rounded-xl border border-destructive/30 bg-destructive/8 text-destructive text-xs">
               <XCircle className="w-3.5 h-3.5 shrink-0" />
