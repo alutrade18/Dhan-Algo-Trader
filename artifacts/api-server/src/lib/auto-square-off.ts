@@ -7,7 +7,8 @@ import { getMarketStatus } from "./market-calendar";
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
-let lastSquareOffDate = "";
+let lastNSESquareOffDate = "";
+let lastMCXSquareOffDate = "";
 
 function nowIST(): { hours: number; minutes: number; timeStr: string; dateStr: string } {
   const now = new Date();
@@ -26,6 +27,27 @@ function isWeekday(dateStr: string): boolean {
   return day >= 1 && day <= 5;
 }
 
+function isAtTargetTime(hours: number, minutes: number, targetTime: string): boolean {
+  const [targetH, targetM] = targetTime.split(":").map(Number);
+  const currentMinutes = hours * 60 + minutes;
+  const targetMinutes = targetH * 60 + targetM;
+  return Math.abs(currentMinutes - targetMinutes) <= 1;
+}
+
+async function doSquareOff(exchange: "NSE" | "MCX", timeStr: string, dateStr: string): Promise<void> {
+  logger.info({ exchange, timeStr, dateStr }, "[AutoSquareOff] Triggering square-off");
+  const result = await dhanClient.exitAllPositions();
+  logger.info({ result, exchange }, "[AutoSquareOff] Exit all positions result");
+  await db.insert(auditLogTable).values({
+    action: "AUTO_SQUARE_OFF",
+    description: `Auto square-off (${exchange}) triggered at ${timeStr} IST on ${dateStr}`,
+  });
+  void sendTelegramAlertIfEnabled(
+    "autoSquareOff",
+    `⏰ *Auto Square-Off (${exchange}) Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_${APP_NAME} — Auto Square-Off_`
+  );
+}
+
 async function checkAndSquareOff(): Promise<void> {
   try {
     const [settings] = await db.select().from(settingsTable);
@@ -34,37 +56,30 @@ async function checkAndSquareOff(): Promise<void> {
 
     const { hours, minutes, timeStr, dateStr } = nowIST();
     if (!isWeekday(dateStr)) return;
-    if (lastSquareOffDate === dateStr) return;
 
-    // Use the market calendar (DB-backed) to check if at least one market is open.
-    // This correctly handles NSE-only holidays (where MCX may still be open)
-    // and full-market holidays (both closed). Auto square-off is skipped only when
-    // ALL markets are closed for the day.
     const marketStatus = getMarketStatus();
-    if (!marketStatus.nseOpen && !marketStatus.mcxOpen) return;
 
-    const targetTime = settings.autoSquareOffTime ?? "15:14";
-    const [targetH, targetM] = targetTime.split(":").map(Number);
-    const currentMinutes = hours * 60 + minutes;
-    const targetMinutes = targetH * 60 + targetM;
-    if (Math.abs(currentMinutes - targetMinutes) > 1) return;
+    // NSE square-off
+    const nseTime = settings.autoSquareOffTimeNSE ?? settings.autoSquareOffTime ?? "15:14";
+    if (
+      marketStatus.nseOpen &&
+      lastNSESquareOffDate !== dateStr &&
+      isAtTargetTime(hours, minutes, nseTime)
+    ) {
+      lastNSESquareOffDate = dateStr;
+      await doSquareOff("NSE", timeStr, dateStr);
+    }
 
-    lastSquareOffDate = dateStr;
-
-    logger.info({ timeStr, dateStr }, "[AutoSquareOff] Triggering square-off");
-
-    const result = await dhanClient.exitAllPositions();
-    logger.info({ result }, "[AutoSquareOff] Exit all positions result");
-
-    await db.insert(auditLogTable).values({
-      action: "AUTO_SQUARE_OFF",
-      description: `Auto square-off triggered at ${timeStr} IST on ${dateStr}`,
-    });
-
-    void sendTelegramAlertIfEnabled(
-      "autoSquareOff",
-      `⏰ *Auto Square-Off Executed*\n\nAll intraday positions squared off at *${timeStr} IST* (${dateStr}).\n\n_${APP_NAME} — Auto Square-Off_`
-    );
+    // MCX square-off — separate time, separate guard
+    const mcxTime = settings.autoSquareOffTimeMCX ?? "23:25";
+    if (
+      marketStatus.mcxOpen &&
+      lastMCXSquareOffDate !== dateStr &&
+      isAtTargetTime(hours, minutes, mcxTime)
+    ) {
+      lastMCXSquareOffDate = dateStr;
+      await doSquareOff("MCX", timeStr, dateStr);
+    }
   } catch (e) {
     logger.error({ err: e }, "[AutoSquareOff] Error during square-off");
   }

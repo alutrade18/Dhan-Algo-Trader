@@ -159,17 +159,13 @@ router.post("/super-orders", async (req, res): Promise<void> => {
       after_market_order: false,
     };
 
-    const dhanResp = await dhanClient.placeOrder(dhanPayload) as {
-      orderId?: string;
-      orderStatus?: string;
-      [key: string]: unknown;
-    };
-
-    const dhanOrderId = dhanResp?.orderId ?? null;
-
     const today = todayIST();
+
+    // Atomic placement: persist BEFORE calling Dhan so the record always exists.
+    // If the server crashes between the DB insert and the Dhan call, the record
+    // shows "PLACING" and the user can manually investigate / cancel.
     const [inserted] = await db.insert(superOrdersTable).values({
-      dhanOrderId,
+      dhanOrderId: null,
       securityId: security_id,
       exchangeSegment: exchange_segment,
       tradingSymbol: String(tradingSymbol),
@@ -180,9 +176,25 @@ router.post("/super-orders", async (req, res): Promise<void> => {
       price: String(price),
       targetPrice: String(target_price),
       stopLossPrice: String(stop_loss_price),
-      status: dhanResp?.orderStatus ?? "PENDING",
+      status: "PLACING",
       orderDate: today,
     }).returning();
+
+    let dhanResp: { orderId?: string; orderStatus?: string; [key: string]: unknown };
+    try {
+      dhanResp = await dhanClient.placeOrder(dhanPayload) as typeof dhanResp;
+    } catch (placementErr) {
+      // Mark as failed so it doesn't show as open / confuse the monitor
+      await db.update(superOrdersTable)
+        .set({ status: "FAILED" })
+        .where(eq(superOrdersTable.id, inserted.id));
+      throw placementErr;
+    }
+
+    const dhanOrderId = dhanResp?.orderId ?? null;
+    await db.update(superOrdersTable)
+      .set({ dhanOrderId, status: dhanResp?.orderStatus ?? "PENDING" })
+      .where(eq(superOrdersTable.id, inserted.id));
 
     res.json({
       orderId: String(inserted.id),

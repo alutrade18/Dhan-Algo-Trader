@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { type ElementType } from "react";
 import {
   useGetFundLimits,
   getGetFundLimitsQueryKey,
@@ -43,7 +43,7 @@ function StatCard({
   title: string;
   value: string;
   inlineTag?: string;
-  icon: React.ElementType;
+  icon: ElementType;
   isLoading?: boolean;
   valueClass?: string;
 }) {
@@ -196,9 +196,6 @@ export default function Dashboard() {
   const winRate = summary?.winRate ?? 0;
   const availBal = fundsData?.availableBalance ?? summary?.availableBalance;
   const usedMargin = fundsData?.utilizedAmount ?? summary?.usedMargin;
-
-  // Suppress unused var warning (useEffect kept for future expansion)
-  useEffect(() => {}, []);
 
   return (
     <div className="space-y-4">

@@ -1,4 +1,5 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,48 +7,58 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
 
-import Dashboard from "@/pages/dashboard";
-import Orders from "@/pages/orders";
-import Positions from "@/pages/positions";
-import Strategies from "@/pages/strategies";
-import Backtesting from "@/pages/backtesting";
-import Settings from "@/pages/settings";
-import RiskManager from "@/pages/risk-manager";
-import Logs from "@/pages/logs";
-import SuperOrders from "@/pages/super-orders";
-import OptionChain from "@/pages/option-chain";
-import TradeHistory from "@/pages/trade-history";
+const Dashboard    = lazy(() => import("@/pages/dashboard"));
+const Orders       = lazy(() => import("@/pages/orders"));
+const Positions    = lazy(() => import("@/pages/positions"));
+const Strategies   = lazy(() => import("@/pages/strategies"));
+const Settings     = lazy(() => import("@/pages/settings"));
+const RiskManager  = lazy(() => import("@/pages/risk-manager"));
+const Logs         = lazy(() => import("@/pages/logs"));
+const SuperOrders  = lazy(() => import("@/pages/super-orders"));
+const OptionChain  = lazy(() => import("@/pages/option-chain"));
+const TradeHistory = lazy(() => import("@/pages/trade-history"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
 
 const queryClient = new QueryClient();
 
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-[60vh]">
+      <div className="relative h-8 w-8">
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    </div>
+  );
+}
+
 function AppRoutes() {
   return (
     <AppLayout>
-      <Switch>
-        <Route path="/">
-          <Redirect to="/dashboard" />
-        </Route>
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/orders" component={Orders} />
-        <Route path="/positions" component={Positions} />
-        <Route path="/strategies" component={Strategies} />
-        <Route path="/backtesting" component={Backtesting} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/risk-manager" component={RiskManager} />
-        <Route path="/logs" component={Logs} />
-        <Route path="/super-orders" component={SuperOrders} />
-        <Route path="/option-chain" component={OptionChain} />
-        <Route path="/trade-history" component={TradeHistory} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/">
+            <Redirect to="/dashboard" />
+          </Route>
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/orders" component={Orders} />
+          <Route path="/positions" component={Positions} />
+          <Route path="/strategies" component={Strategies} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/risk-manager" component={RiskManager} />
+          <Route path="/logs" component={Logs} />
+          <Route path="/super-orders" component={SuperOrders} />
+          <Route path="/option-chain" component={OptionChain} />
+          <Route path="/trade-history" component={TradeHistory} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </AppLayout>
   );
 }
 
-/** Blocks the full layout render until the initial settings fetch resolves. */
 function AppInitializer() {
   const { isLoading, isError, refetch } = useQuery({
     queryKey: ["settings"],

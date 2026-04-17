@@ -14,6 +14,17 @@ async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
 
+  // Read the package.json deps so they are resolved from node_modules at runtime
+  // instead of being bundled — keeps dist/index.mjs small and startup fast.
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  const pkg = req("./package.json");
+  // Workspace packages (workspace:*) must be bundled — they are TypeScript source
+  // that Node.js cannot import directly at runtime. Only externalize published npm packages.
+  const runtimeExternal = Object.keys(pkg.dependencies ?? {}).filter(
+    dep => !dep.startsWith("@workspace/")
+  );
+
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
     platform: "node",
@@ -28,6 +39,7 @@ async function buildAll() {
     // - uses native modules and loads them dynamically (e.g. sharp)
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
+      ...runtimeExternal,
       "*.node",
       "sharp",
       "better-sqlite3",

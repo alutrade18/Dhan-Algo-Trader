@@ -57,14 +57,14 @@ async function checkSuperOrders(): Promise<void> {
       logger.warn({ err }, "SuperOrderMonitor: could not fetch Dhan orders — skipping fill-status check this cycle");
     }
 
-    // Only monitor orders where the entry order is confirmed TRADED (filled)
+    // Monitor orders where the entry is filled (TRADED) or partially filled (has some qty at risk)
     const filledOrders = ordersWithPriceTargets.filter(o => {
       if (!o.dhanOrderId) return false;
       const dhanStatus = dhanOrderStatusMap.get(o.dhanOrderId);
       // If we could not fetch Dhan orders, dhanOrderStatusMap is empty → skip all (safe)
-      // If we fetched successfully, only proceed if status is TRADED
       if (dhanOrderStatusMap.size === 0) return false;
-      return dhanStatus === "TRADED";
+      // Protect fully or partially filled orders — a partial fill still has capital at risk
+      return dhanStatus === "TRADED" || dhanStatus === "PART_TRADED";
     });
 
     if (filledOrders.length === 0) return;

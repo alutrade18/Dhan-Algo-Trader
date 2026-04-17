@@ -34,7 +34,7 @@ interface DhanPosition {
   productType?: string;
   buyAvg?: number;
   buyQty?: number;
-  costPrice?: number;
+  costPrice?: number;  // alias for buyAvg used by some API versions
   sellAvg?: number;
   sellQty?: number;
   netQty?: number;

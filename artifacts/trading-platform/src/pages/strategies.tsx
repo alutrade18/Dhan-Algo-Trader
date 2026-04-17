@@ -332,10 +332,10 @@ function DeployDialog({ strategy, onClose }: DeployDialogProps) {
 
   function handleDeploy() {
     toast({
-      title: "Strategy Queued",
-      description: `${strategy.name} on ${effectiveInstrument} has been configured. Live order placement coming soon.`,
+      title: "Not yet available",
+      description: "Automated multi-leg strategy deployment is under development. Use the Orders or Super Orders page to place individual legs manually.",
+      variant: "destructive",
     });
-    onClose();
   }
 
   return (

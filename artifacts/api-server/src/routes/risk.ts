@@ -100,8 +100,9 @@ async function autoDeactivateKillSwitch() {
     deactivationTracker.date = getISTDateString();
     deactivationTracker.count = 0;
     void sendTelegramAlertIfEnabled("killSwitch", "🟢 *Midnight Reset* — Kill switch automatically deactivated. Fresh trading allowed for the new day.");
-  } catch {
-    // silent
+  } catch (e) {
+    logger.error({ err: e }, "[Risk] Midnight kill-switch auto-deactivation failed — kill switch may remain active");
+    void sendTelegramAlertIfEnabled("criticalErrors", "⚠️ *Midnight Kill Switch Reset Failed*\n\nCould not auto-deactivate kill switch at midnight. Please deactivate manually before trading.");
   }
 }
 

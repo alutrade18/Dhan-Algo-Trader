@@ -21,6 +21,8 @@ const riskSchema = z.object({ maxDailyLoss: z.coerce.number().min(0) });
 interface SettingsData {
   id: number; apiConnected: boolean; maxDailyLoss: number | null;
   autoSquareOffEnabled: boolean; autoSquareOffTime: string;
+  autoSquareOffTimeNSE?: string; autoSquareOffTimeMCX?: string;
+  maxQtyPerSymbol?: number | null; maxOpenOrders?: number | null;
   hasKillSwitchPin: boolean;
 }
 interface KillSwitchStatus { killSwitchStatus?: string; isActive?: boolean; canDeactivateToday?: boolean; deactivationsUsed?: number }
@@ -44,6 +46,10 @@ export default function RiskManager() {
 
   const [autoSquareOffEnabled, setAutoSquareOffEnabled] = useState(false);
   const [autoSquareOffTime, setAutoSquareOffTime] = useState("15:14");
+  const [autoSquareOffTimeNSE, setAutoSquareOffTimeNSE] = useState("15:14");
+  const [autoSquareOffTimeMCX, setAutoSquareOffTimeMCX] = useState("23:25");
+  const [maxQtyPerSymbol, setMaxQtyPerSymbol] = useState<string>("");
+  const [maxOpenOrders, setMaxOpenOrders] = useState<string>("");
 
   const [optimisticKsActive, setOptimisticKsActive] = useState<boolean | null>(null);
   const [pinDialogFor, setPinDialogFor] = useState<string | null>(null);
@@ -64,6 +70,10 @@ export default function RiskManager() {
     if (!settingsData) return;
     setAutoSquareOffEnabled(settingsData.autoSquareOffEnabled ?? false);
     setAutoSquareOffTime(settingsData.autoSquareOffTime ?? "15:14");
+    setAutoSquareOffTimeNSE(settingsData.autoSquareOffTimeNSE ?? settingsData.autoSquareOffTime ?? "15:14");
+    setAutoSquareOffTimeMCX(settingsData.autoSquareOffTimeMCX ?? "23:25");
+    setMaxQtyPerSymbol(settingsData.maxQtyPerSymbol != null ? String(settingsData.maxQtyPerSymbol) : "");
+    setMaxOpenOrders(settingsData.maxOpenOrders != null ? String(settingsData.maxOpenOrders) : "");
   }, [settingsData?.id]);
 
   const riskForm = useForm<z.infer<typeof riskSchema>>({ resolver: zodResolver(riskSchema), defaultValues: { maxDailyLoss: 0 } });
@@ -323,17 +333,77 @@ export default function RiskManager() {
               </div>
               <Switch checked={autoSquareOffEnabled} onCheckedChange={setAutoSquareOffEnabled} />
             </div>
-            <div className="space-y-1.5">
-              <SectionLabel>Square-Off Time (IST)</SectionLabel>
-              <input
-                type="time"
-                value={autoSquareOffTime}
-                onChange={e => setAutoSquareOffTime(e.target.value)}
-                className="h-11 w-full rounded-xl border border-input bg-background/60 px-4 text-base font-mono font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring tabular-nums"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <SectionLabel>NSE Square-Off (IST)</SectionLabel>
+                <input
+                  type="time"
+                  value={autoSquareOffTimeNSE}
+                  onChange={e => setAutoSquareOffTimeNSE(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-input bg-background/60 px-4 text-base font-mono font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring tabular-nums"
+                />
+                <p className="text-[10px] text-muted-foreground">Equities / F&O</p>
+              </div>
+              <div className="space-y-1.5">
+                <SectionLabel>MCX Square-Off (IST)</SectionLabel>
+                <input
+                  type="time"
+                  value={autoSquareOffTimeMCX}
+                  onChange={e => setAutoSquareOffTimeMCX(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-input bg-background/60 px-4 text-base font-mono font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring tabular-nums"
+                />
+                <p className="text-[10px] text-muted-foreground">Commodity</p>
+              </div>
             </div>
-            <Button size="sm" className="w-full h-10 gap-1.5 mt-auto" onClick={() => { void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTime }).then(() => toast({ title: autoSquareOffEnabled ? `Square-off set for ${autoSquareOffTime} IST` : "Auto square-off disabled" })); }}>
+            <Button size="sm" className="w-full h-10 gap-1.5 mt-auto" onClick={() => {
+              void genericSaveMutation.mutateAsync({ autoSquareOffEnabled, autoSquareOffTimeNSE, autoSquareOffTimeMCX })
+                .then(() => toast({ title: autoSquareOffEnabled ? `NSE ${autoSquareOffTimeNSE} · MCX ${autoSquareOffTimeMCX} saved` : "Auto square-off disabled" }));
+            }}>
               <Save className="w-3.5 h-3.5" />Save Timer
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Order Caps: maxQty + maxOpenOrders ── */}
+      <div className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+        <div className="px-5 py-3.5 border-b border-border/30 bg-muted/5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+            <ShieldAlert className="w-4 h-4 text-primary" />
+          </div>
+          <p className="font-semibold text-sm">Order Caps</p>
+        </div>
+        <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <SectionLabel>Max Qty Per Symbol</SectionLabel>
+            <Input
+              type="number" min={0} step={1} placeholder="No cap"
+              value={maxQtyPerSymbol}
+              onChange={e => setMaxQtyPerSymbol(e.target.value)}
+              className="h-10 text-sm bg-background/60"
+            />
+            <p className="text-[10px] text-muted-foreground">Block orders exceeding this quantity for any single instrument (leave blank to disable)</p>
+          </div>
+          <div className="space-y-1.5">
+            <SectionLabel>Max Open Positions</SectionLabel>
+            <Input
+              type="number" min={0} step={1} placeholder="No cap"
+              value={maxOpenOrders}
+              onChange={e => setMaxOpenOrders(e.target.value)}
+              className="h-10 text-sm bg-background/60"
+            />
+            <p className="text-[10px] text-muted-foreground">Block new orders when you already have this many open positions (leave blank to disable)</p>
+          </div>
+          <div className="sm:col-span-2">
+            <Button size="sm" className="w-full h-10 gap-1.5" onClick={() => {
+              void genericSaveMutation.mutateAsync({
+                maxQtyPerSymbol: maxQtyPerSymbol === "" ? null : Number(maxQtyPerSymbol),
+                maxOpenOrders: maxOpenOrders === "" ? null : Number(maxOpenOrders),
+              }).then(() => toast({ title: "Order caps saved" }));
+            }} disabled={genericSaveMutation.isPending}>
+              {genericSaveMutation.isPending
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>
+                : <><Save className="w-3.5 h-3.5" />Save Caps</>}
             </Button>
           </div>
         </div>

@@ -32,10 +32,9 @@ import {
   XCircle,
   RefreshCw,
   Download,
-  Search,
   AlertCircle,
   Settings,
-  TrendingDown,
+  History,
 } from "lucide-react";
 const BASE = import.meta.env.BASE_URL;
 
@@ -93,28 +92,6 @@ interface DhanOrder {
   legName?: string;
 }
 
-interface DhanTrade {
-  exchangeTradeId: string;
-  orderId: string;
-  dhanClientId?: string;
-  correlationId?: string;
-  transactionType: TransactionType;
-  exchangeSegment: string;
-  productType: ProductType;
-  orderType: OrderType;
-  tradingSymbol: string;
-  customSymbol?: string;
-  securityId: string;
-  tradedQuantity: number;
-  tradedPrice: number;
-  createTime: string;
-  exchangeTime?: string;
-  instrument?: string;
-  drvExpiryDate?: string;
-  drvOptionType?: string;
-  drvStrikePrice?: number;
-}
-
 interface ModifyFormState {
   orderType: OrderType;
   quantity: string;
@@ -138,23 +115,6 @@ function formatTime(dt: string): string {
   }
 }
 
-function formatDateTime(dt: string): string {
-  if (!dt) return "—";
-  try {
-    return new Date(dt).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "Asia/Kolkata",
-    });
-  } catch {
-    return dt;
-  }
-}
-
 function formatCurrency(n: number): string {
   return `₹${n.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
@@ -164,12 +124,6 @@ function formatCurrency(n: number): string {
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
-}
-
-function daysAgoISO(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().split("T")[0];
 }
 
 function StatusBadge({ status }: { status: OrderStatus }) {
@@ -535,15 +489,6 @@ export default function OrdersPage() {
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const [fromDate, setFromDate] = useState(daysAgoISO(30));
-  const [toDate, setToDate] = useState(todayISO());
-  const [tradeHistory, setTradeHistory] = useState<DhanTrade[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historySearched, setHistorySearched] = useState(false);
-  const [historyPage, setHistoryPage] = useState(0);
-  const HISTORY_PAGE_SIZE = 100;
-  const lastSearchRef = useRef<{ from: string; to: string } | null>(null);
-
   const fetchOrders = useCallback(async (showRefreshSpin = false) => {
     if (showRefreshSpin) setOrdersRefreshing(true);
     try {
@@ -575,64 +520,14 @@ export default function OrdersPage() {
     if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     autoRefreshRef.current = setInterval(() => {
       void fetchOrders();
-    }, 11000);
+    }, 2000);
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
   }, [fetchOrders]);
 
-  const fetchHistory = useCallback(async (from?: string, to?: string) => {
-    const fd = from ?? fromDate;
-    const td = to ?? toDate;
-    lastSearchRef.current = { from: fd, to: td };
-    setHistoryLoading(true);
-    setHistorySearched(true);
-    setHistoryPage(0);
-    try {
-      const res = await fetch(
-        `${BASE}api/trades/history?fromDate=${fd}&toDate=${td}`,
-        { cache: "no-store" }
-      );
-      if (!res.ok) {
-        const data = (await res.json()) as Record<string, unknown>;
-        toast({
-          title: "Failed to fetch trade history",
-          description:
-            (data.errorMessage as string) || "Could not load history",
-          variant: "destructive",
-        });
-        setTradeHistory([]);
-        return;
-      }
-      const data = (await res.json()) as DhanTrade[];
-      setTradeHistory(Array.isArray(data) ? data : []);
-    } catch {
-      toast({
-        title: "Network error",
-        description: "Could not reach server",
-        variant: "destructive",
-      });
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [fromDate, toDate, toast]);
-
   function handleRefresh() {
-    if (activeTab === "today") {
-      void fetchOrders(true);
-    } else {
-      if (lastSearchRef.current) {
-        void fetchHistory(lastSearchRef.current.from, lastSearchRef.current.to);
-      } else {
-        void fetchOrders(true);
-      }
-    }
-  }
-
-  function applyQuickRange(from: string, to: string) {
-    setFromDate(from);
-    setToDate(to);
-    void fetchHistory(from, to);
+    void fetchOrders(true);
   }
 
   async function handleCancel(orderId: string) {
@@ -705,48 +600,6 @@ export default function OrdersPage() {
     });
   }
 
-  async function exportHistory() {
-    if (tradeHistory.length === 0) {
-      toast({
-        title: "No data to export",
-        description: "No trades to export",
-        variant: "destructive",
-      });
-      return;
-    }
-    const rows = tradeHistory.map((t) => ({
-      "Trade Time":   t.exchangeTime || t.createTime || "",
-      "Segment":      t.exchangeSegment,
-      "Symbol":       t.customSymbol || t.tradingSymbol,
-      "Instrument":   t.instrument || "",
-      "Side":         t.transactionType,
-      "Option Type":  t.drvOptionType || "",
-      "Strike Price": t.drvStrikePrice ?? "",
-      "Expiry Date":  t.drvExpiryDate || "",
-      "Product":      t.productType,
-      "Qty":          t.tradedQuantity,
-      "Price":        t.tradedPrice,
-      "Order ID":     t.orderId,
-      "Security ID":  t.securityId,
-      "Client ID":    t.dhanClientId || "",
-    }));
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Trade History");
-    XLSX.writeFile(wb, `dhan-trades-${fromDate}-to-${toDate}.xlsx`);
-    toast({
-      title: `Exported ${rows.length} rows to Excel`,
-      description: `dhan-trades-${fromDate}-to-${toDate}.xlsx`,
-    });
-  }
-
-  const totalHistoryPages = Math.ceil(tradeHistory.length / HISTORY_PAGE_SIZE);
-  const pagedTrades = tradeHistory.slice(
-    historyPage * HISTORY_PAGE_SIZE,
-    (historyPage + 1) * HISTORY_PAGE_SIZE
-  );
-
   const totalOrders = orders.length;
   const tradedCount = orders.filter((o) => o.orderStatus === "TRADED").length;
   const pendingCount = orders.filter(
@@ -773,11 +626,11 @@ export default function OrdersPage() {
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={ordersRefreshing || historyLoading}
+              disabled={ordersRefreshing}
               className="gap-1.5"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${ordersRefreshing || historyLoading ? "animate-spin" : ""}`} />
-              {ordersRefreshing || historyLoading ? "Refreshing…" : "Refresh"}
+              <RefreshCw className={`h-3.5 w-3.5 ${ordersRefreshing ? "animate-spin" : ""}`} />
+              {ordersRefreshing ? "Refreshing…" : "Refresh"}
             </Button>
             <TabsList className="bg-muted/40 h-8">
               <TabsTrigger value="today" className="text-xs px-3 h-6">Today&apos;s Orders</TabsTrigger>
@@ -1012,266 +865,23 @@ export default function OrdersPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="history" className="space-y-4 mt-0">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">From Date</Label>
-                  <Input
-                    type="date"
-                    className="h-9 text-sm w-44 cursor-pointer"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">To Date</Label>
-                  <Input
-                    type="date"
-                    className="h-9 text-sm w-44 cursor-pointer"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs px-2"
-                    disabled={historyLoading}
-                    onClick={() => applyQuickRange(todayISO(), todayISO())}
-                  >
-                    Today
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs px-2"
-                    disabled={historyLoading}
-                    onClick={() => applyQuickRange(daysAgoISO(7), todayISO())}
-                  >
-                    7D
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs px-2"
-                    disabled={historyLoading}
-                    onClick={() => applyQuickRange(daysAgoISO(30), todayISO())}
-                  >
-                    30D
-                  </Button>
-                </div>
-                <Button
-                  size="sm"
-                  className="gap-1.5 h-8"
-                  onClick={() => void fetchHistory()}
-                  disabled={historyLoading}
-                >
-                  <Search className={`h-3.5 w-3.5 ${historyLoading ? "animate-spin" : ""}`} />
-                  {historyLoading ? "Searching…" : "Search"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 h-8 ml-auto"
-                  disabled={!historySearched || tradeHistory.length === 0}
-                  onClick={exportHistory}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export Excel
-                </Button>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <p className="text-sm font-medium">
-                  {historySearched
-                    ? `${tradeHistory.length} trade${tradeHistory.length !== 1 ? "s" : ""} found`
-                    : "Trade History"}
-                  {historySearched && tradeHistory.length > HISTORY_PAGE_SIZE && (
-                    <span className="ml-2 text-xs text-muted-foreground font-normal">
-                      (showing {historyPage * HISTORY_PAGE_SIZE + 1}–{Math.min((historyPage + 1) * HISTORY_PAGE_SIZE, tradeHistory.length)})
-                    </span>
-                  )}
+          <TabsContent value="history" className="mt-0">
+            <div className="rounded-xl border border-border bg-card flex flex-col items-center justify-center gap-4 py-20 text-center">
+              <History className="h-10 w-10 text-muted-foreground/40" />
+              <div>
+                <p className="text-sm font-medium">Full Trade History</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                  Historical trade data with date range search and Excel export is available in Trade History.
                 </p>
-                {historySearched && tradeHistory.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {lastSearchRef.current?.from} → {lastSearchRef.current?.to}
-                  </p>
-                )}
               </div>
-
-              {!historySearched ? (
-                <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
-                  <Search className="h-8 w-8 opacity-40" />
-                  <p className="text-sm">Select a date range and click Search</p>
-                </div>
-              ) : historyLoading ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {Array.from({ length: 8 }).map((_, i) => (
-                        <tr key={i} className="border-b border-border/50 last:border-0">
-                          {Array.from({ length: 8 }).map((_, j) => (
-                            <td key={j} className="px-4 py-2.5">
-                              <Skeleton className="h-4 w-full" />
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : tradeHistory.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
-                  <TrendingDown className="h-8 w-8 opacity-40" />
-                  <p className="text-sm">No trades found for selected period</p>
-                </div>
-              ) : (
-                <div>
-                <div className="overflow-x-auto">
-                  <table className="w-full table-auto text-sm">
-                    <thead className="sticky top-0 z-10 bg-card">
-                      <tr className="border-b border-border bg-muted/30">
-                        {([
-                          ["Trade Time",   "left" ],
-                          ["Symbol",       "left" ],
-                          ["Option Type",  "left" ],
-                          ["Side",         "left" ],
-                          ["Instrument",   "left" ],
-                          ["Product",      "left" ],
-                          ["Strike Price", "left" ],
-                          ["Expiry Date",  "left" ],
-                          ["Qty",          "right"],
-                          ["Price",        "right"],
-                          ["Segment",      "left" ],
-                          ["Order ID",     "left" ],
-                          ["Security ID",  "left" ],
-                          ["Client ID",    "left" ],
-                        ] as [string, string][]).map(([label, align]) => (
-                          <th key={label}
-                            className={`px-2.5 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-${align}${label === "Order ID" ? " min-w-[160px]" : ""}`}
-                          >{label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedTrades.map((trade, idx) => {
-                        const seg = formatSegment(trade.exchangeSegment);
-                        const optType = trade.drvOptionType && trade.drvOptionType !== "NA"
-                          ? trade.drvOptionType : null;
-                        return (
-                        <tr key={`${trade.exchangeTradeId}-${idx}`}
-                          className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
-                        >
-                          {/* Trade Time */}
-                          <td className="px-2.5 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
-                            {formatDateTime(trade.exchangeTime || trade.createTime)}
-                          </td>
-                          {/* Symbol */}
-                          <td className="px-2.5 py-2 whitespace-nowrap">
-                            <span className="font-mono font-semibold text-xs">
-                              {trade.customSymbol || trade.tradingSymbol}
-                            </span>
-                          </td>
-                          {/* Option Type */}
-                          <td className="px-2.5 py-2 text-xs font-semibold whitespace-nowrap">
-                            {optType ? (
-                              <span className={optType === "CALL" || optType === "CE"
-                                ? "text-success" : "text-destructive"}>
-                                {optType}
-                              </span>
-                            ) : <span className="text-muted-foreground/40">—</span>}
-                          </td>
-                          {/* Side */}
-                          <td className="px-2.5 py-2">
-                            <SideBadge side={trade.transactionType} />
-                          </td>
-                          {/* Instrument */}
-                          <td className="px-2.5 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                            {trade.instrument || "—"}
-                          </td>
-                          {/* Product */}
-                          <td className="px-2.5 py-2">
-                            <ProductBadge product={trade.productType} />
-                          </td>
-                          {/* Strike Price */}
-                          <td className="px-2.5 py-2 text-left text-xs font-mono">
-                            {trade.drvStrikePrice && trade.drvStrikePrice !== 0
-                              ? trade.drvStrikePrice.toLocaleString("en-IN")
-                              : <span className="text-muted-foreground/40">—</span>}
-                          </td>
-                          {/* Expiry Date */}
-                          <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
-                            {trade.drvExpiryDate && trade.drvExpiryDate !== "NA"
-                              ? trade.drvExpiryDate
-                              : <span className="text-muted-foreground/40">—</span>}
-                          </td>
-                          {/* Qty */}
-                          <td className="px-2.5 py-2 text-right text-xs font-mono">
-                            {trade.tradedQuantity.toLocaleString("en-IN")}
-                          </td>
-                          {/* Price */}
-                          <td className="px-2.5 py-2 text-right text-xs font-mono font-semibold">
-                            {formatCurrency(trade.tradedPrice)}
-                          </td>
-                          {/* Segment */}
-                          <td className="px-2.5 py-2">
-                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${seg.color}`}>
-                              {seg.label}
-                            </span>
-                          </td>
-                          {/* Order ID — full width, no truncation */}
-                          <td className="px-2.5 py-2 min-w-[160px]">
-                            <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                              {trade.orderId}
-                            </span>
-                          </td>
-                          {/* Security ID */}
-                          <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
-                            {trade.securityId}
-                          </td>
-                          {/* Client ID */}
-                          <td className="px-2.5 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
-                            {trade.dhanClientId || "—"}
-                          </td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {totalHistoryPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
-                    <p className="text-xs text-muted-foreground">
-                      Page {historyPage + 1} of {totalHistoryPages} &nbsp;·&nbsp; {tradeHistory.length} total trades
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-3 text-xs"
-                        disabled={historyPage === 0}
-                        onClick={() => setHistoryPage((p) => p - 1)}
-                      >
-                        ← Previous
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-3 text-xs"
-                        disabled={historyPage >= totalHistoryPages - 1}
-                        onClick={() => setHistoryPage((p) => p + 1)}
-                      >
-                        Next →
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                </div>
-              )}
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => window.location.assign(`${BASE}trade-history`)}
+              >
+                <History className="h-3.5 w-3.5" />
+                Go to Trade History
+              </Button>
             </div>
           </TabsContent>
 

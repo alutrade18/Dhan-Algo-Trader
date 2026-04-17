@@ -101,6 +101,10 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     updatedAt: s.updatedAt?.toISOString(),
     autoSquareOffEnabled: s.autoSquareOffEnabled,
     autoSquareOffTime: s.autoSquareOffTime,
+    autoSquareOffTimeNSE: s.autoSquareOffTimeNSE ?? "15:14",
+    autoSquareOffTimeMCX: s.autoSquareOffTimeMCX ?? "23:25",
+    maxQtyPerSymbol: s.maxQtyPerSymbol ?? null,
+    maxOpenOrders: s.maxOpenOrders ?? null,
     telegramAlerts: s.telegramAlerts ?? {
       orderFills: true,
       superOrders: true,
@@ -149,7 +153,17 @@ router.put("/settings", async (req, res): Promise<void> => {
   set("theme", "theme");
   set("autoSquareOffEnabled", "autoSquareOffEnabled", v => Boolean(v));
   set("autoSquareOffTime", "autoSquareOffTime");
+  set("autoSquareOffTimeNSE", "autoSquareOffTimeNSE");
+  set("autoSquareOffTimeMCX", "autoSquareOffTimeMCX");
   set("refreshIntervalSeconds", "refreshIntervalSeconds", v => Number(v));
+  if (body.maxQtyPerSymbol !== undefined) {
+    const val = body.maxQtyPerSymbol === null || body.maxQtyPerSymbol === "" ? null : Number(body.maxQtyPerSymbol);
+    if (val === null || (!isNaN(val) && val >= 0)) updateData.maxQtyPerSymbol = val;
+  }
+  if (body.maxOpenOrders !== undefined) {
+    const val = body.maxOpenOrders === null || body.maxOpenOrders === "" ? null : Number(body.maxOpenOrders);
+    if (val === null || (!isNaN(val) && val >= 0)) updateData.maxOpenOrders = val;
+  }
 
   if (body.maxDailyLoss !== undefined && body.maxDailyLoss !== null) {
     const val = Number(body.maxDailyLoss);

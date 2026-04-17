@@ -82,6 +82,7 @@ async function dhanRequest(
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15_000),
   });
 
   const text = await response.text();
@@ -188,8 +189,13 @@ export const dhanClient = {
   },
 
   async placeOrder(orderData: Record<string, unknown>) {
+    // Generate a correlation ID for idempotency (max 48 chars per Dhan API spec).
+    // This lets us detect duplicate orders if the same correlationId is seen twice.
+    const correlationId = (orderData.correlation_id as string | undefined) ??
+      crypto.randomUUID().replace(/-/g, "").slice(0, 48);
     return dhanRequest("POST", "/orders", {
       dhanClientId: credentials.clientId,
+      correlation_id: correlationId,
       ...orderData,
     });
   },

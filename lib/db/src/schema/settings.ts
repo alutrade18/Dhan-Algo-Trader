@@ -18,6 +18,11 @@ export const settingsTable = pgTable("settings", {
 
   autoSquareOffEnabled: boolean("auto_square_off_enabled").notNull().default(false),
   autoSquareOffTime: text("auto_square_off_time").notNull().default("15:14"),
+  autoSquareOffTimeNSE: text("auto_square_off_time_nse").notNull().default("15:14"),
+  autoSquareOffTimeMCX: text("auto_square_off_time_mcx").notNull().default("23:25"),
+
+  maxQtyPerSymbol: integer("max_qty_per_symbol"),
+  maxOpenOrders: integer("max_open_orders"),
 
   dashboardWidgets: jsonb("dashboard_widgets").$type<{
     todayPnl: boolean;

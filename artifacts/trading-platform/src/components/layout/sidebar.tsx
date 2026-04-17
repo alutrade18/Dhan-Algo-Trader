@@ -14,7 +14,6 @@ import {
   LineChart,
   BookOpen,
   ShieldCheck,
-  LogIn,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -166,22 +165,6 @@ export function Sidebar({ isOpen, onClose, brokerConnected }: SidebarProps) {
             </div>
           ))}
 
-          {/* Login / Logout — placeholder, full auth flow coming soon */}
-          <div>
-            <p className="px-3 py-1 text-[10px] font-semibold tracking-widest text-sidebar-foreground/30 uppercase">
-              ACCOUNT
-            </p>
-            <div className="space-y-0.5">
-              <button
-                disabled
-                title="Login coming soon"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground/40 cursor-not-allowed opacity-50"
-              >
-                <LogIn className="w-4 h-4 shrink-0" />
-                Login
-              </button>
-            </div>
-          </div>
         </nav>
 
         <div className="p-4 border-t border-sidebar-border shrink-0">
