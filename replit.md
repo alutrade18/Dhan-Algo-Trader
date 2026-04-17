@@ -228,6 +228,14 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **Flow**: TOTP → backend calls Dhan auth → token saved + all clients reconfigured + WS reconnected → frontend cache invalidated → broker shown as connected with balance
 - **Security**: PIN and TOTP are never stored — used once to call Dhan auth, discarded immediately
 
+### Phase 8 — Live Market Cards, Watchlist & Reliability
+- **MarketIndexCards**: Dashboard shows live LTP for NIFTY, BANKNIFTY, GOLD, SILVER, CRUDEOIL via Socket.io quote-mode subscription
+- **WatchlistPanel**: React Portal drawer with two-column saved+search layout; live LTP per row; backed by `watchlistTable`
+- **market-socket.ts**: Fixed quote-mode subscribe regression — `subscribe()` now uses `isSubscribedInMode()` registry check (previously skipped WS subscribe if any tick listener already existed). `subscribeBatch()` cleanup now only unsubscribes IDs whose listener count reaches zero AND have no quote listeners (previously dropped all IDs unconditionally, breaking other components when option-chain unmounted)
+- **api-server reliability**: Added graceful SIGTERM/SIGINT handler + `httpServer.on("error")` handler in `index.ts`; `prestart` runs `scripts/free-port.mjs` (parses `/proc/net/tcp` to find PID holding `$PORT` and SIGKILLs only that process — safe vs the previous `pkill -f` which killed the prestart shell itself)
+- **lib/db & lib/api-zod**: Rebuilt stale `dist/*.d.ts` after deleting `dist/` + `tsconfig.tsbuildinfo` — fixed missing `watchlistTable`, `marketHolidaysTable`, `equityCurveCacheTable`, `rateLimitLogTable` exports and `tradingSymbol` field on `PlaceOrderBody`
+- **Security audit**: 0 critical/high/moderate dep vulns; 0 HoundDog issues; 2 SAST findings reviewed and confirmed false positives (GCM auth tag length is 16 bytes; "SQL injection" was a template literal inside a log message — all DB access goes through Drizzle parameterized queries)
+
 ### Phase 6 — Frontend Bug Fixes & Theme Standardization
 - **App.tsx**: `AppInitializer` now shows an error state with retry button when `/api/settings` fetch fails (previously showed infinite spinner)
 - **market-socket.ts**: Added `socket.on("connect", resubscribeAll)` — on socket.io reconnect, all subscriptions are replayed to the server so live ticks resume automatically

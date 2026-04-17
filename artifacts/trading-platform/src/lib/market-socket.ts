@@ -197,16 +197,26 @@ class MarketSocket {
     }
 
     return () => {
+      // Only unsubscribe IDs that have NO remaining listeners (tick OR quote)
+      const idsToFullyDrop: number[] = [];
       securityIds.forEach((secId) => {
         const listenerKey = `${exchange}:${secId}`;
         const listeners = this.tickListeners.get(listenerKey);
         if (listeners) {
           listeners.delete(cb);
-          if (listeners.size === 0) this.tickListeners.delete(listenerKey);
+          if (listeners.size === 0) {
+            this.tickListeners.delete(listenerKey);
+            // No quote listeners either → safe to fully drop
+            if (!this.quoteListeners.get(listenerKey)?.size) {
+              idsToFullyDrop.push(secId);
+            }
+          }
         }
       });
-      this.deregisterIds(exchange, securityIds, mode);
-      this.socket.emit("market:unsubscribe", { exchange, securityIds });
+      if (idsToFullyDrop.length > 0) {
+        this.deregisterIds(exchange, idsToFullyDrop);
+        this.socket.emit("market:unsubscribe", { exchange, securityIds: idsToFullyDrop });
+      }
     };
   }
 
