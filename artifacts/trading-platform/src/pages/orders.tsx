@@ -23,7 +23,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   ClipboardList,
@@ -34,7 +33,6 @@ import {
   Download,
   AlertCircle,
   Settings,
-  History,
 } from "lucide-react";
 const BASE = import.meta.env.BASE_URL;
 
@@ -525,8 +523,6 @@ function StatCard({
 
 export default function OrdersPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("today");
-
   const [orders, setOrders] = useState<DhanOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersRefreshing, setOrdersRefreshing] = useState(false);
@@ -663,12 +659,12 @@ export default function OrdersPage() {
 
   return (
     <TooltipProvider>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
+      <div className="space-y-3">
 
-        {/* ── Single header row ─────────────────────────────────── */}
+        {/* ── Header row ─────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <p className="text-sm font-bold text-foreground hidden sm:block">
-            Today&apos;s orders and view past trade history
+            Today&apos;s Orders
           </p>
           <div className="flex items-center gap-2 sm:ml-auto">
             <Button
@@ -681,10 +677,6 @@ export default function OrdersPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${ordersRefreshing ? "animate-spin" : ""}`} />
               {ordersRefreshing ? "Refreshing…" : "Refresh"}
             </Button>
-            <TabsList className="bg-muted/40 h-8">
-              <TabsTrigger value="today" className="text-xs px-3 h-6">Today&apos;s Orders</TabsTrigger>
-              <TabsTrigger value="history" className="text-xs px-3 h-6">Order History</TabsTrigger>
-            </TabsList>
           </div>
         </div>
 
@@ -714,7 +706,7 @@ export default function OrdersPage() {
           />
         </div>
 
-          <TabsContent value="today" className="space-y-0 mt-0">
+          <div className="space-y-0">
             <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col" style={{ minHeight: "calc(100vh - 18rem)" }}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <p className="text-sm font-medium">Today's Orders</p>
@@ -912,27 +904,7 @@ export default function OrdersPage() {
                 </div>
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="history" className="mt-0">
-            <div className="rounded-xl border border-border bg-card flex flex-col items-center justify-center gap-4 py-20 text-center">
-              <History className="h-10 w-10 text-muted-foreground/40" />
-              <div>
-                <p className="text-sm font-medium">Full Trade History</p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                  Historical trade data with date range search and Excel export is available in Trade History.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => window.location.assign(`${BASE}trade-history`)}
-              >
-                <History className="h-3.5 w-3.5" />
-                Go to Trade History
-              </Button>
-            </div>
-          </TabsContent>
+          </div>
 
         <ModifyOrderModal
           order={modifyOrder}
@@ -940,7 +912,7 @@ export default function OrdersPage() {
           onClose={() => setModifyOrder(null)}
           onSuccess={() => void fetchOrders()}
         />
-      </Tabs>
+      </div>
     </TooltipProvider>
   );
 }

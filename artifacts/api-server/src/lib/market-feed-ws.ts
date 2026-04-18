@@ -82,6 +82,8 @@ class MarketFeedWS extends EventEmitter {
   private connected = false;
   private destroyed = false;
   private reconnectDelay = MIN_RECONNECT_MS;
+  /** H5: LTP cache keyed `exchangeSegment:securityId` — updated on every tick. */
+  private ltpCache: Map<string, number> = new Map();
 
   configure(clientId: string, accessToken: string) {
     this.clientId = clientId;
@@ -167,6 +169,8 @@ class MarketFeedWS extends EventEmitter {
     // LTP at bytes 8-11 (float32 LE) — same position for all packet types
     if (buf.length < 12) return;
     const ltp = buf.readFloatLE(8);
+    // Cache LTP for server-side use (e.g. super-order monitor).
+    if (ltp > 0) this.ltpCache.set(`${exchSeg}:${securityId}`, ltp);
 
     if (responseCode === 2) {
       // Ticker: <B H B I f I> = 16 bytes
@@ -374,6 +378,21 @@ class MarketFeedWS extends EventEmitter {
   }
 
   isConnected() { return this.connected; }
+
+  /**
+   * H5: Get the latest cached LTP for a security from the WS feed.
+   * Returns null if no tick has been received yet for this security.
+   */
+  getLtp(exchangeSegment: string, securityId: number): number | null {
+    return this.ltpCache.get(`${exchangeSegment}:${securityId}`) ?? null;
+  }
+
+  /** H5: Subscribe to a set of securities for the super-order monitor (server-side). */
+  subscribeForMonitor(securities: Record<string, number[]>): void {
+    for (const [segment, ids] of Object.entries(securities)) {
+      if (ids.length > 0) this.subscribe(segment, ids, "ticker");
+    }
+  }
 }
 
 export const marketFeedWS = new MarketFeedWS();

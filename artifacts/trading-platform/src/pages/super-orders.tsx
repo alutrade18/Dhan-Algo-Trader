@@ -425,8 +425,8 @@ export default function SuperOrders() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-primary flex items-center gap-1">
-                  Margin Est. ₹
-                  <span className="text-[9px] text-muted-foreground font-normal">(price×qty, actual may differ)</span>
+                  Notional Value
+                  <span className="text-[9px] text-muted-foreground font-normal">(price × qty)</span>
                 </label>
                 <div className={`px-3 py-2 rounded-md border text-xs font-mono min-h-[34px] flex items-center font-semibold ${
                   insufficientFunds
@@ -438,6 +438,9 @@ export default function SuperOrders() {
                     : "—"
                   }
                 </div>
+                <p className="text-[9px] text-muted-foreground/60 leading-snug">
+                  ⚠ Actual margin required (SPAN + Exposure) is determined by the exchange and may differ significantly. Verify margin availability in your Dhan account before placing.
+                </p>
               </div>
             </div>
 

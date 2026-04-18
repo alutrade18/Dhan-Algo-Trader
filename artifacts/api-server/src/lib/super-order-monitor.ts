@@ -4,6 +4,7 @@ import { dhanClient } from "./dhan-client";
 import { sendTelegramAlertIfEnabled } from "./telegram";
 import { logger } from "./logger";
 import { getMarketStatus } from "./market-calendar";
+import { marketFeedWS } from "./market-feed-ws";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
@@ -30,7 +31,8 @@ interface DhanOrderSummary {
 
 async function checkSuperOrders(): Promise<void> {
   if (!isAnyMarketOpen()) return;
-  if (!dhanClient.isConfigured()) return;
+  // H10: also pause when token is expired (isConnected() = false if expired)
+  if (!dhanClient.isConnected()) return;
 
   try {
     const openOrders = await db
@@ -75,23 +77,45 @@ async function checkSuperOrders(): Promise<void> {
       bySegment[order.exchangeSegment].push(order.securityId);
     }
 
+    // H5: Subscribe active securities to the WS feed so we get live LTP ticks.
+    const wsSecurities: Record<string, number[]> = {};
+    for (const [seg, ids] of Object.entries(bySegment)) {
+      wsSecurities[seg] = [...new Set(ids)].map(Number);
+    }
+    marketFeedWS.subscribeForMonitor(wsSecurities);
+
+    // Try to get LTPs from the WS cache first (no REST round-trip).
+    // Fall back to REST batch fetch if WS has no data (e.g. market feed not connected).
     let ltpMap: Record<string, number> = {};
-    try {
-      const securities: Record<string, string[]> = {};
-      for (const [seg, ids] of Object.entries(bySegment)) {
-        securities[seg] = [...new Set(ids)];
+    const missingFromWs: Record<string, string[]> = {};
+    for (const order of filledOrders) {
+      const wsLtp = marketFeedWS.getLtp(order.exchangeSegment, Number(order.securityId));
+      if (wsLtp !== null && wsLtp > 0) {
+        ltpMap[`${order.exchangeSegment}:${order.securityId}`] = wsLtp;
+      } else {
+        if (!missingFromWs[order.exchangeSegment]) missingFromWs[order.exchangeSegment] = [];
+        missingFromWs[order.exchangeSegment].push(order.securityId);
       }
-      const raw = await dhanClient.getMarketQuote(securities, "ltp") as Record<string, unknown>;
-      const data = (raw.data && typeof raw.data === "object" ? raw.data : raw) as Record<string, Record<string, { last_price?: number }>>;
-      for (const [seg, entries] of Object.entries(data)) {
-        for (const [secId, val] of Object.entries(entries ?? {})) {
-          const key = `${seg}:${secId}`;
-          ltpMap[key] = Number((val as { last_price?: number }).last_price ?? 0);
+    }
+
+    // REST fallback for any securities not yet in WS cache
+    if (Object.keys(missingFromWs).length > 0) {
+      try {
+        const securities: Record<string, string[]> = {};
+        for (const [seg, ids] of Object.entries(missingFromWs)) {
+          securities[seg] = [...new Set(ids)];
         }
+        const raw = await dhanClient.getMarketQuote(securities, "ltp") as Record<string, unknown>;
+        const data = (raw.data && typeof raw.data === "object" ? raw.data : raw) as Record<string, Record<string, { last_price?: number }>>;
+        for (const [seg, entries] of Object.entries(data)) {
+          for (const [secId, val] of Object.entries(entries ?? {})) {
+            ltpMap[`${seg}:${secId}`] = Number((val as { last_price?: number }).last_price ?? 0);
+          }
+        }
+      } catch (ltpErr) {
+        logger.warn({ err: ltpErr }, "SuperOrderMonitor: REST LTP fallback failed — will retry next cycle");
+        return;
       }
-    } catch (ltpErr) {
-      logger.warn({ err: ltpErr }, "SuperOrderMonitor: failed to batch fetch LTPs — will retry next cycle");
-      return;
     }
 
     for (const order of filledOrders) {

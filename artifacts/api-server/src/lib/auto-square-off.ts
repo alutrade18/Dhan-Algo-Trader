@@ -52,7 +52,8 @@ async function checkAndSquareOff(): Promise<void> {
   try {
     const [settings] = await db.select().from(settingsTable);
     if (!settings?.autoSquareOffEnabled) return;
-    if (!dhanClient.isConfigured()) return;
+    // H10: also pause when token is expired (isConnected() = false on expiry)
+    if (!dhanClient.isConnected()) return;
 
     const { hours, minutes, timeStr, dateStr } = nowIST();
     if (!isWeekday(dateStr)) return;

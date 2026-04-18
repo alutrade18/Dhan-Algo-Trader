@@ -5,7 +5,6 @@ import {
   List,
   Briefcase,
   TerminalSquare,
-  FlaskConical,
   Settings,
   ShieldAlert,
   X,
@@ -40,7 +39,6 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     label: "AUTOMATION",
     items: [
       { href: "/strategies", label: "Strategies", icon: TerminalSquare },
-      { href: "/backtesting", label: "Backtesting", icon: FlaskConical, comingSoon: true },
     ],
   },
   {
