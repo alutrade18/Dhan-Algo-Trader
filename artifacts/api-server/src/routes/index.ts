@@ -14,7 +14,6 @@ import superOrdersRouter from "./super-orders";
 import { createPostbackRouter } from "./postback";
 import { getIO } from "../lib/io";
 import instrumentsRouter from "./instruments";
-import watchlistRouter from "./watchlist";
 import {
   orderRateLimit,
   dataRateLimit,
@@ -58,7 +57,6 @@ router.use([
   "/trades",
   "/logs",
   "/instruments",   // symbol search
-  "/watchlist",     // watchlist CRUD
   "/postback",
 ], nonTradingRateLimit);
 
@@ -75,7 +73,6 @@ router.use(riskRouter);
 router.use(tradesRouter);
 router.use(logsRouter);
 router.use(instrumentsRouter);
-router.use(watchlistRouter);
 router.use(superOrdersRouter);
 router.use((req, res, next) => {
   const io = getIO();

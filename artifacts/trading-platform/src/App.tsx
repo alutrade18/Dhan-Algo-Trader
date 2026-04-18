@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
 
 const Dashboard    = lazy(() => import("@/pages/dashboard"));
+const Charts       = lazy(() => import("@/pages/charts"));
 const Orders       = lazy(() => import("@/pages/orders"));
 const Positions    = lazy(() => import("@/pages/positions"));
 const Strategies   = lazy(() => import("@/pages/strategies"));
@@ -43,6 +44,7 @@ function AppRoutes() {
             <Redirect to="/dashboard" />
           </Route>
           <Route path="/dashboard" component={Dashboard} />
+          <Route path="/charts" component={Charts} />
           <Route path="/orders" component={Orders} />
           <Route path="/positions" component={Positions} />
           <Route path="/strategies" component={Strategies} />

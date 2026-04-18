@@ -13,6 +13,7 @@ import {
   LineChart,
   BookOpen,
   ShieldCheck,
+  CandlestickChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     label: "TRADING",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/charts", label: "Live Charts", icon: CandlestickChart },
       { href: "/positions", label: "Positions", icon: Briefcase },
       { href: "/orders", label: "Order Book", icon: List },
       { href: "/option-chain", label: "Option Chain", icon: LineChart },

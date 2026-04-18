@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { marketSocket, type QuoteData } from "@/lib/market-socket";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -22,6 +23,7 @@ function fmt(v: number, decimals = 2) {
 }
 
 function IndexCard({ index }: { index: MarketIndex }) {
+  const [, navigate] = useLocation();
   const [quote, setQuote] = useState<QuoteData | null>(null);
   const prevLtp = useRef<number | null>(null);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
@@ -50,18 +52,19 @@ function IndexCard({ index }: { index: MarketIndex }) {
   const positive = change !== null && change >= 0;
 
   return (
-    <div
+    <button
+      onClick={() => navigate(`/charts?symbol=${index.symbol}`)}
       className={cn(
-        "relative rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3 transition-colors duration-300 min-w-0",
+        "relative rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3 transition-all duration-300 min-w-0 w-full text-left",
+        "hover:border-primary/40 hover:bg-primary/5 cursor-pointer",
         flash === "up" && "border-success/40 bg-success/5",
         flash === "down" && "border-destructive/40 bg-destructive/5",
         !flash && "border-border/50",
       )}
     >
-      {/* Left: label + name */}
       <div className="min-w-0 flex-1">
         <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70 leading-none mb-1">
-          NSE INDEX
+          NSE INDEX · tap for chart
         </p>
         <p className="text-sm font-bold text-foreground leading-tight truncate">{index.name}</p>
         {change !== null && changePct !== null && (
@@ -81,7 +84,6 @@ function IndexCard({ index }: { index: MarketIndex }) {
         )}
       </div>
 
-      {/* Right: price + trend icon */}
       <div className="text-right shrink-0">
         {change !== null ? (
           positive
@@ -98,7 +100,7 @@ function IndexCard({ index }: { index: MarketIndex }) {
           {ltp !== null ? fmt(ltp) : "—"}
         </p>
       </div>
-    </div>
+    </button>
   );
 }
 

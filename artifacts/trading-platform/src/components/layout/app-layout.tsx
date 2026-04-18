@@ -5,11 +5,11 @@ import { useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-re
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi, Star } from "lucide-react";
+import { Activity, Moon, Sun, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { WatchlistPanel } from "@/components/watchlist-panel";
+
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -18,6 +18,7 @@ interface AppLayoutProps {
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/": "Dashboard",
+  "/charts": "Live Charts",
   "/orders": "Order Book",
   "/super-orders": "Super Orders",
   "/option-chain": "Option Chain",
@@ -61,7 +62,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
-  const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [staticIpError, setStaticIpError] = useState(false);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
   const rateLimitDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,12 +72,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handler = () => setStaticIpError(true);
     window.addEventListener("dhan:staticip-error", handler);
     return () => window.removeEventListener("dhan:staticip-error", handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = () => setWatchlistOpen(true);
-    window.addEventListener("watchlist:open", handler);
-    return () => window.removeEventListener("watchlist:open", handler);
   }, []);
 
   useEffect(() => {
@@ -211,7 +205,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     ksStatus?.isActive === true ||
     ksStatus?.killSwitchStatus === "ACTIVATE" ||
     ksStatus?.killSwitchStatus === "ACTIVE";
-  const isDashboard = location === "/";
+  const isDashboard = location === "/" || location === "/dashboard";
 
   const pageTitle = PAGE_TITLES[location] ?? PAGE_TITLES[location.replace(/\/$/, "")] ?? "Rajesh Algo";
 
@@ -335,19 +329,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Button
               variant="ghost"
               size="icon"
-              className={cn(
-                "h-8 w-8 text-muted-foreground hover:text-foreground",
-                watchlistOpen && "text-primary bg-primary/10",
-              )}
-              onClick={() => setWatchlistOpen(o => !o)}
-              title="Watchlist"
-            >
-              <Star className={cn("w-4 h-4", watchlistOpen && "fill-current")} />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={toggleTheme}
               title={resolvedTheme === "dark" ? "Switch to Light mode" : "Switch to Dark mode"}
@@ -406,7 +387,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </main>
       </div>
-      <WatchlistPanel open={watchlistOpen} onClose={() => setWatchlistOpen(false)} />
     </div>
   );
 }

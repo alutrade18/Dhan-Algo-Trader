@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarketIndexCards } from "@/components/market-index-cards";
-import { WatchlistWidget } from "@/components/watchlist-widget";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -252,12 +251,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Two-column: compact index cards left, watchlist right */}
-      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 items-start">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-sm">
         <MarketIndexCards />
-        <WatchlistWidget
-          onOpenPanel={() => window.dispatchEvent(new Event("watchlist:open"))}
-        />
       </div>
     </div>
   );
