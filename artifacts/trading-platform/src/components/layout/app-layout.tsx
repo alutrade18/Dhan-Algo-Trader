@@ -75,6 +75,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   useEffect(() => {
+    const handler = () => setWatchlistOpen(true);
+    window.addEventListener("watchlist:open", handler);
+    return () => window.removeEventListener("watchlist:open", handler);
+  }, []);
+
+  useEffect(() => {
     const handler = (e: Event) => {
       const { retryAfterMs, message } = (e as CustomEvent<{ retryAfterMs: number; message?: string }>).detail;
       const sec = Math.ceil(retryAfterMs / 1000);

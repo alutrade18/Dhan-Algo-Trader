@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarketIndexCards } from "@/components/market-index-cards";
+import { WatchlistWidget } from "@/components/watchlist-widget";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -252,6 +253,11 @@ export default function Dashboard() {
       )}
 
       <MarketIndexCards />
+
+      {/* Watchlist inline on dashboard */}
+      <WatchlistWidget
+        onOpenPanel={() => window.dispatchEvent(new Event("watchlist:open"))}
+      />
     </div>
   );
 }
