@@ -207,6 +207,7 @@ function ModifyOrderModal({
 }: ModifyOrderModalProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState<ModifyFormState>({
     orderType: "LIMIT",
     quantity: "",
@@ -224,6 +225,7 @@ function ModifyOrderModal({
         triggerPrice: String(order.triggerPrice ?? ""),
         validity: order.validity,
       });
+      setShowConfirm(false);
     }
   }, [order]);
 
@@ -232,8 +234,12 @@ function ModifyOrderModal({
   const triggerRequired =
     form.orderType === "STOP_LOSS" || form.orderType === "STOP_LOSS_MARKET";
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleReview(e: React.FormEvent) {
     e.preventDefault();
+    setShowConfirm(true);
+  }
+
+  async function handleConfirm() {
     if (!order) return;
     setLoading(true);
     try {
@@ -260,6 +266,7 @@ function ModifyOrderModal({
             "Could not modify order",
           variant: "destructive",
         });
+        setShowConfirm(false);
         return;
       }
       toast({
@@ -274,21 +281,22 @@ function ModifyOrderModal({
         description: "Could not reach server",
         variant: "destructive",
       });
+      setShowConfirm(false);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setShowConfirm(false); } }}>
       <DialogContent className="sm:max-w-md bg-card border-border">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold">
-            Modify Order
+            {showConfirm ? "Confirm Modification" : "Modify Order"}
           </DialogTitle>
         </DialogHeader>
-        {order && (
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        {order && !showConfirm && (
+          <form onSubmit={(e) => void handleReview(e)} className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <div>
                 <span className="font-medium text-foreground">Order ID</span>
@@ -397,15 +405,56 @@ function ModifyOrderModal({
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                disabled={loading}
               >
                 Close
               </Button>
-              <Button type="submit" size="sm" disabled={loading}>
-                {loading ? "Modifying…" : "Modify Order"}
+              <Button type="submit" size="sm">
+                Review Changes
               </Button>
             </DialogFooter>
           </form>
+        )}
+        {order && showConfirm && (
+          <div className="space-y-4">
+            <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+              Review the changes below. This will modify a live order on Dhan.
+            </div>
+            <div className="space-y-2 rounded-md bg-muted/40 px-3 py-3 text-xs">
+              {[
+                { label: "Symbol",     value: order.tradingSymbol },
+                { label: "Order ID",   value: order.orderId },
+                { label: "Order Type", value: form.orderType },
+                { label: "Quantity",   value: form.quantity },
+                ...(priceRequired   ? [{ label: "Price",         value: `₹${form.price}` }]        : []),
+                ...(triggerRequired ? [{ label: "Trigger Price", value: `₹${form.triggerPrice}` }] : []),
+                { label: "Validity",   value: form.validity },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex justify-between">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-mono font-medium">{value}</span>
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConfirm(false)}
+                disabled={loading}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={loading}
+                onClick={() => void handleConfirm()}
+              >
+                {loading ? "Modifying…" : "Confirm Modify"}
+              </Button>
+            </DialogFooter>
+          </div>
         )}
       </DialogContent>
     </Dialog>

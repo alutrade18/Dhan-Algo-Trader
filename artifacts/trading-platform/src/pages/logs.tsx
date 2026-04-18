@@ -348,7 +348,7 @@ function LogTable({ headers, isLoading, isEmpty, emptyText, colSpan, children, t
 }) {
   return (
     <div className="overflow-auto rounded-md border border-border" style={{ height: tableH }}>
-      <table className="w-full table-auto text-sm">
+      <table className="w-full min-w-[560px] table-auto text-sm">
         <thead className="sticky top-0 z-10">
           <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
             {headers.map((h) => (
@@ -478,39 +478,41 @@ export default function Logs() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
 
         {/* ── Tab bar ── */}
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <TabsList className="h-8 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+          <div className="overflow-x-auto flex-1">
+            <TabsList className="h-8 w-max">
 
-            <TabsTrigger value="failed" className="text-xs px-3 gap-1.5">
-              <XCircle className="w-3 h-3 text-destructive" />
-              Failed Logs
-              {(counts?.failed ?? 0) > 0 && (
-                <span className="ml-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1.5 min-w-[16px] text-center leading-4">
-                  {counts!.failed > 99 ? "99+" : counts!.failed}
-                </span>
-              )}
-            </TabsTrigger>
+              <TabsTrigger value="failed" className="text-xs px-2.5 sm:px-3 gap-1.5">
+                <XCircle className="w-3 h-3 text-destructive" />
+                Failed Logs
+                {(counts?.failed ?? 0) > 0 && (
+                  <span className="ml-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1.5 min-w-[16px] text-center leading-4">
+                    {counts!.failed > 99 ? "99+" : counts!.failed}
+                  </span>
+                )}
+              </TabsTrigger>
 
-            <TabsTrigger value="success" className="text-xs px-3 gap-1.5">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-              Success Logs
-              {(counts?.success ?? 0) > 0 && (
-                <span className="ml-1 rounded-full bg-emerald-600 text-white text-[9px] font-bold px-1.5 min-w-[16px] text-center leading-4">
-                  {counts!.success > 999 ? "999+" : counts!.success}
-                </span>
-              )}
-            </TabsTrigger>
+              <TabsTrigger value="success" className="text-xs px-2.5 sm:px-3 gap-1.5">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                Success Logs
+                {(counts?.success ?? 0) > 0 && (
+                  <span className="ml-1 rounded-full bg-emerald-600 text-white text-[9px] font-bold px-1.5 min-w-[16px] text-center leading-4">
+                    {counts!.success > 999 ? "999+" : counts!.success}
+                  </span>
+                )}
+              </TabsTrigger>
 
-            <TabsTrigger value="audit" className="text-xs px-3 gap-1.5">
-              <History className="w-3 h-3" />
-              Audit Logs
-            </TabsTrigger>
-          </TabsList>
+              <TabsTrigger value="audit" className="text-xs px-2.5 sm:px-3 gap-1.5">
+                <History className="w-3 h-3" />
+                Audit Logs
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {activeTab === "success" && (
             <Button
               variant="outline" size="sm"
-              className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 ml-auto"
+              className="h-8 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 self-start sm:self-auto"
               onClick={() => setConfirmOpen(true)}
               disabled={successTotal === 0}
             >

@@ -3,6 +3,7 @@ import { dhanClient } from "../lib/dhan-client";
 import { handleRouteError } from "../lib/route-error";
 import { recordOrderModification } from "../lib/rate-limiter";
 import { runOrderGuards } from "../lib/order-guards";
+import { logger } from "../lib/logger";
 import {
   PlaceOrderBody,
   ModifyOrderBody,
@@ -52,6 +53,45 @@ router.post("/orders", async (req, res): Promise<void> => {
     if (!guard.allowed) {
       res.status(403).json({ errorCode: "DH-906", errorMessage: guard.reason ?? "Order blocked by trading guard", retryable: false });
       return;
+    }
+
+    // ── H4: Pre-trade margin check via Dhan's margin calculator ──────────────
+    // Only checked for priced order types (LIMIT / STOP_LOSS) to avoid false
+    // positives on MARKET orders where price is unknown. Fail-open: if the
+    // margin API itself fails (rate limit, network) we log and proceed.
+    if (
+      parsed.data.orderType === "LIMIT" ||
+      parsed.data.orderType === "SL"
+    ) {
+      try {
+        const marginResult = await dhanClient.calculateMargin({
+          dhanClientId: dhanClient.getCredentials().clientId,
+          exchangeSegment: parsed.data.exchangeSegment,
+          transactionType: parsed.data.transactionType,
+          quantity: parsed.data.quantity,
+          productType: parsed.data.productType,
+          securityId: parsed.data.securityId,
+          price: parsed.data.price ?? 0,
+          triggerPrice: parsed.data.triggerPrice ?? 0,
+        }) as Record<string, unknown>;
+
+        if (marginResult.insufficientBalance === true) {
+          const required = marginResult.totalMarginRequired;
+          const available = marginResult.availableBalance;
+          logger.warn(
+            { securityId: parsed.data.securityId, required, available },
+            "[H4] Pre-trade margin check failed — insufficient balance",
+          );
+          res.status(402).json({
+            errorCode: "DH-907",
+            errorMessage: `Insufficient margin: required ₹${Number(required ?? 0).toFixed(2)}, available ₹${Number(available ?? 0).toFixed(2)}`,
+            retryable: false,
+          });
+          return;
+        }
+      } catch (marginErr) {
+        logger.warn({ err: marginErr, securityId: parsed.data.securityId }, "[H4] Pre-trade margin check skipped — margin API error (fail open)");
+      }
     }
 
     const result = await dhanClient.placeOrder({

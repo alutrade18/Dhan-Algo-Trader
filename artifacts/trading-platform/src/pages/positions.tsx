@@ -275,9 +275,9 @@ export default function Positions() {
 
       {/* ── Toolbar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-        <div className="overflow-x-auto -mx-0.5 px-0.5">
+        <div className="overflow-x-auto -mx-0.5 px-0.5 scrollbar-thin">
           <Tabs value={tab} onValueChange={v => setTab(v as TabKey)}>
-            <TabsList className="h-8 shrink-0">
+            <TabsList className="h-8 w-max">
               <TabsTrigger value="open"        className="text-xs px-2.5 sm:px-3 gap-1">All Open        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{openAll.length}</Badge></TabsTrigger>
               <TabsTrigger value="intraday"    className="text-xs px-2.5 sm:px-3 gap-1">Intraday        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{intraday.length}</Badge></TabsTrigger>
               <TabsTrigger value="carryforward"className="text-xs px-2.5 sm:px-3 gap-1">Carryforward    <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{carryFwd.length}</Badge></TabsTrigger>
@@ -301,7 +301,7 @@ export default function Positions() {
 
       {/* ── Table ── */}
       <div className="rounded-lg border bg-card overflow-x-auto">
-        <Table>
+        <Table className="min-w-[900px]">
           <TableHeader>
             <TableRow className="border-b border-border hover:bg-transparent">
               <TableHead className="text-xs font-semibold whitespace-nowrap pl-4">Symbol</TableHead>

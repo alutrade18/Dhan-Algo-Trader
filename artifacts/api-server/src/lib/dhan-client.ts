@@ -40,6 +40,21 @@ const credentials = {
   tokenExpired: false,
 };
 
+// ── H8: Retry configuration — safe for idempotent (GET) requests only ────────
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000] as const;
+
+/**
+ * Returns true if the request method is safe to retry.
+ * We never retry POST/PUT on order endpoints to avoid duplicate fills.
+ */
+function isRetryable(method: string, path: string): boolean {
+  if (method.toUpperCase() !== "GET") return false;
+  // Belt-and-suspenders: don't retry order mutations even if method is GET
+  const p = path.toLowerCase();
+  if (p.startsWith("/orders") || p.startsWith("/superorder") || p.startsWith("/forever")) return false;
+  return true;
+}
+
 async function dhanRequest(
   method: string,
   path: string,
@@ -76,38 +91,65 @@ async function dhanRequest(
     });
   }
 
-  logger.info({ method, path }, "Dhan API request");
+  const retryable = isRetryable(method, path);
+  let lastError: unknown;
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  const text = await response.text();
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-
-  if (!response.ok) {
-    const errorInfo = resolveDhanError(data);
-    logger.error(
-      { status: response.status, path, data, errorCode: errorInfo?.code },
-      `Dhan API error: ${errorInfo?.code ?? response.status} — ${errorInfo?.message ?? "Unknown error"}`,
-    );
-    // Mark token as expired on auth failures (only for the main credentials, not override calls)
-    if (response.status === 401 && !overrideCredentials) {
-      credentials.tokenExpired = true;
-      logger.warn({ path }, "Dhan 401 — marking token as expired, broker will show as disconnected");
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      const delayMs = RETRY_DELAYS_MS[attempt - 1];
+      logger.warn({ method, path, attempt, delayMs }, `[Retry] Dhan 5xx — retrying in ${delayMs}ms (attempt ${attempt}/${RETRY_DELAYS_MS.length})`);
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
     }
-    throw new DhanApiError(response.status, data, errorInfo ?? undefined);
+
+    logger.info({ method, path, attempt }, "Dhan API request");
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (fetchErr) {
+      // Network-level error (timeout, DNS, etc.) — retry if safe
+      lastError = fetchErr;
+      if (retryable && attempt < RETRY_DELAYS_MS.length) continue;
+      throw fetchErr;
+    }
+
+    const text = await response.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+
+    if (!response.ok) {
+      const errorInfo = resolveDhanError(data);
+      logger.error(
+        { status: response.status, path, data, errorCode: errorInfo?.code, attempt },
+        `Dhan API error: ${errorInfo?.code ?? response.status} — ${errorInfo?.message ?? "Unknown error"}`,
+      );
+      // Mark token as expired on auth failures (only for the main credentials, not override calls)
+      if (response.status === 401 && !overrideCredentials) {
+        credentials.tokenExpired = true;
+        logger.warn({ path }, "Dhan 401 — marking token as expired, broker will show as disconnected");
+      }
+      const err = new DhanApiError(response.status, data, errorInfo ?? undefined);
+      // Retry on 5xx if this is a safe GET request
+      if (retryable && response.status >= 500 && attempt < RETRY_DELAYS_MS.length) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+
+    return data;
   }
 
-  return data;
+  throw lastError;
 }
 
 export class DhanApiError extends Error {

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface SettingsSnapshot {
   refreshIntervalSeconds?: number;
@@ -9,15 +9,12 @@ interface SettingsSnapshot {
  * Returns the value in milliseconds, falling back to `fallbackSeconds` if
  * settings have not yet loaded or the field is not set.
  *
- * Uses `enabled: false` so it never triggers its own network request —
+ * Uses `getQueryData` so it never triggers its own network request —
  * it purely reads from the cache that is populated by the app layout.
  */
 export function useRefreshInterval(fallbackSeconds = 15): number {
-  const { data } = useQuery<SettingsSnapshot>({
-    queryKey: ["/api/settings"],
-    enabled: false,
-    staleTime: Infinity,
-  });
+  const queryClient = useQueryClient();
+  const data = queryClient.getQueryData<SettingsSnapshot>(["/api/settings"]);
   const seconds = data?.refreshIntervalSeconds ?? fallbackSeconds;
   return Math.max(5, seconds) * 1000;
 }

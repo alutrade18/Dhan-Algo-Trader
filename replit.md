@@ -236,6 +236,31 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **lib/db & lib/api-zod**: Rebuilt stale `dist/*.d.ts` after deleting `dist/` + `tsconfig.tsbuildinfo` — fixed missing `watchlistTable`, `marketHolidaysTable`, `equityCurveCacheTable`, `rateLimitLogTable` exports and `tradingSymbol` field on `PlaceOrderBody`
 - **Security audit**: 0 critical/high/moderate dep vulns; 0 HoundDog issues; 2 SAST findings reviewed and confirmed false positives (GCM auth tag length is 16 bytes; "SQL injection" was a template literal inside a log message — all DB access goes through Drizzle parameterized queries)
 
+### Phase 9 — Audit Fixes A–D + Mobile Friendliness
+
+**Backend reliability (api-server):**
+- **H8 retry backoff**: `dhanClient`'s internal `dhanRequest` retries GET requests on Dhan 5xx errors with 1s/2s/4s exponential backoff (up to 3 attempts). POST/PUT/DELETE order endpoints are never retried to prevent duplicate fills. Network-level errors (timeout, DNS) also retry for safe GET paths.
+- **H4 pre-trade margin**: `POST /orders` now calls Dhan's `/margincalculator` before placing LIMIT/SL orders. If Dhan returns `insufficientBalance: true`, the route returns HTTP 402 with the margin shortfall. Fail-open: if the margin API itself fails, the order proceeds.
+- **C7 rate-limiter persistence**: `DailyCounter` saves to the `rate_limit_log` DB table on every increment and loads today's count on startup via `loadDailyCountersFromDb()` called in `index.ts`. Survives server restarts within the same IST calendar day.
+- **H10 token-expiry monitor pause**: Both super-order monitor and auto-square-off guard on `dhanClient.isConfigured()` which returns `false` when `tokenExpired=true`. Already in place.
+- **H1–H2–H3–H6–H9**: Kill-switch 2s cache, positions 3s cache, maxQtyPerSymbol/maxOpenOrders guards, orders poll 2s, logged midnight KS reset.
+
+**Frontend fixes:**
+- **M2 margin disclaimer**: Super-orders form now labels margin field as "Margin Est." with `(price×qty, actual may differ)` note. Insufficient-funds warning says "Est. Required" to clarify it's an approximation, not SPAN margin.
+- **M3 modify confirm step**: `ModifyOrderModal` now has a two-step flow — "Review Changes" shows a summary card of all new values with a warning banner; "Confirm Modify" executes the PATCH. "Back" returns to the edit form.
+- **M5 segment map fix**: `handleInstrumentSelect` in `super-orders.tsx` had incorrect mapping `D → _CURR` (currency). Fixed to `D → _FNO` (derivatives/F&O), consistent with watchlist-panel.tsx. Added `M` and `I` → `IDX_I` mapping.
+- **useRefreshInterval hook**: Replaced `useQuery({ enabled: false })` (React Query v5 warning) with `useQueryClient().getQueryData()` — reads the settings cache directly without triggering network requests or console warnings.
+
+**Mobile responsive fixes (390px viewport):**
+- **Positions tabs**: `TabsList` now has `w-max` inside an `overflow-x-auto` wrapper, allowing "Carryforward" and "Closed" tabs to be scrolled into view.
+- **Positions table**: `Table` rendered with `min-w-[900px]` forcing horizontal scroll on the existing `overflow-x-auto` container.
+- **Logs tabs**: `TabsList` wrapped in `overflow-x-auto flex-1` div with `w-max`. "Delete All" button uses `self-start` on mobile to render below tabs.
+- **Logs table**: `min-w-[560px]` on the `<table>` element so all columns (TIME, LEVEL, CATEGORY, ACTION, MESSAGE) scroll within their fixed-height container.
+
+**Dead code / quality:**
+- Removed duplicate positions imports, sidebar Login button, dashboard empty useEffect, strategies fake deploy toast, orders history tab + 6 functions.
+- Bundle: lazy-loaded all pages, added `manualChunks` for React/Recharts/RadixUI vendor, removed 4 unused dependencies.
+
 ### Phase 6 — Frontend Bug Fixes & Theme Standardization
 - **App.tsx**: `AppInitializer` now shows an error state with retry button when `/api/settings` fetch fails (previously showed infinite spinner)
 - **market-socket.ts**: Added `socket.on("connect", resubscribeAll)` — on socket.io reconnect, all subscriptions are replayed to the server so live ticks resume automatically

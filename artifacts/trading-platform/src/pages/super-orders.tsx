@@ -112,9 +112,9 @@ export default function SuperOrders() {
 
   const entryPrice  = parseFloat(form.price)            || 0;
   const qty         = parseInt(form.quantity, 10)        || 0;
-  const marginRequired = entryPrice * qty;
-  const shortfall      = marginRequired - availableBalance;
-  const insufficientFunds = marginRequired > 0 && availableBalance > 0 && shortfall > 0;
+  const marginEstimate = entryPrice * qty;
+  const shortfall      = marginEstimate - availableBalance;
+  const insufficientFunds = marginEstimate > 0 && availableBalance > 0 && shortfall > 0;
 
   function applyDefaults(price: number) {
     const target = parseFloat((price * (1 + TARGET_PCT / 100)).toFixed(2));
@@ -163,10 +163,11 @@ export default function SuperOrders() {
     if (inst) {
       const segMap: Record<string, string> = {
         E: `${inst.exchId}_EQ`,
-        F: `${inst.exchId}_FNO`,
+        D: `${inst.exchId}_FNO`,
+        C: `${inst.exchId}_CURR`,
+        F: `${inst.exchId}_COMM`,
+        M: `IDX_I`,
         I: `IDX_I`,
-        D: `${inst.exchId}_CURR`,
-        C: `${inst.exchId}_COMM`,
       };
       const exchSeg = segMap[inst.segment] ?? `${inst.exchId}_${inst.segment}`;
       const defaultQty = inst.lotSize && inst.lotSize > 1 ? String(inst.lotSize) : String(DEFAULT_QTY);
@@ -423,14 +424,17 @@ export default function SuperOrders() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-primary">Margin Required ₹</label>
+                <label className="text-xs font-medium text-primary flex items-center gap-1">
+                  Margin Est. ₹
+                  <span className="text-[9px] text-muted-foreground font-normal">(price×qty, actual may differ)</span>
+                </label>
                 <div className={`px-3 py-2 rounded-md border text-xs font-mono min-h-[34px] flex items-center font-semibold ${
                   insufficientFunds
                     ? "border-destructive/40 bg-destructive/10 text-destructive"
                     : "border-primary/30 bg-primary/10 text-primary"
                 }`}>
-                  {marginRequired > 0
-                    ? `₹${marginRequired.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  {marginEstimate > 0
+                    ? `₹${marginEstimate.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     : "—"
                   }
                 </div>
@@ -444,7 +448,7 @@ export default function SuperOrders() {
                   <p className="font-semibold">Insufficient Balance — Cannot Place Order</p>
                   <p className="mt-0.5 text-destructive/80">
                     Available: ₹{availableBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
-                    Required: ₹{marginRequired.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
+                    Est. Required: ₹{marginEstimate.toLocaleString("en-IN", { minimumFractionDigits: 2 })} · 
                     Shortfall: <span className="font-semibold">₹{shortfall.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span> — Please add funds to place this trade.
                   </p>
                 </div>
