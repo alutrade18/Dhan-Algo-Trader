@@ -12,7 +12,6 @@ interface MarketIndex {
   securityId: number;
   exchange: string;
   lotSize: number;
-  expiry?: string;
 }
 
 function fmt(v: number, decimals = 2) {
@@ -32,8 +31,7 @@ function IndexCard({ index }: { index: MarketIndex }) {
     const unsub = marketSocket.subscribeQuote(index.exchange, index.securityId, (data) => {
       setQuote(data);
       if (prevLtp.current !== null && data.ltp !== prevLtp.current) {
-        const dir = data.ltp > prevLtp.current ? "up" : "down";
-        setFlash(dir);
+        setFlash(data.ltp > prevLtp.current ? "up" : "down");
         if (flashTimer.current) clearTimeout(flashTimer.current);
         flashTimer.current = setTimeout(() => setFlash(null), 600);
       }
@@ -47,82 +45,59 @@ function IndexCard({ index }: { index: MarketIndex }) {
 
   const ltp = quote?.ltp ?? null;
   const open = quote?.open ?? null;
-  const high = quote?.high ?? null;
-  const low = quote?.low ?? null;
-
   const change = ltp !== null && open !== null ? ltp - open : null;
   const changePct = change !== null && open !== null && open !== 0 ? (change / open) * 100 : null;
   const positive = change !== null && change >= 0;
 
-  const isMCX = index.exchange === "MCX_COMM";
-  const decimals = isMCX ? 0 : 2;
-
   return (
     <div
       className={cn(
-        "relative rounded-xl border bg-card p-3 md:p-4 flex flex-col gap-1.5 transition-colors duration-300 min-w-0",
-        flash === "up" && "bg-success/5 border-success/30",
-        flash === "down" && "bg-destructive/5 border-destructive/30",
+        "relative rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-3 transition-colors duration-300 min-w-0",
+        flash === "up" && "border-success/40 bg-success/5",
+        flash === "down" && "border-destructive/40 bg-destructive/5",
+        !flash && "border-border/50",
       )}
     >
-      <div className="flex items-start justify-between gap-1">
-        <div className="min-w-0">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">
-            {index.exchange === "IDX_I" ? "NSE INDEX" : "MCX"}
-          </p>
-          <p className="text-sm font-bold text-foreground leading-tight truncate">{index.name}</p>
-          {index.expiry && (
-            <p className="text-[9px] text-muted-foreground/60">{index.expiry}</p>
-          )}
-        </div>
-        {change !== null ? (
-          positive ? (
-            <TrendingUp className="w-4 h-4 text-success shrink-0 mt-0.5" />
-          ) : (
-            <TrendingDown className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-          )
-        ) : (
-          <Minus className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-0.5" />
-        )}
-      </div>
-
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span
-          className={cn(
-            "text-lg md:text-xl font-bold font-mono tabular-nums transition-colors duration-300",
-            flash === "up" ? "text-success" : flash === "down" ? "text-destructive" : "text-foreground",
-          )}
-        >
-          {ltp !== null ? fmt(ltp, decimals) : <span className="text-muted-foreground/40 text-base">—</span>}
-        </span>
+      {/* Left: label + name */}
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70 leading-none mb-1">
+          NSE INDEX
+        </p>
+        <p className="text-sm font-bold text-foreground leading-tight truncate">{index.name}</p>
         {change !== null && changePct !== null && (
-          <span
-            className={cn(
-              "text-xs font-semibold font-mono tabular-nums",
-              positive ? "text-success" : "text-destructive",
-            )}
-          >
-            {positive ? "+" : ""}{fmt(change, decimals)} ({positive ? "+" : ""}{fmt(changePct, 2)}%)
-          </span>
+          <p className={cn(
+            "text-[10px] font-semibold font-mono tabular-nums mt-0.5",
+            positive ? "text-success" : "text-destructive",
+          )}>
+            {positive ? "+" : ""}{fmt(change)} ({positive ? "+" : ""}{fmt(changePct, 2)}%)
+          </p>
+        )}
+        {change === null && ltp === null && (
+          <div className="flex gap-1 mt-1">
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:0ms]" />
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:150ms]" />
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:300ms]" />
+          </div>
         )}
       </div>
 
-      {(high !== null || low !== null) && (
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
-          {high !== null && <span>H: <span className="text-success/80">{fmt(high, decimals)}</span></span>}
-          {low !== null && <span>L: <span className="text-destructive/80">{fmt(low, decimals)}</span></span>}
-        </div>
-      )}
-
-      {ltp === null && (
-        <div className="absolute inset-0 flex items-center justify-center bg-card/50 rounded-xl">
-          <div className="flex gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:300ms]" />
-          </div>
-        </div>
-      )}
+      {/* Right: price + trend icon */}
+      <div className="text-right shrink-0">
+        {change !== null ? (
+          positive
+            ? <TrendingUp className="w-3.5 h-3.5 text-success ml-auto mb-1" />
+            : <TrendingDown className="w-3.5 h-3.5 text-destructive ml-auto mb-1" />
+        ) : (
+          <Minus className="w-3.5 h-3.5 text-muted-foreground/30 ml-auto mb-1" />
+        )}
+        <p className={cn(
+          "text-base font-bold font-mono tabular-nums transition-colors duration-300",
+          flash === "up" ? "text-success" : flash === "down" ? "text-destructive" : "text-foreground",
+          ltp === null && "text-muted-foreground/30",
+        )}>
+          {ltp !== null ? fmt(ltp) : "—"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -141,20 +116,17 @@ export function MarketIndexCards() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="rounded-xl border bg-card p-3 md:p-4 animate-pulse h-[90px]" />
-        ))}
+      <div className="flex flex-col gap-2">
+        <div className="rounded-xl border bg-card px-4 py-3 animate-pulse h-[68px]" />
+        <div className="rounded-xl border bg-card px-4 py-3 animate-pulse h-[68px]" />
       </div>
     );
   }
 
-  if (isError || !indices?.length) {
-    return null;
-  }
+  if (isError || !indices?.length) return null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="flex flex-col gap-2">
       {indices.map((index) => (
         <IndexCard key={`${index.exchange}:${index.securityId}`} index={index} />
       ))}

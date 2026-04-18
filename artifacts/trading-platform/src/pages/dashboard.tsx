@@ -252,12 +252,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      <MarketIndexCards />
-
-      {/* Watchlist inline on dashboard */}
-      <WatchlistWidget
-        onOpenPanel={() => window.dispatchEvent(new Event("watchlist:open"))}
-      />
+      {/* Two-column: compact index cards left, watchlist right */}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 items-start">
+        <MarketIndexCards />
+        <WatchlistWidget
+          onOpenPanel={() => window.dispatchEvent(new Event("watchlist:open"))}
+        />
+      </div>
     </div>
   );
 }

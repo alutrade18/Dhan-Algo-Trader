@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
 import { db, instrumentsTable } from "@workspace/db";
-import { eq, and, sql, inArray, min } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   GetMarketQuoteBody,
   GetHistoricalDataBody,
@@ -364,73 +364,13 @@ router.get("/market/securities", async (req, res): Promise<void> => {
   }
 });
 
-// Returns the 5 market index instruments with their live feed security IDs.
-// NSE indices (NIFTY, BANKNIFTY) use fixed IDs on IDX_I exchange segment.
-// MCX commodities (GOLD, SILVER, CRUDEOIL) are resolved dynamically by finding
-// the nearest-expiry OPTFUT option's underlying_security_id in the DB.
-router.get("/market/indices", async (req, res): Promise<void> => {
-  try {
-    // Fixed NSE index instruments
-    const nseIndices = [
-      { name: "NIFTY 50", symbol: "NIFTY", securityId: 13, exchange: "IDX_I", lotSize: 75 },
-      { name: "BANK NIFTY", symbol: "BANKNIFTY", securityId: 25, exchange: "IDX_I", lotSize: 30 },
-    ];
-
-    // For MCX commodities, find the nearest expiry OPTFUT underlying to get the active future security ID
-    const targetSymbols = ["GOLD", "SILVER", "CRUDEOIL"];
-    const today = new Date().toISOString().slice(0, 10);
-
-    const rows = await db
-      .select({
-        underlyingSymbol: instrumentsTable.underlyingSymbol,
-        underlyingSecurityId: instrumentsTable.underlyingSecurityId,
-        nearestExpiry: min(instrumentsTable.expiryDate),
-      })
-      .from(instrumentsTable)
-      .where(
-        and(
-          eq(instrumentsTable.exchId, "MCX"),
-          eq(instrumentsTable.instrument, "OPTFUT"),
-          inArray(instrumentsTable.underlyingSymbol, targetSymbols),
-          sql`${instrumentsTable.expiryDate} >= ${today}`,
-        )
-      )
-      .groupBy(instrumentsTable.underlyingSymbol, instrumentsTable.underlyingSecurityId)
-      .orderBy(instrumentsTable.underlyingSymbol);
-
-    // Resolve to the underlying with the earliest expiry for each symbol
-    const commodityMap = new Map<string, { securityId: number; expiry: string }>();
-    for (const row of rows) {
-      if (!row.underlyingSymbol || !row.underlyingSecurityId || !row.nearestExpiry) continue;
-      const sym = row.underlyingSymbol;
-      const existing = commodityMap.get(sym);
-      if (!existing || row.nearestExpiry < existing.expiry) {
-        commodityMap.set(sym, { securityId: row.underlyingSecurityId, expiry: row.nearestExpiry });
-      }
-    }
-
-    const commodityMeta: Record<string, { name: string; lotSize: number }> = {
-      GOLD:     { name: "GOLD",      lotSize: 100 },
-      SILVER:   { name: "SILVER",    lotSize: 30000 },
-      CRUDEOIL: { name: "CRUDE OIL", lotSize: 100 },
-    };
-
-    const mcxIndices = targetSymbols
-      .filter(sym => commodityMap.has(sym))
-      .map(sym => ({
-        name: commodityMeta[sym].name,
-        symbol: sym,
-        securityId: commodityMap.get(sym)!.securityId,
-        exchange: "MCX_COMM",
-        lotSize: commodityMeta[sym].lotSize,
-        expiry: commodityMap.get(sym)!.expiry,
-      }));
-
-    res.json([...nseIndices, ...mcxIndices]);
-  } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch market indices");
-    res.status(500).json({ error: "Failed to fetch market indices" });
-  }
+// Returns the 2 NSE index instruments (NIFTY 50 + BANK NIFTY) with their live feed security IDs.
+router.get("/market/indices", async (_req, res): Promise<void> => {
+  const indices = [
+    { name: "NIFTY 50",   symbol: "NIFTY",     securityId: 13, exchange: "IDX_I", lotSize: 75 },
+    { name: "BANK NIFTY", symbol: "BANKNIFTY",  securityId: 25, exchange: "IDX_I", lotSize: 30 },
+  ];
+  res.json(indices);
 });
 
 export default router;

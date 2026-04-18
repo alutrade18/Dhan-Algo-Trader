@@ -1,11 +1,11 @@
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Sidebar } from "./sidebar";
-import { useHealthCheck, useGetFundLimits, getHealthCheckQueryKey, getGetFundLimitsQueryKey } from "@workspace/api-client-react";
+import { useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, RefreshCw, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi, Star } from "lucide-react";
+import { Activity, Moon, Sun, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi, Star } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -95,15 +95,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
   }, []);
 
-  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
+  const { data: health, isLoading: isHealthLoading } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), refetchInterval: 30000 } });
 
-  // Derive market state BEFORE the funds hook so we can gate its poll interval.
+  // Derive market state to gate kill switch polling interval.
   const _healthForLayout = health as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
   const _anyMarketOpenLayout = (_healthForLayout?.nseOpen ?? false) || (_healthForLayout?.mcxOpen ?? false);
-
-  // Funds: 15 s during market hours, 2 min outside (weekends/holidays/after-hours).
-  // Fund limits don't change during closed market — no need to hammer the API.
-  const { data: funds, isLoading: isFundsLoading, refetch: refetchFunds } = useGetFundLimits({ query: { queryKey: getGetFundLimitsQueryKey(), refetchInterval: _anyMarketOpenLayout ? 15000 : 120_000 } });
 
   const { data: brokerStatus, isLoading: isBrokerStatusLoading } = useQuery<{ connected: boolean; maskedClientId?: string | null }>({
     queryKey: ["broker-status"],
@@ -117,7 +113,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   const { resolvedTheme, toggleTheme } = useTheme();
-  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -140,19 +135,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isBrokerConnected = isBrokerStatusLoading ? null : (brokerStatus?.connected ?? false);
   const BROKER_BANNER_PAGES = ["/", "/dashboard", "/positions", "/orders", "/super-orders"];
   const showBrokerBanner = isBrokerConnected === false && BROKER_BANNER_PAGES.includes(location);
-
-  const fundsData = funds as (typeof funds & { availableBalance?: number | null }) | undefined;
-  const availableBalance = fundsData?.availableBalance;
-  const isRefreshing = isFundsLoading || isManualRefreshing;
-
-  const handleRefreshBalance = async () => {
-    setIsManualRefreshing(true);
-    try {
-      await Promise.all([refetchFunds(), refetchHealth()]);
-    } finally {
-      setIsManualRefreshing(false);
-    }
-  };
 
   const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
     queryKey: ["killswitch-status"],
@@ -296,29 +278,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
-              <span className="text-foreground/60">BAL:</span>
-              <span className="font-semibold text-foreground min-w-[56px]">
-                {isRefreshing
-                  ? <span className="animate-pulse text-muted-foreground">···</span>
-                  : availableBalance != null
-                    ? formatCurrency(availableBalance)
-                    : <span className="text-muted-foreground/50">—</span>
-                }
-              </span>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={handleRefreshBalance}
-              disabled={isRefreshing}
-              title="Refresh balance"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-            </Button>
-
             <div className="hidden sm:block h-4 w-[1px] bg-border" />
 
             <div className="flex items-center gap-1.5">
