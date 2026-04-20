@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
@@ -288,8 +288,17 @@ router.post("/telegram/test", async (req, res): Promise<void> => {
 
 router.get("/settings/audit-log", async (req, res): Promise<void> => {
   try {
-    const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(200);
-    res.json(logs);
+    const { page = "0", limit = "50" } = req.query as Record<string, string>;
+    const pageNum = Math.max(0, Math.min(3, parseInt(page, 10) || 0));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
+    const offset = pageNum * limitNum;
+
+    const [logs, countResult] = await Promise.all([
+      db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(limitNum).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(auditLogTable),
+    ]);
+
+    res.json({ logs, total: countResult[0]?.count ?? 0, page: pageNum, limit: limitNum });
   } catch (e) {
     req.log.error({ err: e }, "Failed to fetch audit log");
     res.status(500).json({ error: "Failed to fetch audit log" });

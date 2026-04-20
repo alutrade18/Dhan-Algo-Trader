@@ -3,8 +3,7 @@ import { Server as SocketIO } from "socket.io";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { dhanClient } from "./lib/dhan-client";
-import { db, settingsTable, appLogsTable } from "@workspace/db";
-import { lt, sql } from "drizzle-orm";
+import { db, settingsTable } from "@workspace/db";
 import { marketFeedWS } from "./lib/market-feed-ws";
 import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
@@ -57,17 +56,6 @@ io.on("connection", (socket) => {
   });
 });
 
-async function pruneOldAppLogs() {
-  try {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    const result = await db.delete(appLogsTable).where(lt(appLogsTable.createdAt, cutoff));
-    const deleted = (result as unknown as { rowCount?: number }).rowCount ?? 0;
-    if (deleted > 0) logger.info({ deleted }, "[AppLogs] Pruned old entries (>30 days)");
-  } catch (e) {
-    logger.warn({ err: e }, "[AppLogs] Prune failed — non-fatal");
-  }
-}
 
 async function loadSavedCredentials() {
   try {
@@ -112,7 +100,6 @@ loadSavedCredentials().then(async () => {
   await loadDailyCountersFromDb();
   await loadHolidayCache();
   await initDeactivationTracker();
-  void pruneOldAppLogs();
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
     startAutoSquareOffScheduler();

@@ -4,13 +4,6 @@ import { desc, and, gte, lte, eq, or, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-function sevenDaysAgo(): Date {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 router.get("/logs", async (req, res): Promise<void> => {
   try {
     const {
@@ -21,18 +14,17 @@ router.get("/logs", async (req, res): Promise<void> => {
       toDate,
       fromTimestamp,
       page = "0",
-      limit = "100",
+      limit = "50",
     } = req.query as Record<string, string>;
 
-    const pageNum = Math.max(0, parseInt(page, 10) || 0);
-    const limitNum = Math.min(500, Math.max(1, parseInt(limit, 10) || 100));
+    const pageNum = Math.max(0, Math.min(3, parseInt(page, 10) || 0)); // max page 3 (0-indexed → 4 pages)
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
     const offset = pageNum * limitNum;
 
     const conditions = [];
 
     if (tab === "failed") {
       conditions.push(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!);
-      conditions.push(gte(appLogsTable.createdAt, sevenDaysAgo()));
     } else if (tab === "success") {
       conditions.push(eq(appLogsTable.status, "success"));
     }
@@ -41,15 +33,13 @@ router.get("/logs", async (req, res): Promise<void> => {
       conditions.push(eq(appLogsTable.category, category));
     }
 
-    if (tab !== "failed") {
-      if (fromTimestamp) {
-        conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
-      } else if (fromDate) {
-        conditions.push(gte(appLogsTable.createdAt, new Date(fromDate + "T00:00:00Z")));
-      }
-      if (toDate) {
-        conditions.push(lte(appLogsTable.createdAt, new Date(toDate + "T23:59:59Z")));
-      }
+    if (fromTimestamp) {
+      conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
+    } else if (fromDate) {
+      conditions.push(gte(appLogsTable.createdAt, new Date(fromDate + "T00:00:00Z")));
+    }
+    if (toDate) {
+      conditions.push(lte(appLogsTable.createdAt, new Date(toDate + "T23:59:59Z")));
     }
 
     if (search) {
