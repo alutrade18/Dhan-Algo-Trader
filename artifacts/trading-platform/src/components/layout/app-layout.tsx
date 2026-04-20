@@ -5,7 +5,8 @@ import { useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-re
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Moon, Sun, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Activity, Moon, Sun, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi, Lock, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -138,11 +139,53 @@ export function AppLayout({ children }: AppLayoutProps) {
       if (!res.ok) return {};
       return res.json();
     },
-    // Kill switch state only matters during market hours
-    refetchInterval: _anyMarketOpenLayout ? 15000 : false,
+    // Always poll — kill switch can be toggled from Dhan app at any time,
+    // faster during market hours, slower otherwise so we don't waste calls
+    refetchInterval: _anyMarketOpenLayout ? 10_000 : 30_000,
     staleTime: 0,
     gcTime: 0,
   });
+
+  // ── Settings — needed for PIN check on kill switch ───────────────────────────
+  const { data: appSettings } = useQuery<{ hasKillSwitchPin?: boolean }>({
+    queryKey: ["/api/settings"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}api/settings`);
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 30_000,
+  });
+  const hasPin = appSettings?.hasKillSwitchPin ?? false;
+
+  // Kill switch header confirmation + PIN states
+  const [showKsConfirm, setShowKsConfirm] = useState(false);
+  const [showKsPin, setShowKsPin] = useState(false);
+  const [ksPinInput, setKsPinInput] = useState("");
+  const [ksPinPending, setKsPinPending] = useState(false);
+
+  async function handleKsPinVerify() {
+    setKsPinPending(true);
+    try {
+      const res = await fetch(`${BASE}api/settings/verify-pin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: ksPinInput }),
+      });
+      const data = await res.json() as { valid: boolean };
+      if (data.valid) {
+        setShowKsPin(false);
+        setKsPinInput("");
+        emergencyStopMutation.mutate();
+      } else {
+        toast({ title: "Incorrect PIN", description: "Kill switch not activated.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setKsPinPending(false);
+    }
+  }
 
   const [allPaused, setAllPaused] = useState(false);
 
@@ -252,19 +295,32 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <span className="hidden md:inline">Pause All Strategy</span>
                   </Button>
                 )}
-                <Button
-                  variant={dhanKillActive ? "secondary" : "destructive"}
-                  size="sm"
-                  className="h-7 px-2 text-xs gap-1.5"
-                  onClick={() => emergencyStopMutation.mutate()}
-                  disabled={emergencyStopMutation.isPending || dhanKillActive}
-                  title="Emergency Stop — pause all strategies and activate Dhan kill switch"
-                >
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  <span className="hidden md:inline">
-                    {dhanKillActive ? "Kill Switch Activated" : "Activate Kill Switch"}
-                  </span>
-                </Button>
+                {!hasPin ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    title="Set a Kill Switch PIN in Risk Manager first"
+                    className="h-7 px-2 text-xs gap-1.5 opacity-50 cursor-not-allowed border-muted-foreground/30 text-muted-foreground"
+                  >
+                    <Lock className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Set PIN First</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant={dhanKillActive ? "secondary" : "destructive"}
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1.5"
+                    onClick={() => { if (!dhanKillActive) setShowKsConfirm(true); }}
+                    disabled={emergencyStopMutation.isPending || dhanKillActive}
+                    title={dhanKillActive ? "Kill switch is already active — deactivate in Risk Manager" : "Emergency Stop — confirm + PIN required"}
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">
+                      {dhanKillActive ? "Kill Switch Activated" : "Activate Kill Switch"}
+                    </span>
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -385,6 +441,83 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </main>
       </div>
+
+      {/* ── Kill Switch: Confirmation dialog ─────────────────────────────────── */}
+      {showKsConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md">
+          <div className="bg-background border border-destructive/40 rounded-2xl p-7 w-[360px] shadow-2xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/15 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Activate Kill Switch?</h3>
+                <p className="text-[11px] text-muted-foreground">This will pause all strategies and block all order placement.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5 rounded-xl bg-destructive/10 border border-destructive/25 px-4 py-3 text-xs text-destructive">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>All active strategies will be paused and new orders will be blocked on Dhan immediately.</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="flex-1 h-9"
+                onClick={() => setShowKsConfirm(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="destructive" className="flex-1 h-9 gap-1.5 font-semibold"
+                onClick={() => {
+                  setShowKsConfirm(false);
+                  setShowKsPin(true);
+                  setKsPinInput("");
+                }}>
+                <Lock className="w-3.5 h-3.5" />
+                Continue — Enter PIN
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Kill Switch: PIN dialog ───────────────────────────────────────────── */}
+      {showKsPin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md">
+          <div className="bg-background border border-border rounded-2xl p-7 w-[340px] space-y-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">PIN Required</h3>
+                <p className="text-[11px] text-muted-foreground">Enter your 4-digit kill switch PIN to activate.</p>
+              </div>
+            </div>
+            <Input
+              type="password"
+              placeholder="• • • •"
+              maxLength={4}
+              value={ksPinInput}
+              onChange={e => setKsPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onKeyDown={e => { if (e.key === "Enter" && ksPinInput.length === 4) void handleKsPinVerify(); }}
+              className="text-center text-2xl tracking-[0.5em] font-mono h-12"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="flex-1 h-9"
+                onClick={() => { setShowKsPin(false); setKsPinInput(""); }}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="destructive" className="flex-1 h-9 gap-1.5 font-semibold"
+                disabled={ksPinInput.length < 4 || ksPinPending}
+                onClick={() => void handleKsPinVerify()}>
+                {ksPinPending
+                  ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Verifying…</>
+                  : <><ShieldAlert className="w-3.5 h-3.5" />Activate</>}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
