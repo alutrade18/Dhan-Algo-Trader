@@ -153,9 +153,6 @@ export default function TradeHistory() {
     a.download = `ledger_${fromDate}_to_${toDate}.csv`; a.click(); URL.revokeObjectURL(a.href);
   }
 
-  const totalDebit = ledgerData.reduce((s, r) => s + parseAmount(r.debit), 0);
-  const totalCredit = ledgerData.reduce((s, r) => s + parseAmount(r.credit), 0);
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -180,14 +177,6 @@ export default function TradeHistory() {
       </div>
 
       <div className="space-y-3">
-          {ledgerData.length > 0 && (
-            <div className="flex items-center gap-6 text-xs flex-wrap">
-              <span className="text-muted-foreground">Entries: <span className="text-foreground font-semibold">{ledgerData.length}</span></span>
-              <span>Total Credit: <span className="text-success font-mono font-semibold">₹{totalCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
-              <span>Total Debit: <span className="text-destructive font-mono font-semibold">₹{totalDebit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></span>
-            </div>
-          )}
-
           {error && (
             <Card className="border-destructive/30 bg-destructive/5">
               <CardContent className="py-4 text-center text-sm text-destructive">{error}</CardContent>
