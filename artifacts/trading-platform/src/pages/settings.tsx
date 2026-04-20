@@ -417,9 +417,9 @@ export default function Settings() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">Broker Connection</p>
               <p className={`text-xs mt-0.5 truncate ${isConnected ? "text-success" : tokenExpired ? "text-destructive" : "text-muted-foreground"}`}>
-                {isConnected ? "Connected to Dhan — live trading active"
+                {isConnected ? "Connected"
                   : tokenExpired ? "Token expired — paste new token below"
-                  : "Not connected — enter credentials below"}
+                  : "Disconnect"}
               </p>
             </div>
           </div>

@@ -180,10 +180,6 @@ export default function TradeHistory() {
       </div>
 
       <div className="space-y-3">
-          <p className="text-sm font-bold text-foreground">
-            Account credit and debit details fetched live from Dhan
-          </p>
-
           {ledgerData.length > 0 && (
             <div className="flex items-center gap-6 text-xs flex-wrap">
               <span className="text-muted-foreground">Entries: <span className="text-foreground font-semibold">{ledgerData.length}</span></span>
