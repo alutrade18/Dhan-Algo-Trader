@@ -28,19 +28,26 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 
 ### Frontend (artifacts/trading-platform)
 - React + Vite web app with dark-mode fintech terminal theme
-- Pages: Dashboard, Orders, Positions, Strategies, Settings, Logs, Super Orders, Option Chain, Trade History
-- Backtesting page removed (was a "Coming Soon" placeholder)
-- Sidebar organized into sections: OVERVIEW, TRADING, PORTFOLIO, MARKET DATA, AUTOMATION, REPORTS, SYSTEM
-- Uses Orval-generated React Query hooks for all API calls
+- Pages: Dashboard, Orders, Positions, Strategies (Coming Soon), Settings, Logs, Super Orders, Option Chain, Trade History (Ledger)
+- All pages lazy-loaded via React.lazy() with Suspense
+- Sidebar organized into sections: TRADING, AUTOMATION, SYSTEM
+- Uses TanStack React Query for all API calls; all pages lazy-loaded
 - Socket.io client (lib/market-socket.ts) for real-time market ticks and order updates
-- Recharts for equity curve, backtesting charts, and P&L visualizations
+- Recharts for charts (named imports, chunked via vite manualChunks)
+- Removed: Backtesting page, MCX tab in Option Chain, equity curve/diary in Trade History, market index cards on Dashboard, failed/success log tabs
+- Removed 5 unused radix UI packages: aspect-ratio, context-menu, hover-card, menubar, navigation-menu
 
 ### Backend (artifacts/api-server)
 - Express 5 API server proxying requests to Dhan broker API
 - Dhan API client (`src/lib/dhan-client.ts`) handles all broker communication
 - **Instruments API**: `/api/instruments/search?q=NIFTY&limit=20` — full-text search across 223k instruments
-- Rate limiting (sliding-window per category): Order 10/sec, Quote 1/sec, Data 5/sec, Non-Trading 20/sec
-- All Dhan error codes mapped (DH-901–DH-911) with retryable flags
+- Rate limiting (sliding-window per category): Order 25/sec, Data 10/sec, Non-Trading 20/sec — daily counters persisted to DB
+- All Dhan error codes mapped with retryable flags; 15s timeout on all Dhan calls; 3-attempt exponential backoff on 5xx
+- Kill-switch cache: 2s TTL; Positions cache: 3s TTL
+- Order guards: kill switch + daily loss limit + max qty/symbol + max open orders + pre-trade margin check
+- Super-order monitor: DB row inserted before Dhan call (atomic); PART_TRADED handled; WS LTP with REST fallback; pauses on token expiry
+- Auto square-off: separate NSE (15:14) and MCX (23:25) times; midnight kill-switch auto-reset
+- Removed: /market/indices route, /logs/counts, DELETE /logs/success, strategiesTable reference in dashboard
 - Telegram alerts via `src/lib/telegram.ts` (uses fetch, no external dependency)
 
 ### Database Schema

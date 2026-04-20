@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Plus, X, TrendingUp, TrendingDown, WifiOff, AlertTriangle, Loader2 } from "lucide-react";
+import { RefreshCw, X, TrendingUp, TrendingDown, WifiOff, AlertTriangle, Loader2 } from "lucide-react";
 import { SymbolSearch, type InstrumentResult } from "@/components/symbol-search";
 
 const BASE = import.meta.env.BASE_URL;
@@ -92,7 +92,6 @@ function segToExch(exchSeg: string): string {
 export default function SuperOrders() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [showForm, setShowForm] = useState(false);
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentResult | null>(null);
   const [form, setForm] = useState<FormState>(BLANK_FORM);
   const [ltpLoading, setLtpLoading] = useState(false);
@@ -229,7 +228,6 @@ export default function SuperOrders() {
     },
     onSuccess: () => {
       toast({ title: "Super Order Placed", description: `${selectedInstrument?.symbolName ?? ""} order placed successfully` });
-      setShowForm(false);
       setSelectedInstrument(null);
       setForm(BLANK_FORM);
       void queryClient.invalidateQueries({ queryKey: ["super-orders"] });
@@ -295,9 +293,6 @@ export default function SuperOrders() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refetch()} disabled={isFetching}>
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} /> Refresh
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(v => !v)}>
-            <Plus className="w-3.5 h-3.5" /> New Super Order
-          </Button>
         </div>
       </div>
 
@@ -310,7 +305,7 @@ export default function SuperOrders() {
         </Card>
       )}
 
-      {showForm && !notConnected && (
+      {!notConnected && (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -472,7 +467,7 @@ export default function SuperOrders() {
                   ? "Loading price..."
                   : `Place ${form.transaction_type}`}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setSelectedInstrument(null); setForm(BLANK_FORM); }}>Cancel</Button>
+              <Button variant="outline" size="sm" onClick={() => { setSelectedInstrument(null); setForm(BLANK_FORM); }}>Cancel</Button>
               {availableBalance > 0 && (
                 <span className="text-xs text-muted-foreground ml-2">
                   Available: ₹{availableBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}

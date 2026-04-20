@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { dhanClient } from "../lib/dhan-client";
-import { db, settingsTable, strategiesTable } from "@workspace/db";
+import { db, settingsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { getCachedEquityCurve } from "../lib/equity-scheduler";
 import { cachedGetLedger, cachedGetAllLedger } from "../lib/ledger-cache";
@@ -22,13 +22,12 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     const allTimeStartStr = allTimeStart.toISOString().split("T")[0];
     const todayStr = now.toISOString().split("T")[0];
 
-    const [fundsResult, ledgerResult, settingsResult, killSwitchResult, strategiesResult, positionsResult] =
+    const [fundsResult, ledgerResult, settingsResult, killSwitchResult, positionsResult] =
       await Promise.allSettled([
         dhanClient.getFundLimits(),
         cachedGetAllLedger(allTimeStartStr, todayStr),
         db.select().from(settingsTable),
         dhanClient.getKillSwitchStatus(),
-        db.select({ count: sql<number>`count(*)::int` }).from(strategiesTable).where(eq(strategiesTable.active, true)),
         dhanClient.getPositions(),
       ]);
 
@@ -79,9 +78,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
     const killSwitchEnabled = dhanKsActive;
 
-    const activeStrategies = strategiesResult.status === "fulfilled"
-      ? (strategiesResult.value[0]?.count ?? 0)
-      : 0;
+    const activeStrategies = 0;
 
     // Compute win rate from today's closed positions (netQty === 0, realizedProfit defined)
     let winRate = 0;

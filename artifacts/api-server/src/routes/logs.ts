@@ -81,43 +81,4 @@ router.get("/logs", async (req, res): Promise<void> => {
   }
 });
 
-// GET /logs/counts — badge counts for tab headers
-// Failed count: last 7 days only (matches what the UI displays)
-router.get("/logs/counts", async (_req, res): Promise<void> => {
-  try {
-    const [failedRow, successRow] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(appLogsTable)
-        .where(and(
-          or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!,
-          gte(appLogsTable.createdAt, sevenDaysAgo()),
-        )),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(appLogsTable)
-        .where(eq(appLogsTable.status, "success")),
-    ]);
-    res.json({
-      failed: failedRow[0]?.count ?? 0,
-      success: successRow[0]?.count ?? 0,
-    });
-  } catch (e) {
-    res.status(500).json({ error: "Failed" });
-  }
-});
-
-// DELETE /logs/success — permanently deletes all success logs from the database
-router.delete("/logs/success", async (_req, res): Promise<void> => {
-  try {
-    const result = await db
-      .delete(appLogsTable)
-      .where(eq(appLogsTable.status, "success"))
-      .returning({ id: appLogsTable.id });
-    res.json({ success: true, deleted: result.length });
-  } catch (e) {
-    res.status(500).json({ error: "Failed to delete success logs" });
-  }
-});
-
 export default router;

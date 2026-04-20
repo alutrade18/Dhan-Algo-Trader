@@ -60,15 +60,13 @@ const REFETCH_MS         = 5_000;
 const REFRESH_COOLDOWN   = 2_000;
 
 const isClosed      = (p: DhanPosition) => (p.netQty ?? 0) === 0 || p.positionType === "CLOSED";
-const isIntraday    = (p: DhanPosition) => !isClosed(p) && ["INTRADAY", "MARGIN", "MTF"].includes(p.productType ?? "");
-const isCarryForward= (p: DhanPosition) => !isClosed(p) && (p.productType === "CNC" || (p.carryForwardBuyQty ?? 0) + (p.carryForwardSellQty ?? 0) > 0);
 
 function expiryLabel(d?: string) {
   if (!d || d.startsWith("0001")) return null;
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
-type TabKey = "open" | "intraday" | "carryforward" | "closed";
+type TabKey = "open" | "closed";
 
 export default function Positions() {
   const { toast } = useToast();
@@ -182,13 +180,10 @@ export default function Positions() {
   };
 
   // Partition
-  const openAll  = positions.filter(p => !isClosed(p));
-  const intraday = positions.filter(isIntraday);
-  const carryFwd = positions.filter(isCarryForward);
-  const closed   = positions.filter(isClosed);
+  const openAll = positions.filter(p => !isClosed(p));
+  const closed  = positions.filter(isClosed);
 
-  const tabRows: Record<TabKey, DhanPosition[]> = { open: openAll, intraday, carryforward: carryFwd, closed };
-  const rows = tabRows[tab];
+  const rows = tab === "closed" ? closed : openAll;
 
   // Totals
   const totalUnrealized = openAll.reduce((s, p) => s + (getUnrealized(p) ?? 0), 0);
@@ -260,7 +255,7 @@ export default function Positions() {
           <p className="text-[11px] text-muted-foreground mb-1">Open Positions</p>
           <p className="text-sm sm:text-base font-mono font-bold tabular-nums">{openAll.length}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {intraday.length} intraday · {carryFwd.length} carryforward
+            {closed.length} closed today
           </p>
         </div>
       </div>
@@ -278,10 +273,8 @@ export default function Positions() {
         <div className="overflow-x-auto -mx-0.5 px-0.5 scrollbar-thin">
           <Tabs value={tab} onValueChange={v => setTab(v as TabKey)}>
             <TabsList className="h-8 w-max">
-              <TabsTrigger value="open"        className="text-xs px-2.5 sm:px-3 gap-1">All Open        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{openAll.length}</Badge></TabsTrigger>
-              <TabsTrigger value="intraday"    className="text-xs px-2.5 sm:px-3 gap-1">Intraday        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{intraday.length}</Badge></TabsTrigger>
-              <TabsTrigger value="carryforward"className="text-xs px-2.5 sm:px-3 gap-1">Carryforward    <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{carryFwd.length}</Badge></TabsTrigger>
-              <TabsTrigger value="closed"      className="text-xs px-2.5 sm:px-3 gap-1">Closed          <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{closed.length}</Badge></TabsTrigger>
+              <TabsTrigger value="open"   className="text-xs px-2.5 sm:px-3 gap-1">Open   <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{openAll.length}</Badge></TabsTrigger>
+              <TabsTrigger value="closed" className="text-xs px-2.5 sm:px-3 gap-1">Closed <Badge variant="secondary" className="text-[9px] h-4 px-1.5 rounded-sm">{closed.length}</Badge></TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -497,36 +490,6 @@ export default function Positions() {
         </Table>
       </div>
 
-      {/* ── Carryforward detail ── */}
-      {(tab === "open" || tab === "carryforward") && carryFwd.length > 0 && (
-        <div className="rounded-lg border bg-card/50 p-4">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-            Carryforward Detail
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border">
-                  {["Symbol", "CF Buy Qty", "CF Buy Value", "CF Sell Qty", "CF Sell Value"].map((h, i) => (
-                    <th key={h} className={cn("py-1.5 font-medium", i === 0 ? "text-left pr-6" : "text-right pr-4 last:pr-0")}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {carryFwd.map((p, i) => (
-                  <tr key={i} className="border-b border-border/30 last:border-0">
-                    <td className="py-1.5 pr-6 font-mono font-semibold">{p.tradingSymbol}</td>
-                    <td className="text-right pr-4 font-mono">{p.carryForwardBuyQty ?? 0}</td>
-                    <td className="text-right pr-4 font-mono">{fmt(p.carryForwardBuyValue)}</td>
-                    <td className="text-right pr-4 font-mono">{p.carryForwardSellQty ?? 0}</td>
-                    <td className="text-right font-mono">{fmt(p.carryForwardSellValue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

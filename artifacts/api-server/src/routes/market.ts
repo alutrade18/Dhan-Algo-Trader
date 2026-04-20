@@ -364,13 +364,4 @@ router.get("/market/securities", async (req, res): Promise<void> => {
   }
 });
 
-// Returns the 2 NSE index instruments (NIFTY 50 + BANK NIFTY) with their live feed security IDs.
-router.get("/market/indices", async (_req, res): Promise<void> => {
-  const indices = [
-    { name: "NIFTY 50",   symbol: "NIFTY",     securityId: 13, exchange: "IDX_I", lotSize: 75 },
-    { name: "BANK NIFTY", symbol: "BANKNIFTY",  securityId: 25, exchange: "IDX_I", lotSize: 30 },
-  ];
-  res.json(indices);
-});
-
 export default router;

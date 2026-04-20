@@ -37,20 +37,7 @@ interface IndexUnderlying {
 }
 
 type Mode = "index" | "stock";
-type Exchange = "NSE" | "MCX";
-
-// MCX commodity underlyings — stable list from DB
-const MCX_UNDERLYINGS = [
-  { label: "Gold",         symbol: "GOLD",       underlyingSecId: 114 },
-  { label: "Silver",       symbol: "SILVER",     underlyingSecId: 115 },
-  { label: "Crude Oil",    symbol: "CRUDEOIL",   underlyingSecId: 294 },
-  { label: "Natural Gas",  symbol: "NATURALGAS", underlyingSecId: 401 },
-  { label: "Gold Mini",    symbol: "GOLDM",      underlyingSecId: 117 },
-  { label: "Silver Mini",  symbol: "SILVERM",    underlyingSecId: 122 },
-  { label: "Crude Mini",   symbol: "CRUDEOILM",  underlyingSecId: 556 },
-  { label: "Nat Gas Mini", symbol: "NATGASMINI", underlyingSecId: 596 },
-] as const;
-type McxUnderlying = typeof MCX_UNDERLYINGS[number];
+type Exchange = "NSE";
 
 interface StockUnderlying {
   underlyingSymbol: string | null;
@@ -120,18 +107,17 @@ function computeMarketStatus(exchange: Exchange): {
       color: "text-muted-foreground",
     };
   }
-  // Check exchange-specific holiday calendar
-  if (isHolidayToday(exchange === "MCX" ? "MCX" : "NSE")) {
+  if (isHolidayToday("NSE")) {
     return {
       isOpen: false,
       label: "Market closed · Public holiday",
       color: "text-muted-foreground",
     };
   }
-  const open = exchange === "MCX" ? 9 * 60 : 9 * 60 + 15;      // MCX 09:00, NSE 09:15
-  const close = exchange === "MCX" ? 23 * 60 + 30 : 15 * 60 + 30; // MCX 23:30, NSE 15:30
-  const closeLabel = exchange === "MCX" ? "11:30 PM" : "3:30 PM";
-  const openLabel  = exchange === "MCX" ? "9:00 AM"  : "9:15 AM";
+  const open = 9 * 60 + 15;
+  const close = 15 * 60 + 30;
+  const closeLabel = "3:30 PM";
+  const openLabel  = "9:15 AM";
 
   if (mins < open) {
     return {
@@ -326,16 +312,10 @@ interface FlashEntry { call: Dir; put: Dir }
 
 // ── Main Component ──────────────────────────────────────────────────
 export default function OptionChain() {
-  // ── Market selector: null = not yet chosen, then NSE or MCX
-  const [market, setMarket] = useState<Exchange | null>(null);
-
-  // NSE-specific state
+  const market: Exchange = "NSE";
   const [mode, setMode] = useState<Mode>("index");
   const [indexUnderlying, setIndexUnderlying] = useState<IndexUnderlying | null>(null);
   const [stockUnderlying, setStockUnderlying] = useState<StockUnderlying | null>(null);
-
-  // MCX-specific state
-  const [mcxUnderlying, setMcxUnderlying] = useState<McxUnderlying>(MCX_UNDERLYINGS[0]);
 
   const [expiry, setExpiry] = useState("");
   // Live spot price from WS (overrides REST ltp when available)
@@ -360,45 +340,26 @@ export default function OptionChain() {
     setIndexUnderlying(nifty ?? indexList[0]);
   }, [indexList, indexUnderlying]);
 
-  // Active IDs / segment — null market means nothing selected yet
+  // Active IDs / segment
   const activeIndex = indexUnderlying;
-  const activeDbSecId = market === "MCX"
-    ? mcxUnderlying.underlyingSecId
-    : market === "NSE"
-      ? mode === "index"
-        ? (activeIndex?.dbSecId ?? null)
-        : (stockUnderlying?.underlyingSecurityId ?? null)
-      : null;
-  const activeDhanSecId = market === "MCX"
-    ? mcxUnderlying.underlyingSecId
-    : market === "NSE"
-      ? mode === "index"
-        ? (activeIndex?.dhanSecId ?? null)
-        : (stockUnderlying?.underlyingSecurityId ?? null)
-      : null;
-  const activeSegment = market === "MCX"
-    ? "MCX_COMM"
-    : market === "NSE"
-      ? mode === "index"
-        ? (activeIndex?.segment ?? "IDX_I")
-        : stockUnderlying?.exchId === "BSE"
-          ? "BSE_EQ"
-          : "NSE_EQ"
-      : "";
-  const activeLabel = market === "MCX"
-    ? mcxUnderlying.label
-    : market === "NSE"
-      ? mode === "index"
-        ? (activeIndex?.label ?? "")
-        : (stockUnderlying?.underlyingSymbol ?? "")
-      : "";
-  const activeExchange: Exchange = market ?? "NSE";
+  const activeDbSecId = mode === "index"
+    ? (activeIndex?.dbSecId ?? null)
+    : (stockUnderlying?.underlyingSecurityId ?? null);
+  const activeDhanSecId = mode === "index"
+    ? (activeIndex?.dhanSecId ?? null)
+    : (stockUnderlying?.underlyingSecurityId ?? null);
+  const activeSegment = mode === "index"
+    ? (activeIndex?.segment ?? "IDX_I")
+    : stockUnderlying?.exchId === "BSE"
+      ? "BSE_EQ"
+      : "NSE_EQ";
+  const activeLabel = mode === "index"
+    ? (activeIndex?.label ?? "")
+    : (stockUnderlying?.underlyingSymbol ?? "");
+  const activeExchange: Exchange = "NSE";
 
   // Option contract segment
-  const optionSegment = market === "MCX"
-    ? "MCX_COMM"
-    : activeSegment?.startsWith("BSE") ? "BSE_FNO"
-    : "NSE_FNO";
+  const optionSegment = activeSegment?.startsWith("BSE") ? "BSE_FNO" : "NSE_FNO";
 
   // Market hours gate
   const marketStatus = useMarketStatus(activeExchange);
@@ -758,7 +719,7 @@ export default function OptionChain() {
           <div className="flex items-center gap-2 min-w-0 px-3 py-1.5 rounded-lg border border-warning/25 bg-warning/8">
             <Clock className="w-3.5 h-3.5 text-warning shrink-0" />
             <p className="text-xs font-medium text-warning leading-snug">
-              Market closed · Showing last closing values · Live resumes at {market === "MCX" ? "9:00 AM" : "9:15 AM"} IST
+              Market closed · Showing last closing values · Live resumes at 9:15 AM IST
             </p>
           </div>
         ) : (
@@ -768,18 +729,8 @@ export default function OptionChain() {
         {/* Right: controls */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
 
-          {/* ── NSE controls (only when NSE selected) ── */}
-          {market === "NSE" && (
-            <>
-              {/* Market chip — click to switch market */}
-              <button
-                onClick={() => { setMarket(null); setExpiry(""); setLiveSpot(0); }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/15 text-primary text-xs font-semibold border border-primary/30 hover:bg-primary/25 transition-colors"
-                title="Switch market"
-              >
-                NSE <X className="w-3 h-3" />
-              </button>
-
+          {/* ── NSE controls ── */}
+          <>
               {/* Index / Stock toggle */}
               <div className="flex rounded-md overflow-hidden border border-border text-xs">
                 <button
@@ -832,56 +783,13 @@ export default function OptionChain() {
                   </SelectContent>
                 </Select>
               )}
-            </>
-          )}
-
-          {/* ── MCX controls (only when MCX selected) ── */}
-          {market === "MCX" && (
-            <>
-              {/* Market chip — click to switch market */}
-              <button
-                onClick={() => { setMarket(null); setExpiry(""); setLiveSpot(0); }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-400 text-xs font-semibold border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
-                title="Switch market"
-              >
-                MCX <X className="w-3 h-3" />
-              </button>
-
-              {/* Commodity dropdown */}
-              <Select
-                value={mcxUnderlying.symbol}
-                onValueChange={(v) => {
-                  const u = MCX_UNDERLYINGS.find((u) => u.symbol === v);
-                  if (u) { setMcxUnderlying(u); setExpiry(""); }
-                }}
-              >
-                <SelectTrigger className="w-36 text-xs h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MCX_UNDERLYINGS.map((u) => (
-                    <SelectItem key={u.symbol} value={u.symbol}>{u.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Expiry */}
-              <Select value={expiry} onValueChange={setExpiry} disabled={expiryLoading || expiryList.length === 0}>
-                <SelectTrigger className="w-32 text-xs font-mono h-9">
-                  <SelectValue placeholder={expiryLoading ? "Loading…" : "Expiry"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {expiryList.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </>
-          )}
+          </>
 
         </div>
       </div>
 
       {/* ── Stats bar ── */}
-      {hasData && market !== null && (
+      {hasData && (
         <div className="flex items-center gap-6 flex-wrap text-xs">
           {displaySpot > 0 && (
             <div className="flex items-center gap-1.5">
@@ -947,28 +855,7 @@ export default function OptionChain() {
       )}
 
       {/* ── States ── */}
-      {market === null ? (
-        <Card className="border-dashed">
-          <CardContent className="py-16 text-center space-y-3">
-            <p className="text-sm font-medium text-foreground">Select a market to begin</p>
-            <p className="text-xs text-muted-foreground">Choose NSE for equity F&amp;O or MCX for commodity options</p>
-            <div className="flex justify-center gap-3 pt-2">
-              <button
-                onClick={() => { setMarket("NSE"); setExpiry(""); setLiveSpot(0); }}
-                className="px-6 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-muted/50 transition-colors"
-              >
-                NSE
-              </button>
-              <button
-                onClick={() => { setMarket("MCX"); setExpiry(""); setLiveSpot(0); }}
-                className="px-6 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-muted/50 transition-colors"
-              >
-                MCX
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : market === "NSE" && mode === "stock" && !stockUnderlying ? (
+      {mode === "stock" && !stockUnderlying ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Search for a stock symbol above to view its option chain.
@@ -1278,7 +1165,7 @@ export default function OptionChain() {
       )}
 
       {/* Legend */}
-      {hasData && market !== null && (
+      {hasData && (
         <div className="flex items-center gap-4 text-[10px] text-muted-foreground flex-wrap">
           <span className="flex items-center gap-1">
             <span className="w-3 h-1.5 rounded-full bg-gradient-to-r from-red-600 to-red-400 inline-block" />

@@ -25,7 +25,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/positions": "Positions",
   "/trade-history": "Ledger Statement",
   "/strategies": "Strategies",
-  "/backtesting": "Backtesting",
   "/settings": "Settings",
   "/risk-manager": "Risk Manager",
   "/logs": "Logs",
