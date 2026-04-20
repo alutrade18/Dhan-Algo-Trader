@@ -66,12 +66,18 @@ function DateField({ value, onChange, min, max }: { value: string; onChange: (ym
         onBlur={e => commit(e.target.value)}
         onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
       />
-      <button type="button" className="absolute right-2 text-muted-foreground hover:text-foreground transition-colors" onClick={() => pickerRef.current?.showPicker()} tabIndex={-1}>
+      <button type="button" className="absolute right-2 text-muted-foreground hover:text-foreground transition-colors z-10 hidden sm:flex" onClick={() => pickerRef.current?.showPicker()} tabIndex={-1}>
         <CalendarIcon className="w-3.5 h-3.5" />
       </button>
+      {/* Desktop: hidden picker triggered by calendar icon button */}
       <input ref={pickerRef} type="date" value={value} min={min} max={max}
         onChange={e => { onChange(e.target.value); setText(ymdToDisplay(e.target.value)); }}
         className="sr-only absolute inset-0 w-0 h-0 opacity-0 pointer-events-none" tabIndex={-1}
+      />
+      {/* Mobile: full-area transparent native date input — iOS/Android open picker on tap */}
+      <input type="date" value={value} min={min} max={max}
+        onChange={e => { onChange(e.target.value); setText(ymdToDisplay(e.target.value)); }}
+        className="sm:hidden absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
     </div>
   );
