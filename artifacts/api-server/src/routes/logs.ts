@@ -1,10 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, appLogsTable } from "@workspace/db";
-import { desc, and, gte, lte, eq, ilike, or, sql } from "drizzle-orm";
+import { desc, and, gte, lte, eq, or, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// Failed logs always show last 7 days only
 function sevenDaysAgo(): Date {
   const d = new Date();
   d.setDate(d.getDate() - 7);
@@ -33,7 +32,6 @@ router.get("/logs", async (req, res): Promise<void> => {
 
     if (tab === "failed") {
       conditions.push(or(eq(appLogsTable.status, "failed"), eq(appLogsTable.level, "error"))!);
-      // Failed logs: enforce 7-day rolling window — no UI override possible
       conditions.push(gte(appLogsTable.createdAt, sevenDaysAgo()));
     } else if (tab === "success") {
       conditions.push(eq(appLogsTable.status, "success"));
@@ -42,7 +40,7 @@ router.get("/logs", async (req, res): Promise<void> => {
     if (category && category !== "all") {
       conditions.push(eq(appLogsTable.category, category));
     }
-    // Date filters only apply to success (failed uses enforced 7-day window above)
+
     if (tab !== "failed") {
       if (fromTimestamp) {
         conditions.push(gte(appLogsTable.createdAt, new Date(fromTimestamp)));
@@ -53,11 +51,12 @@ router.get("/logs", async (req, res): Promise<void> => {
         conditions.push(lte(appLogsTable.createdAt, new Date(toDate + "T23:59:59Z")));
       }
     }
+
     if (search) {
       conditions.push(
         or(
-          ilike(appLogsTable.action, `%${search}%`),
-          ilike(appLogsTable.details ?? sql`''`, `%${search}%`),
+          sql`${appLogsTable.action} ILIKE ${"%" + search + "%"}`,
+          sql`COALESCE(${appLogsTable.details}, '') ILIKE ${"%" + search + "%"}`,
         )!
       );
     }

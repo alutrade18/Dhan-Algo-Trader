@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertTriangle } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -51,24 +52,31 @@ function LogTable({ headers, isLoading, isEmpty, emptyText, colSpan, children, t
 export default function Logs() {
   const TABLE_H = "calc(100vh - 220px)";
 
-  const { data: auditLogs = [], isLoading: auditLoading } = useQuery<AuditEntry[]>({
+  const { data: auditLogs = [], isLoading: auditLoading, isError: auditError } = useQuery<AuditEntry[]>({
     queryKey: ["audit-log"],
     queryFn: async () => {
       const r = await fetch(`${BASE}api/settings/audit-log`);
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
     refetchInterval: 30_000,
+    retry: 2,
   });
 
   return (
     <div className="w-full space-y-3">
+      {auditError && (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          Failed to load audit logs. The server may be unavailable — retrying automatically.
+        </div>
+      )}
       <Card>
         <CardContent className="px-3 pb-3 pt-3">
           <LogTable
             headers={["Time (IST)", "Action", "Field", "Old Value", "New Value", "Description"]}
             isLoading={auditLoading}
-            isEmpty={auditLogs.length === 0}
+            isEmpty={!auditError && auditLogs.length === 0}
             emptyText="No settings changes recorded yet."
             colSpan={6}
             tableH={TABLE_H}

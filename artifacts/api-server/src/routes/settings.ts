@@ -288,7 +288,7 @@ router.post("/telegram/test", async (req, res): Promise<void> => {
 
 router.get("/settings/audit-log", async (req, res): Promise<void> => {
   try {
-    const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(50);
+    const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(200);
     res.json(logs);
   } catch (e) {
     req.log.error({ err: e }, "Failed to fetch audit log");
