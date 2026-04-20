@@ -23,6 +23,22 @@ router.get("/orders", async (req, res): Promise<void> => {
   }
 });
 
+// GET /orders/history?date=YYYY-MM-DD  — fetch trade history for a past date
+// Must be declared BEFORE /orders/:orderId so "history" is not treated as an orderId
+router.get("/orders/history", async (req, res): Promise<void> => {
+  const date = String(req.query.date ?? "").trim();
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ errorCode: "DH-905", errorMessage: "Invalid date. Use YYYY-MM-DD format." });
+    return;
+  }
+  try {
+    const trades = await dhanClient.getAllTradeHistory(date, date);
+    res.json(Array.isArray(trades) ? trades : []);
+  } catch (e) {
+    handleRouteError(res, e, "GET /orders/history");
+  }
+});
+
 router.get("/orders/:orderId", async (req, res): Promise<void> => {
   const params = GetOrderByIdParams.safeParse(req.params);
   if (!params.success) {

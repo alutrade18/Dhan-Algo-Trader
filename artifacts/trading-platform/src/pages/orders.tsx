@@ -33,6 +33,9 @@ import {
   Download,
   AlertCircle,
   Settings,
+  History,
+  Search,
+  CalendarDays,
 } from "lucide-react";
 const BASE = import.meta.env.BASE_URL;
 
@@ -96,6 +99,25 @@ interface ModifyFormState {
   price: string;
   triggerPrice: string;
   validity: Validity;
+}
+
+interface TradeHistoryEntry {
+  orderId?: string;
+  exchangeOrderId?: string;
+  exchangeTradeId?: string;
+  transactionType: TransactionType;
+  exchangeSegment: string;
+  productType: ProductType;
+  orderType?: OrderType;
+  tradingSymbol: string;
+  customSymbol?: string;
+  securityId?: string;
+  tradedQuantity: number;
+  tradedPrice: number;
+  tradeValue?: number;
+  createTime: string;
+  updateTime?: string;
+  exchangeTime?: string;
 }
 
 function formatTime(dt: string): string {
@@ -610,6 +632,67 @@ export default function OrdersPage() {
     }
   }
 
+  // ── Previous orders (trade history) ─────────────────────────────────────
+  function yesterdayISO(): string {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split("T")[0];
+  }
+
+  const [historyDate, setHistoryDate] = useState<string>(yesterdayISO());
+  const [historyOrders, setHistoryOrders] = useState<TradeHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyFetched, setHistoryFetched] = useState(false);
+
+  async function fetchHistory() {
+    if (!historyDate) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    setHistoryFetched(false);
+    try {
+      const res = await fetch(`${BASE}api/orders/history?date=${historyDate}`, { cache: "no-store" });
+      const data = await res.json() as TradeHistoryEntry[] | { errorMessage?: string };
+      if (!res.ok) {
+        setHistoryError((data as { errorMessage?: string }).errorMessage ?? "Failed to fetch trade history.");
+        setHistoryOrders([]);
+        return;
+      }
+      setHistoryOrders(Array.isArray(data) ? data : []);
+      setHistoryFetched(true);
+    } catch {
+      setHistoryError("Network error — could not reach server.");
+      setHistoryOrders([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function exportHistory() {
+    if (historyOrders.length === 0) {
+      toast({ title: "No data to export", variant: "destructive" });
+      return;
+    }
+    const rows = historyOrders.map((t) => ({
+      "Order ID": t.orderId ?? "",
+      "Trade ID": t.exchangeTradeId ?? "",
+      Symbol: t.tradingSymbol,
+      "Transaction Type": t.transactionType,
+      Product: t.productType,
+      "Traded Qty": t.tradedQuantity,
+      "Traded Price": t.tradedPrice,
+      "Trade Value": t.tradeValue ?? t.tradedQuantity * t.tradedPrice,
+      Segment: t.exchangeSegment,
+      "Create Time": t.createTime,
+    }));
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "TradeHistory");
+    XLSX.writeFile(wb, `dhan-trade-history-${historyDate}.xlsx`);
+    toast({ title: `Exported ${rows.length} rows`, description: `dhan-trade-history-${historyDate}.xlsx` });
+  }
+
   async function exportTodayOrders() {
     if (orders.length === 0) {
       toast({
@@ -905,6 +988,186 @@ export default function OrdersPage() {
               )}
             </div>
           </div>
+
+        {/* ── Previous Orders (Trade History) ─────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Card header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                <History className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <p className="text-sm font-semibold">Previous Orders</p>
+              <span className="text-[10px] text-muted-foreground bg-muted/40 border border-border/50 rounded-full px-2 py-0.5 hidden sm:inline">Trade History</span>
+            </div>
+            {historyFetched && historyOrders.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 h-7 text-xs"
+                onClick={() => void exportHistory()}
+              >
+                <Download className="h-3 w-3" />
+                Export
+              </Button>
+            )}
+          </div>
+
+          {/* Date picker + Fetch button */}
+          <div className="px-4 py-3 border-b border-border/50 bg-muted/5">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 rounded-xl border border-border bg-background/60 px-3 h-10 focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-colors">
+                <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  type="date"
+                  value={historyDate}
+                  max={todayISO()}
+                  onChange={e => setHistoryDate(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") void fetchHistory(); }}
+                  className="flex-1 bg-transparent text-sm font-mono text-foreground outline-none min-w-0 [color-scheme:dark]"
+                  style={{ colorScheme: "dark" }}
+                />
+              </div>
+              <Button
+                size="sm"
+                className="h-10 px-5 gap-2 font-medium shrink-0"
+                onClick={() => void fetchHistory()}
+                disabled={historyLoading || !historyDate}
+              >
+                {historyLoading ? (
+                  <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Fetching…</>
+                ) : (
+                  <><Search className="h-3.5 w-3.5" />Fetch Orders</>
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Select a date to view executed trades from Dhan trade history.
+            </p>
+          </div>
+
+          {/* Results area */}
+          {historyError && (
+            <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
+              <AlertCircle className="h-7 w-7 text-destructive/60" />
+              <p className="text-sm text-destructive font-medium">Failed to load</p>
+              <p className="text-xs text-muted-foreground max-w-xs">{historyError}</p>
+            </div>
+          )}
+
+          {!historyError && !historyFetched && !historyLoading && (
+            <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+              <History className="h-7 w-7 opacity-30" />
+              <p className="text-sm">Select a date above and tap Fetch Orders</p>
+            </div>
+          )}
+
+          {historyLoading && (
+            <div className="overflow-x-auto">
+              <table className="w-full table-auto text-sm">
+                <tbody>
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i} className="border-b border-border/50 last:border-0">
+                      {Array.from({ length: 6 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!historyLoading && historyFetched && (
+            historyOrders.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+                <ClipboardList className="h-7 w-7 opacity-30" />
+                <p className="text-sm">No trades found for {historyDate}</p>
+                <p className="text-xs opacity-60">Only executed (filled) trades appear in history</p>
+              </div>
+            ) : (
+              <>
+                {/* Mobile card view */}
+                <div className="flex flex-col gap-0 sm:hidden">
+                  {historyOrders.map((t, idx) => {
+                    const seg = formatSegment(t.exchangeSegment);
+                    const value = t.tradeValue ?? t.tradedQuantity * t.tradedPrice;
+                    return (
+                      <div key={t.exchangeTradeId ?? idx} className="border-b border-border/40 last:border-0 px-4 py-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>
+                          <SideBadge side={t.transactionType} />
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
+                          <ProductBadge product={t.productType} />
+                        </div>
+                        <div className="grid grid-cols-3 gap-1 text-[11px]">
+                          <div><span className="text-muted-foreground">Qty</span><p className="font-mono font-medium">{t.tradedQuantity}</p></div>
+                          <div><span className="text-muted-foreground">Price</span><p className="font-mono font-medium">{formatCurrency(t.tradedPrice)}</p></div>
+                          <div><span className="text-muted-foreground">Value</span><p className="font-mono font-medium">{formatCurrency(value)}</p></div>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground font-mono">{formatTime(t.createTime)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop table view */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full table-auto text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        {["Time", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Value"].map((h, i) => (
+                          <th key={h} className={`px-4 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap ${i >= 5 ? "text-right" : "text-left"}`}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyOrders.map((t, idx) => {
+                        const seg = formatSegment(t.exchangeSegment);
+                        const value = t.tradeValue ?? t.tradedQuantity * t.tradedPrice;
+                        return (
+                          <tr key={t.exchangeTradeId ?? idx} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                              {formatTime(t.createTime)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>
+                              {t.customSymbol && (
+                                <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{t.customSymbol}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
+                            </td>
+                            <td className="px-4 py-3"><SideBadge side={t.transactionType} /></td>
+                            <td className="px-4 py-3"><ProductBadge product={t.productType} /></td>
+                            <td className="px-4 py-3 text-right text-xs font-mono">{t.tradedQuantity}</td>
+                            <td className="px-4 py-3 text-right text-xs font-mono">{formatCurrency(t.tradedPrice)}</td>
+                            <td className="px-4 py-3 text-right text-xs font-mono font-medium">{formatCurrency(value)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border bg-muted/10">
+                        <td colSpan={7} className="px-4 py-2 text-xs text-muted-foreground text-right font-medium">
+                          Total Trade Value
+                        </td>
+                        <td className="px-4 py-2 text-right text-xs font-mono font-bold">
+                          {formatCurrency(historyOrders.reduce((sum, t) => sum + (t.tradeValue ?? t.tradedQuantity * t.tradedPrice), 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )
+          )}
+        </div>
 
         <ModifyOrderModal
           order={modifyOrder}
