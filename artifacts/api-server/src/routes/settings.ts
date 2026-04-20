@@ -107,7 +107,6 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
     maxOpenOrders: s.maxOpenOrders ?? null,
     telegramAlerts: s.telegramAlerts ?? {
       orderFills: true,
-      superOrders: true,
       killSwitch: true,
       autoSquareOff: true,
       criticalErrors: true,

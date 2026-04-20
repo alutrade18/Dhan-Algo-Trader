@@ -2,14 +2,13 @@ import { db, settingsTable } from "@workspace/db";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
 
-export type TelegramAlertCategory = "orderFills" | "superOrders" | "killSwitch" | "autoSquareOff" | "criticalErrors";
+export type TelegramAlertCategory = "orderFills" | "killSwitch" | "autoSquareOff" | "criticalErrors";
 
 interface TelegramConfig {
   botToken: string;
   chatId: string;
   alerts: {
     orderFills: boolean;
-    superOrders: boolean;
     killSwitch: boolean;
     autoSquareOff: boolean;
     criticalErrors: boolean;
@@ -25,7 +24,6 @@ async function getTelegramConfig(): Promise<TelegramConfig | null> {
       chatId: settings.telegramChatId,
       alerts: settings.telegramAlerts ?? {
         orderFills: true,
-        superOrders: true,
         killSwitch: true,
         autoSquareOff: true,
         criticalErrors: true,

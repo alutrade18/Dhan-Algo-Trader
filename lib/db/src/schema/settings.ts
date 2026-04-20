@@ -38,13 +38,11 @@ export const settingsTable = pgTable("settings", {
 
   telegramAlerts: jsonb("telegram_alerts").$type<{
     orderFills: boolean;
-    superOrders: boolean;
     killSwitch: boolean;
     autoSquareOff: boolean;
     criticalErrors: boolean;
   }>().default({
     orderFills: true,
-    superOrders: true,
     killSwitch: true,
     autoSquareOff: true,
     criticalErrors: true,

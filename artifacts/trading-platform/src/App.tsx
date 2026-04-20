@@ -15,7 +15,6 @@ const Strategies   = lazy(() => import("@/pages/strategies"));
 const Settings     = lazy(() => import("@/pages/settings"));
 const RiskManager  = lazy(() => import("@/pages/risk-manager"));
 const Logs         = lazy(() => import("@/pages/logs"));
-const SuperOrders  = lazy(() => import("@/pages/super-orders"));
 const OptionChain  = lazy(() => import("@/pages/option-chain"));
 const TradeHistory = lazy(() => import("@/pages/trade-history"));
 
@@ -51,7 +50,6 @@ function AppRoutes() {
           <Route path="/settings" component={Settings} />
           <Route path="/risk-manager" component={RiskManager} />
           <Route path="/logs" component={Logs} />
-          <Route path="/super-orders" component={SuperOrders} />
           <Route path="/option-chain" component={OptionChain} />
           <Route path="/trade-history" component={TradeHistory} />
           <Route component={NotFound} />

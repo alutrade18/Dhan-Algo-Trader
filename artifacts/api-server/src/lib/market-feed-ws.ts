@@ -169,7 +169,7 @@ class MarketFeedWS extends EventEmitter {
     // LTP at bytes 8-11 (float32 LE) — same position for all packet types
     if (buf.length < 12) return;
     const ltp = buf.readFloatLE(8);
-    // Cache LTP for server-side use (e.g. super-order monitor).
+    // Cache LTP for server-side use.
     if (ltp > 0) this.ltpCache.set(`${exchSeg}:${securityId}`, ltp);
 
     if (responseCode === 2) {
@@ -387,12 +387,6 @@ class MarketFeedWS extends EventEmitter {
     return this.ltpCache.get(`${exchangeSegment}:${securityId}`) ?? null;
   }
 
-  /** H5: Subscribe to a set of securities for the super-order monitor (server-side). */
-  subscribeForMonitor(securities: Record<string, number[]>): void {
-    for (const [segment, ids] of Object.entries(securities)) {
-      if (ids.length > 0) this.subscribe(segment, ids, "ticker");
-    }
-  }
 }
 
 export const marketFeedWS = new MarketFeedWS();

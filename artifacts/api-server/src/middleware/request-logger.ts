@@ -4,7 +4,6 @@ import { logEvent, type LogCategory } from "../lib/app-logger";
 const CATEGORY_MAP: Record<string, LogCategory> = {
   broker: "broker",
   orders: "order",
-  "super-orders": "order",
   "forever-orders": "order",
   conditional: "order",
   settings: "settings",
@@ -38,8 +37,6 @@ function getAction(method: string, url: string): string {
     [/^\/orders\/cancel/, "Cancel order"],
     [/^\/orders$/, method === "POST" ? "Place order" : "Fetch orders"],
     [/^\/orders\/[^/]+$/, method === "GET" ? "Fetch order by ID" : method === "PATCH" ? "Modify order" : method === "DELETE" ? "Cancel order" : "Order"],
-    [/^\/super-orders\/[^/]+$/, method === "PUT" ? "Update super order" : method === "DELETE" ? "Delete super order" : "Super order"],
-    [/^\/super-orders$/, method === "POST" ? "Create super order" : "Fetch super orders"],
     [/^\/forever-orders\/[^/]+\/cancel/, "Cancel forever order"],
     [/^\/forever-orders\/[^/]+$/, method === "PUT" ? "Update forever order" : method === "DELETE" ? "Delete forever order" : "Forever order"],
     [/^\/forever-orders$/, method === "POST" ? "Create forever order" : "Fetch forever orders"],

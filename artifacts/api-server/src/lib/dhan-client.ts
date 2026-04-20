@@ -30,7 +30,7 @@ function getApiCategory(method: string, path: string): ApiCategory {
   }
 
   // Everything else: data reads (positions, holdings, orders-read, trades, ledger,
-  // market feed, charts, option chain, fund limits, super-order reads)
+  // market feed, charts, option chain, fund limits)
   return "data";
 }
 
@@ -452,21 +452,6 @@ export const dhanClient = {
     return dhanRequest("POST", `/killswitch?killSwitchStatus=${status}`);
   },
 
-  async getSuperOrders() {
-    return dhanRequest("GET", "/superorder");
-  },
-
-  async placeSuperOrder(body: Record<string, unknown>) {
-    return dhanRequest("POST", "/superorder", { dhanClientId: credentials.clientId, ...body });
-  },
-
-  async modifySuperOrder(orderId: string, body: Record<string, unknown>) {
-    return dhanRequest("PUT", `/superorder/${orderId}`, { dhanClientId: credentials.clientId, order_id: orderId, ...body });
-  },
-
-  async cancelSuperOrder(orderId: string, leg: "ENTRY_LEG" | "TARGET_LEG" | "STOP_LOSS_LEG") {
-    return dhanRequest("DELETE", `/superorder/${orderId}?leg_name=${leg}`);
-  },
 
   async getForeverOrders() {
     return dhanRequest("GET", "/forever/orders");

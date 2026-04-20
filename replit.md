@@ -28,7 +28,7 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 
 ### Frontend (artifacts/trading-platform)
 - React + Vite web app with dark-mode fintech terminal theme
-- Pages: Dashboard, Orders, Positions, Strategies (Coming Soon), Settings, Logs, Super Orders, Option Chain, Trade History (Ledger)
+- Pages: Dashboard, Orders, Positions, Strategies (Coming Soon), Settings, Logs, Option Chain, Trade History (Ledger)
 - All pages lazy-loaded via React.lazy() with Suspense
 - Sidebar organized into sections: TRADING, AUTOMATION, SYSTEM
 - Uses TanStack React Query for all API calls; all pages lazy-loaded
@@ -45,7 +45,6 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - All Dhan error codes mapped with retryable flags; 15s timeout on all Dhan calls; 3-attempt exponential backoff on 5xx
 - Kill-switch cache: 2s TTL; Positions cache: 3s TTL
 - Order guards: kill switch + daily loss limit + max qty/symbol + max open orders + pre-trade margin check
-- Super-order monitor: DB row inserted before Dhan call (atomic); PART_TRADED handled; WS LTP with REST fallback; pauses on token expiry
 - Auto square-off: separate NSE (15:14) and MCX (23:25) times; midnight kill-switch auto-reset
 - Removed: /market/indices route, /logs/counts, DELETE /logs/success, strategiesTable reference in dashboard
 - Telegram alerts via `src/lib/telegram.ts` (uses fetch, no external dependency)

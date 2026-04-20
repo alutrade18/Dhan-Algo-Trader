@@ -10,7 +10,6 @@ import brokerRouter from "./broker";
 import riskRouter from "./risk";
 import tradesRouter from "./trades";
 import logsRouter from "./logs";
-import superOrdersRouter from "./super-orders";
 import { createPostbackRouter } from "./postback";
 import { getIO } from "../lib/io";
 import instrumentsRouter from "./instruments";
@@ -25,7 +24,6 @@ const router: IRouter = Router();
 
 // ── ORDER APIs: 10/sec | 250/min | 1000/hr | 7000/day ────────────────────────
 router.use("/orders", orderRateLimit);
-router.use("/super-orders", orderRateLimit);
 router.use("/positions/exit-single", orderRateLimit); // exit = order placement
 
 // ── QUOTE APIs: 1/sec (LTP, OHLC, snapshots) ─────────────────────────────────
@@ -73,7 +71,6 @@ router.use(riskRouter);
 router.use(tradesRouter);
 router.use(logsRouter);
 router.use(instrumentsRouter);
-router.use(superOrdersRouter);
 router.use((req, res, next) => {
   const io = getIO();
   if (io) {

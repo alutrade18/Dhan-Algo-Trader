@@ -27,7 +27,7 @@ const telegramSchema = z.object({
 interface FundDetails { dhanClientId?: string; availableBalance?: number; sodLimit?: number; utilizedAmount?: number; withdrawableBalance?: number }
 interface ConnectResult extends FundDetails { success: boolean; errorCode?: string; errorMessage?: string }
 interface TelegramAlerts {
-  orderFills: boolean; superOrders: boolean; killSwitch: boolean;
+  orderFills: boolean; killSwitch: boolean;
   autoSquareOff: boolean; criticalErrors: boolean;
 }
 interface SettingsData {
@@ -37,7 +37,7 @@ interface SettingsData {
 }
 
 const DEFAULT_TELEGRAM_ALERTS: TelegramAlerts = {
-  orderFills: true, superOrders: true, killSwitch: true, autoSquareOff: true, criticalErrors: true,
+  orderFills: true, killSwitch: true, autoSquareOff: true, criticalErrors: true,
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -682,7 +682,6 @@ export default function Settings() {
               <div className="rounded-xl border border-border/40 bg-muted/10 divide-y divide-border/30 overflow-hidden">
                 {([
                   { key: "orderFills",     icon: Zap,          label: "Order fills & rejections" },
-                  { key: "superOrders",    icon: Target,        label: "Super order target / stop-loss hit" },
                   { key: "killSwitch",     icon: ShieldAlert,   label: "Kill switch activated / deactivated" },
                   { key: "autoSquareOff",  icon: Timer,         label: "Auto square-off executed" },
                   { key: "criticalErrors", icon: AlertTriangle, label: "Critical errors (token expired, IP blocked)" },
