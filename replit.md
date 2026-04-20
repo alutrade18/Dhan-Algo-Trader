@@ -63,10 +63,27 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - `reset()` method clears `destroyed` flag before new broker connect
 
 ### Performance Caches
-- Positions: 15-second in-memory cache in `order-guards.ts` (avoids redundant Dhan API calls during guard checks)
+- Kill switch: 2-second in-memory cache in `order-guards.ts` (reduced from 10s — H1 fix)
+- Positions: 3-second in-memory cache in `order-guards.ts` (reduced from 15s for tighter P&L guard — H2 fix)
 - Recent-activity: 30-second in-memory cache in `dashboard.ts`
 - NSE holidays: per-day in-memory cache in `equity-scheduler.ts`
 - Equity curve: skips refresh on weekends AND NSE market holidays
+
+### Algo-Trading Safety (Audit Fixes A–D)
+- **C1 — Correlation IDs**: Every Dhan order call tagged with `x-correlation-id` UUID header to prevent duplicates
+- **C3 — Atomic super-orders**: DB row (`PLACING` state) inserted before Dhan API call; transitions to `FAILED` on error
+- **C4 — Partial fill monitor**: `PART_TRADED` status handled in `super-order-monitor.ts` alongside `TRADED`
+- **C5 — Separate NSE/MCX square-off**: `autoSquareOffTimeNSE` (default 15:14) and `autoSquareOffTimeMCX` (default 23:25) stored in DB and fired independently
+- **C6 — 15s AbortSignal timeout**: All Dhan fetch calls wrapped with 15-second `AbortController` timeout
+- **C7 — DB-backed rate counter**: `DailyCounter` class loads today's order count from DB on startup (survives process restarts)
+- **H3 — maxQtyPerSymbol + maxOpenOrders**: New settings columns enforced in `runOrderGuards()` before every order
+- **H4 — Pre-trade margin check**: Available margin fetched from Dhan and compared against estimated order cost before placement
+- **H5 — WS LTP for monitors**: Super-order monitor uses live WebSocket LTP with REST fallback (no extra REST call per tick)
+- **H8 — Exponential backoff**: Dhan GET and 5xx responses retried with 1s/2s/4s backoff (max 3 attempts)
+- **H9 — Kill-switch midnight reset**: Error in nightly reset is now logged + Telegram-alerted instead of silently swallowed
+- **H10 — Token expiry monitor pause**: Both monitors check `dhanClient.isTokenExpired()` and skip iterations when expired
+- **M2 — Margin disclaimer**: Super-orders form shows explicit ⚠ SPAN+Exposure disclaimer next to estimated margin
+- **M3 — Modify confirm step**: Order modify modal has a 2-step review (confirm dialog before submitting to Dhan)
 
 ## Features
 

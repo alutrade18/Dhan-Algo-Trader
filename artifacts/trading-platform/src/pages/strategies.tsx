@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  TrendingUp, TrendingDown, Minus, Zap, Code2, Layers,
+  TrendingUp, TrendingDown, Minus, Zap,
   ChevronRight, Info, X, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -679,42 +679,9 @@ function ReadyMadeTab() {
   );
 }
 
-// ─── Coming Soon Tab ───────────────────────────────────────────────────────────
-
-function ComingSoonTab({ icon: Icon, title, desc }: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-5 text-center">
-      <div className="rounded-full bg-primary/10 p-5">
-        <Icon className="h-10 w-10 text-primary" />
-      </div>
-      <div className="space-y-1.5">
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        <p className="text-muted-foreground text-sm max-w-xs">{desc}</p>
-      </div>
-      <span className="rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-xs font-medium text-primary tracking-wide uppercase">
-        Coming Soon
-      </span>
-    </div>
-  );
-}
-
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
-type Tab = "ready" | "custom" | "python";
-
-const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "ready",  label: "Ready Made Strategy", icon: Layers },
-  { id: "custom", label: "Custom Strategy",     icon: Zap },
-  { id: "python", label: "Python Strategy",     icon: Code2 },
-];
-
 export default function Strategies() {
-  const [activeTab, setActiveTab] = useState<Tab>("ready");
-
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
 
@@ -722,47 +689,11 @@ export default function Strategies() {
       <div>
         <h1 className="text-2xl font-bold text-foreground tracking-tight">Strategies</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Choose a ready-made strategy or build your own. Configure, review legs, and deploy with one click.
+          Choose a ready-made options strategy and deploy it with one click.
         </p>
       </div>
 
-      {/* Tab toggle */}
-      <div className="flex gap-1 bg-muted p-1 rounded-xl w-fit">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-              activeTab === tab.id
-                ? "bg-card text-foreground shadow-sm border border-border"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {activeTab === "ready" && <ReadyMadeTab />}
-
-      {activeTab === "custom" && (
-        <ComingSoonTab
-          icon={Zap}
-          title="Custom Strategy Builder"
-          desc="Build your own entry/exit conditions using price levels, indicators (RSI, EMA, VWAP), and time triggers. No coding needed."
-        />
-      )}
-
-      {activeTab === "python" && (
-        <ComingSoonTab
-          icon={Code2}
-          title="Python Strategy Engine"
-          desc="Write strategies in pure Python. Connect via webhook or upload a script. Full backtesting and live paper trading support."
-        />
-      )}
+      <ReadyMadeTab />
     </div>
   );
 }
