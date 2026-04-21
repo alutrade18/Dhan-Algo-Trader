@@ -23,17 +23,43 @@ router.get("/orders", async (req, res): Promise<void> => {
   }
 });
 
-// GET /orders/history?date=YYYY-MM-DD  — fetch trade history for a past date
+// GET /orders/history?from=YYYY-MM-DD&to=YYYY-MM-DD  — fetch trade history for a date range
+// Legacy: ?date=YYYY-MM-DD still supported (treated as from=date&to=date)
 // Must be declared BEFORE /orders/:orderId so "history" is not treated as an orderId
 router.get("/orders/history", async (req, res): Promise<void> => {
-  const date = String(req.query.date ?? "").trim();
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    res.status(400).json({ errorCode: "DH-905", errorMessage: "Invalid date. Use YYYY-MM-DD format." });
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  const legacyDate = String(req.query.date ?? "").trim();
+  const fromParam = legacyDate || String(req.query.from ?? "").trim();
+  const toParam   = legacyDate || String(req.query.to   ?? "").trim();
+
+  if (!fromParam || !dateRe.test(fromParam) || !toParam || !dateRe.test(toParam)) {
+    res.status(400).json({ errorCode: "DH-905", errorMessage: "Provide from=YYYY-MM-DD&to=YYYY-MM-DD (or legacy ?date=YYYY-MM-DD)." });
     return;
   }
+
+  const from = new Date(fromParam + "T00:00:00Z");
+  const to   = new Date(toParam   + "T00:00:00Z");
+  if (from > to) {
+    res.status(400).json({ errorCode: "DH-905", errorMessage: "'from' date must be on or before 'to' date." });
+    return;
+  }
+
+  // Dhan supports up to 90 days per /trades call; chunk if range > 90 days
+  const MS_PER_DAY = 86_400_000;
+  const CHUNK_DAYS = 90;
+  const allTrades: unknown[] = [];
+
   try {
-    const trades = await dhanClient.getAllTradeHistory(date, date);
-    res.json(Array.isArray(trades) ? trades : []);
+    let chunkStart = from;
+    while (chunkStart <= to) {
+      const chunkEnd = new Date(Math.min(chunkStart.getTime() + (CHUNK_DAYS - 1) * MS_PER_DAY, to.getTime()));
+      const f = chunkStart.toISOString().split("T")[0];
+      const t = chunkEnd.toISOString().split("T")[0];
+      const trades = await dhanClient.getAllTradeHistory(f, t);
+      if (Array.isArray(trades)) allTrades.push(...trades);
+      chunkStart = new Date(chunkEnd.getTime() + MS_PER_DAY);
+    }
+    res.json(allTrades);
   } catch (e) {
     handleRouteError(res, e, "GET /orders/history");
   }
