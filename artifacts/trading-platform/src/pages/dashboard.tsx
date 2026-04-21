@@ -1,4 +1,4 @@
-import { type ElementType } from "react";
+import { lazy, Suspense, type ElementType } from "react";
 import {
   useGetFundLimits,
   getGetFundLimitsQueryKey,
@@ -18,6 +18,8 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const Charts = lazy(() => import("@/pages/charts"));
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -96,6 +98,17 @@ interface DhanPosition {
   netQty?: number | string;
 }
 
+function ChartLoader() {
+  return (
+    <div className="flex items-center justify-center h-[200px]">
+      <div className="relative h-8 w-8">
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: settingsRaw } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey(), staleTime: 60_000 } });
   const settings = settingsRaw as (typeof settingsRaw & { dashboardWidgets?: Record<string, boolean> }) | undefined;
@@ -105,9 +118,6 @@ export default function Dashboard() {
     activeStrategies: settings?.dashboardWidgets?.activeStrategies !== false,
   };
 
-  // Shared health check — same cache as app-layout (no extra request).
-  // Used to gate position/killswitch polling: when market is fully closed
-  // (weekend, holiday, after-hours) we stop hammering Dhan's API.
   const { data: healthRaw } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 25_000 } });
   const healthForGate = healthRaw as unknown as { nseOpen?: boolean; mcxOpen?: boolean } | undefined;
   const anyMarketOpen = (healthForGate?.nseOpen ?? false) || (healthForGate?.mcxOpen ?? false);
@@ -150,15 +160,11 @@ export default function Dashboard() {
       if (!res.ok) return {};
       return res.json();
     },
-    // Only poll killswitch during market hours — pointless + wasteful to check outside
     refetchInterval: anyMarketOpen ? 15_000 : false,
     staleTime: 0,
     gcTime: 0,
   });
 
-  // Shared positions cache — same queryKey as Positions page, so no extra Dhan API call.
-  // todayPnl is computed here instead of being fetched from the summary endpoint.
-  // Only auto-refresh during market hours; outside hours the data doesn't change.
   const { data: positions = [], isLoading: isPositionsLoading } = useQuery<DhanPosition[]>({
     queryKey: ["positions"],
     queryFn: async () => {
@@ -171,19 +177,14 @@ export default function Dashboard() {
     staleTime: 3_000,
   });
 
-  // today P&L — computed live from the shared positions cache (no extra API call)
   const todayPnlFromPositions = positions.reduce(
     (s, p) => s + Number(p.realizedProfit ?? 0) + Number(p.unrealizedProfit ?? 0),
     0,
   );
-  // dailyLossAmount = negative portion of todayPnl only
   const dailyLossAmountFromPositions = Math.abs(Math.min(0, todayPnlFromPositions));
 
-  // Kill switch: ONLY trust real-time Dhan API (from dedicated /risk/killswitch endpoint)
   const dhanKillActive =
     ksStatus?.isActive === true || ksStatus?.killSwitchStatus === "ACTIVE" || ksStatus?.killSwitchStatus === "ACTIVATE";
-  // Daily loss trigger: maxDailyLoss from summary (settings DB), loss amount from positions.
-  // Guard: maxDailyLoss must be > 0 to be meaningful — 0 means "not configured".
   const dailyLossTriggered =
     summary?.maxDailyLoss != null &&
     summary.maxDailyLoss > 0 &&
@@ -250,6 +251,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Live Charts — embedded below stat cards */}
+      <div className="pt-2">
+        <Suspense fallback={<ChartLoader />}>
+          <Charts />
+        </Suspense>
+      </div>
     </div>
   );
 }

@@ -1,23 +1,21 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   createChart,
   CrosshairMode,
   CandlestickSeries,
-  HistogramSeries,
   LineStyle,
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
-  type HistogramData,
   type UTCTimestamp,
   type IPriceLine,
 } from "lightweight-charts";
-import { TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { marketSocket, type QuoteData } from "@/lib/market-socket";
+import { useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -30,10 +28,10 @@ type IndexSymbol = (typeof INDICES)[number]["symbol"];
 
 const TIMEFRAMES = [
   { label: "1m",  value: "1"  },
+  { label: "3m",  value: "3"  },
   { label: "5m",  value: "5"  },
   { label: "15m", value: "15" },
-  { label: "25m", value: "25" },
-  { label: "60m", value: "60" },
+  { label: "30m", value: "30" },
 ] as const;
 
 type Interval = (typeof TIMEFRAMES)[number]["value"];
@@ -45,6 +43,11 @@ interface RawCandle {
   low: number;
   close: number;
   volume: number;
+}
+
+interface HealthData {
+  marketOpen: boolean;
+  brokerConnected: boolean;
 }
 
 function fmt(v: number, d = 2) {
@@ -91,12 +94,7 @@ const CANDLE_BORDER_DOWN = "#dc2626";
 const PRICE_LINE_COLOR = "#f59e0b";
 
 export default function Charts() {
-  const search = useSearch();
-  const params = new URLSearchParams(search);
-  const initialSymbol = (params.get("symbol") ?? "NIFTY") as IndexSymbol;
-  const [symbol, setSymbol] = useState<IndexSymbol>(
-    INDICES.some((i) => i.symbol === initialSymbol) ? initialSymbol : "NIFTY"
-  );
+  const [symbol, setSymbol] = useState<IndexSymbol>("NIFTY");
   const [interval, setInterval] = useState<Interval>("1");
 
   const selectedIndex = INDICES.find((i) => i.symbol === symbol)!;
@@ -108,15 +106,20 @@ export default function Charts() {
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
-  const volContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const volChartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const volSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const liveRef = useRef<CandlestickData<UTCTimestamp> | null>(null);
   const priceLineRef = useRef<IPriceLine | null>(null);
 
   const staleMs = Number(interval) * 60_000;
+
+  const { data: health } = useHealthCheck({
+    query: { queryKey: getHealthCheckQueryKey(), staleTime: 25_000, refetchInterval: 30_000 },
+  });
+  const healthData = health as unknown as HealthData | undefined;
+  const brokerConnected = healthData?.brokerConnected ?? true;
+  const marketOpen = healthData?.marketOpen ?? true;
+  const marketClosed = !brokerConnected || !marketOpen;
 
   const { data: rawCandles, isLoading, isFetching, refetch } = useQuery<RawCandle[]>({
     queryKey: ["intraday", symbol, interval],
@@ -142,7 +145,6 @@ export default function Charts() {
   const createChartInstance = (
     container: HTMLDivElement,
     height: number,
-    showTimeScale: boolean
   ): IChartApi => {
     return createChart(container, {
       width: container.clientWidth,
@@ -164,7 +166,6 @@ export default function Charts() {
       },
       rightPriceScale: {
         borderColor: "rgba(255,255,255,0.06)",
-        // Symmetric margins so current price stays centered in the visible range
         scaleMargins: { top: 0.15, bottom: 0.15 },
         minimumWidth: 72,
         autoScale: true,
@@ -173,7 +174,7 @@ export default function Charts() {
         borderColor: "rgba(255,255,255,0.06)",
         timeVisible: true,
         secondsVisible: false,
-        visible: showTimeScale,
+        visible: true,
         rightOffset: 5,
         tickMarkFormatter: (time: number) => {
           const ist = new Date((time + 5.5 * 3600) * 1000);
@@ -185,13 +186,11 @@ export default function Charts() {
     });
   };
 
-  // Create chart instances once on mount
   useEffect(() => {
     const container = chartContainerRef.current;
-    const volContainer = volContainerRef.current;
-    if (!container || !volContainer) return;
+    if (!container) return;
 
-    const mainChart = createChartInstance(container, 360, true);
+    const mainChart = createChartInstance(container, 380);
     chartRef.current = mainChart;
 
     const candleSeries = mainChart.addSeries(CandlestickSeries, {
@@ -202,86 +201,49 @@ export default function Charts() {
       wickUpColor: CANDLE_UP,
       wickDownColor: CANDLE_DOWN,
       lastValueVisible: true,
-      priceLineVisible: false, // we manage our own price line
+      priceLineVisible: false,
     });
     candleSeriesRef.current = candleSeries;
 
-    const volChart = createChartInstance(volContainer, 90, false);
-    volChartRef.current = volChart;
-
-    const volSeries = volChart.addSeries(HistogramSeries, {
-      priceFormat: { type: "volume" },
-      priceScaleId: "right",
-      color: "rgba(99,102,241,0.45)",
-    });
-    volSeriesRef.current = volSeries;
-
     const ro = new ResizeObserver(() => {
       mainChart.applyOptions({ width: container.clientWidth });
-      volChart.applyOptions({ width: volContainer.clientWidth });
     });
     ro.observe(container);
-    ro.observe(volContainer);
 
     return () => {
       ro.disconnect();
       mainChart.remove();
-      volChart.remove();
       chartRef.current = null;
-      volChartRef.current = null;
       candleSeriesRef.current = null;
-      volSeriesRef.current = null;
       liveRef.current = null;
       priceLineRef.current = null;
     };
   }, []);
 
-  // Load candle data whenever it changes (symbol or interval switch)
   useEffect(() => {
     const series = candleSeriesRef.current;
-    const volSeries = volSeriesRef.current;
     const chart = chartRef.current;
-    const volChart = volChartRef.current;
     const container = chartContainerRef.current;
-    const volContainer = volContainerRef.current;
-    if (!series || !volSeries || !chart || !volChart || !rawCandles) return;
+    if (!series || !chart || !rawCandles) return;
 
-    // Ensure correct dimensions in case container was zero-width at mount
     if (container) chart.applyOptions({ width: container.clientWidth });
-    if (volContainer) volChart.applyOptions({ width: volContainer.clientWidth });
 
     const seen = new Set<number>();
     const candleData: CandlestickData<UTCTimestamp>[] = [];
-    const volData: HistogramData<UTCTimestamp>[] = [];
 
     for (const c of rawCandles) {
       const time = parseISTtoUTC(c.timestamp);
       if (seen.has(time)) continue;
       seen.add(time);
       candleData.push({ time, open: c.open, high: c.high, low: c.low, close: c.close });
-      volData.push({
-        time,
-        value: c.volume,
-        color: c.close >= c.open ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)",
-      });
     }
 
     candleData.sort((a, b) => a.time - b.time);
-    volData.sort((a, b) => a.time - b.time);
-
     series.setData(candleData);
-    volSeries.setData(volData);
-
-    // fitContent auto-scales price axis to fit all visible candles
     chart.timeScale().fitContent();
-    volChart.timeScale().fitContent();
-
-    // Re-enable autoScale after setting data (resets any manual pan drift)
     chart.priceScale("right").applyOptions({ autoScale: true });
-
     liveRef.current = candleData[candleData.length - 1] ?? null;
 
-    // Restore / create the LTP price line if we have a live price
     if (ltp != null) {
       if (priceLineRef.current) {
         priceLineRef.current.applyOptions({ price: ltp });
@@ -298,13 +260,11 @@ export default function Charts() {
     }
   }, [rawCandles]);
 
-  // WebSocket live ticks
   useEffect(() => {
     setLtp(null);
     setWsOpen(null);
     prevLtpRef.current = null;
     liveRef.current = null;
-    // Remove stale price line when switching symbol
     if (priceLineRef.current && candleSeriesRef.current) {
       try { candleSeriesRef.current.removePriceLine(priceLineRef.current); } catch {}
       priceLineRef.current = null;
@@ -325,9 +285,6 @@ export default function Charts() {
           setLtp(data.ltp);
 
           const series = candleSeriesRef.current;
-          const volSeries = volSeriesRef.current;
-
-          // Update or create the price line
           if (series) {
             if (priceLineRef.current) {
               priceLineRef.current.applyOptions({ price: data.ltp });
@@ -343,7 +300,6 @@ export default function Charts() {
             }
           }
 
-          // Update the live (current) candle
           if (series && liveRef.current) {
             const updated: CandlestickData<UTCTimestamp> = {
               ...liveRef.current,
@@ -353,16 +309,6 @@ export default function Charts() {
             };
             liveRef.current = updated;
             series.update(updated);
-            if (volSeries && data.volume != null) {
-              volSeries.update({
-                time: updated.time,
-                value: data.volume,
-                color:
-                  updated.close >= updated.open
-                    ? "rgba(34,197,94,0.35)"
-                    : "rgba(239,68,68,0.35)",
-              });
-            }
           }
         }
         if (data.open != null) setWsOpen(data.open);
@@ -391,8 +337,6 @@ export default function Charts() {
   const dayLow = allLows.length ? Math.min(...allLows) : null;
 
   const hasData = (rawCandles?.length ?? 0) > 0;
-
-  const tfLabel = TIMEFRAMES.find((t) => t.value === interval)?.label ?? interval;
 
   return (
     <div className="space-y-4">
@@ -426,9 +370,6 @@ export default function Charts() {
       {/* Price header */}
       <div className="flex flex-wrap items-end gap-4">
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">
-            NSE · {selectedIndex.label} · {tfLabel} Candles
-          </p>
           <div
             className={cn(
               "text-4xl font-bold font-mono tracking-tight transition-colors duration-300",
@@ -464,13 +405,9 @@ export default function Charts() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1.5 mb-2">
-          <Activity className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Candlestick · live WS</span>
-          {ltp != null && (
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
-          )}
-        </div>
+        {ltp != null && (
+          <span className="w-2 h-2 rounded-full bg-success animate-pulse inline-block mb-2" />
+        )}
       </div>
 
       {/* Main candlestick chart */}
@@ -493,8 +430,21 @@ export default function Charts() {
           ))}
         </div>
 
-        <div className="relative" style={{ height: 360 }}>
-          {(isLoading || !hasData) && (
+        <div className="relative" style={{ height: 380 }}>
+          {marketClosed && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-card/90 rounded-lg">
+              <div className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center">
+                <svg className="w-5 h-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-muted-foreground">Market is Closed</p>
+              <p className="text-xs text-muted-foreground/60">
+                {!brokerConnected ? "Broker not connected" : "Outside trading hours"}
+              </p>
+            </div>
+          )}
+          {!marketClosed && (isLoading || !hasData) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-card/80">
               {isLoading ? (
                 <>
@@ -502,31 +452,11 @@ export default function Charts() {
                   <span className="text-sm text-muted-foreground">Loading chart data…</span>
                 </>
               ) : (
-                <>
-                  <Activity className="w-6 h-6 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground text-center">
-                    No intraday data available
-                    <br />
-                    <span className="text-xs">Market may be closed or broker not connected</span>
-                  </p>
-                </>
+                <p className="text-sm text-muted-foreground text-center">No intraday data available</p>
               )}
             </div>
           )}
           <div ref={chartContainerRef} className="w-full h-full" />
-        </div>
-      </div>
-
-      {/* Volume chart */}
-      <div className="bg-card border border-border rounded-xl px-4 pt-3 pb-2 overflow-hidden">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">
-          Volume
-        </p>
-        <div className="relative" style={{ height: 90 }}>
-          {(isLoading || !hasData) && (
-            <div className="absolute inset-0 bg-card/80 z-10" />
-          )}
-          <div ref={volContainerRef} className="w-full h-full" />
         </div>
       </div>
 

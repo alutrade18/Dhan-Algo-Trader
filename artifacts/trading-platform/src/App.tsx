@@ -1,14 +1,6 @@
-import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
-import { lazy, Suspense, useEffect, useRef } from "react";
-import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ClerkProvider,
-  SignIn,
-  SignUp,
-  Show,
-  useAuth,
-  useClerk,
-} from "@clerk/react";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { lazy, Suspense, useEffect } from "react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -30,21 +22,6 @@ const TradeHistory = lazy(() => import("@/pages/trade-history"));
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
 
-// NOTE: in dev this env var will be empty; in production it is auto-set by Replit
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
-
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-if (!clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
-}
-
-// Clerk passes full paths — strip the base prefix so Wouter doesn't double it
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || "/"
-    : path;
-}
-
 const queryClient = new QueryClient();
 
 function PageLoader() {
@@ -58,32 +35,10 @@ function PageLoader() {
   );
 }
 
-// Invalidates React Query cache when the signed-in user changes
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const qc = useQueryClient();
-  const prevUserIdRef = useRef<string | null | undefined>(undefined);
-
+function SocketInitializer() {
   useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
-      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
-        qc.clear();
-      }
-      prevUserIdRef.current = userId;
-    });
-    return unsubscribe;
-  }, [addListener, qc]);
-
-  return null;
-}
-
-// Wires Socket.IO with Clerk token — web API calls use session cookies automatically
-function SocketAuthInitializer() {
-  const { getToken } = useAuth();
-  useEffect(() => {
-    void marketSocket.init(getToken);
-  }, [getToken]);
+    void marketSocket.init(() => Promise.resolve(null));
+  }, []);
   return null;
 }
 
@@ -158,83 +113,25 @@ function AppInitializer() {
     );
   }
 
-  return <AppRoutes />;
-}
-
-function SignInPage() {
-  // To update login providers, app branding, or OAuth settings use the Auth
-  // pane in the workspace toolbar.
-  return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignIn
-        routing="path"
-        path={`${basePath}/sign-in`}
-        signUpUrl={`${basePath}/sign-up`}
-      />
-    </div>
-  );
-}
-
-function SignUpPage() {
-  // To update login providers, app branding, or OAuth settings use the Auth
-  // pane in the workspace toolbar.
-  return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignUp
-        routing="path"
-        path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in`}
-      />
-    </div>
-  );
-}
-
-// For protected routes: show app if signed in, redirect to sign-in if not
-function ProtectedApp() {
   return (
     <>
-      <Show when="signed-in">
-        <SocketAuthInitializer />
-        <AppInitializer />
-        <Toaster />
-      </Show>
-      <Show when="signed-out">
-        <Redirect to="/sign-in" />
-      </Show>
+      <SocketInitializer />
+      <AppRoutes />
+      <Toaster />
     </>
-  );
-}
-
-function AppRouter() {
-  const [, setLocation] = useLocation();
-
-  return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <TooltipProvider>
-          <Switch>
-            <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/sign-up/*?" component={SignUpPage} />
-            <Route component={ProtectedApp} />
-          </Switch>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ClerkProvider>
   );
 }
 
 function App() {
   return (
     <ThemeProvider>
-      <WouterRouter base={basePath}>
-        <AppRouter />
-      </WouterRouter>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={basePath}>
+            <AppInitializer />
+          </WouterRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

@@ -10,8 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, LogOut,
-  Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Sparkles, Clock,
-  ShieldAlert, Target, Zap, Timer, MessageCircle, ExternalLink, ListOrdered,
+  Bell, AlertTriangle, Send, Server, Copy, RefreshCw, KeyRound, Clock,
+  ShieldAlert, Zap, Timer, MessageCircle,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
@@ -418,8 +418,8 @@ export default function Settings() {
               <p className="text-sm font-semibold text-foreground">Broker Connection</p>
               <p className={`text-xs mt-0.5 truncate ${isConnected ? "text-success" : tokenExpired ? "text-destructive" : "text-muted-foreground"}`}>
                 {isConnected ? "Connected"
-                  : tokenExpired ? "Token expired — paste new token below"
-                  : "Disconnect"}
+                  : tokenExpired ? "Token expired"
+                  : "Disconnected"}
               </p>
             </div>
           </div>
@@ -428,44 +428,12 @@ export default function Settings() {
               <><div className="w-2 h-2 rounded-full bg-success animate-pulse" />
               <span className="text-[11px] font-bold text-success uppercase tracking-wider hidden sm:inline">Live</span></>
             )}
-            {tokenExpired && (
-              <><div className="w-2 h-2 rounded-full bg-destructive" />
-              <span className="text-[11px] font-bold text-destructive uppercase tracking-wider hidden sm:inline">Offline</span></>
-            )}
             {!isConnected && !tokenExpired && (
               <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider hidden sm:inline">Disconnected</span>
             )}
           </div>
         </div>
 
-        {/* Token expired alert */}
-        {tokenExpired && (
-          <div className="mx-4 sm:mx-5 mt-4 rounded-xl border border-destructive/25 bg-destructive/5 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-              <p className="text-sm font-semibold text-destructive">Token expired — how to reconnect</p>
-            </div>
-            <ol className="space-y-2 mb-3">
-              {[
-                "Open Dhan app or website and log in",
-                "Tap profile icon → My Profile",
-                "Scroll to Access Token section",
-                "Tap Generate Token and copy it",
-                "Paste the token in the Access Token field below",
-                "Tap Save & Connect",
-              ].map((step, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-xs text-muted-foreground">
-                  <span className="shrink-0 w-5 h-5 rounded-full bg-destructive/20 text-destructive flex items-center justify-center text-[10px] font-bold mt-0.5">{i + 1}</span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-            <a href="https://web.dhan.co" target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
-              <ExternalLink className="w-3.5 h-3.5" /> Open Dhan Web Portal
-            </a>
-          </div>
-        )}
 
         {/* Balance row when connected */}
         {isConnected && funds.availableBalance !== undefined && (
@@ -521,8 +489,8 @@ export default function Settings() {
                 </button>
               </div>
               {tokenExpired && !totpPin && (
-                <p className="text-[10px] text-destructive font-medium flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" /> Paste your fresh Dhan access token here, or use TOTP below
+                <p className="text-[10px] text-destructive font-bold flex items-center gap-1">
+                  Token Expired - Enter New Token
                 </p>
               )}
             </div>
@@ -540,11 +508,8 @@ export default function Settings() {
           <div className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-3">
             <div className="flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-muted-foreground shrink-0" />
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Generate Token via TOTP (optional)</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Generate Token via TOTP</p>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              If TOTP is enabled on your Dhan account, enter your 6-digit PIN and the current TOTP code from your authenticator app to generate a fresh token automatically — no copy-pasting needed.
-            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <SectionLabel>Dhan PIN</SectionLabel>
@@ -586,7 +551,7 @@ export default function Settings() {
             >
               {generateMutation.isPending
                 ? <><span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />Generating…</>
-                : <><Sparkles className="w-3.5 h-3.5" />Generate Token & Connect</>}
+                : <>Generate Token & Broker Connect</>}
             </Button>
           </div>
 
@@ -595,7 +560,7 @@ export default function Settings() {
             <Button type="submit" size="sm" className="h-10 gap-1.5 flex-1" disabled={connectMutation.isPending}>
               {connectMutation.isPending
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Connecting…</>
-                : <><Wifi className="w-3.5 h-3.5" />{isConnected ? "Reconnect" : "Save & Connect"}</>}
+                : <><Zap className="w-3.5 h-3.5" />{isConnected ? "Reconnect" : "Save & Connect"}</>}
             </Button>
             {isConnected && (
               <Button

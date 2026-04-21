@@ -13,7 +13,6 @@ const BASE = import.meta.env.BASE_URL;
 const PER_PAGE = 50;
 const MAX_PAGES = 4;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface AuditEntry {
   id: number; action: string; field: string | null; oldValue: string | null;
   newValue: string | null; description: string | null; changedAt: string;
@@ -27,13 +26,6 @@ interface PagedResponse<T> { logs: T[]; total: number; page: number; limit: numb
 
 type TabKey = "audit" | "success" | "failed";
 
-const TABS: { key: TabKey; label: string; icon: React.ReactNode; iconClass: string }[] = [
-  { key: "audit",   label: "Audit Logs",   icon: <ClipboardList className="w-3.5 h-3.5" />, iconClass: "text-purple-400" },
-  { key: "success", label: "Success Logs", icon: <CheckCircle2  className="w-3.5 h-3.5" />, iconClass: "text-success"    },
-  { key: "failed",  label: "Failed Logs",  icon: <XCircle       className="w-3.5 h-3.5" />, iconClass: "text-destructive"},
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtIST(iso: string) {
   return new Date(iso).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "2-digit",
@@ -55,7 +47,6 @@ function categoryBadge(cat: string) {
   return map[cat] ?? "bg-muted text-muted-foreground";
 }
 
-// ── Table shell ───────────────────────────────────────────────────────────────
 function TableShell({ headers, isLoading, isEmpty, emptyText, colSpan, children }: {
   headers: string[]; isLoading: boolean; isEmpty: boolean;
   emptyText: string; colSpan: number; children: React.ReactNode;
@@ -90,7 +81,6 @@ function TableShell({ headers, isLoading, isEmpty, emptyText, colSpan, children 
   );
 }
 
-// ── Pagination ────────────────────────────────────────────────────────────────
 function Pagination({ page, total, onPrev, onNext }: {
   page: number; total: number; onPrev: () => void; onNext: () => void;
 }) {
@@ -118,7 +108,6 @@ function Pagination({ page, total, onPrev, onNext }: {
   );
 }
 
-// ── Audit Logs view ───────────────────────────────────────────────────────────
 function AuditLogsView() {
   const [page, setPage] = useState(0);
   const { data, isLoading, isError } = useQuery<PagedResponse<AuditEntry>>({
@@ -159,7 +148,6 @@ function AuditLogsView() {
   );
 }
 
-// ── Success Logs view ─────────────────────────────────────────────────────────
 function SuccessLogsView() {
   const [page, setPage] = useState(0);
   const { data, isLoading, isError } = useQuery<PagedResponse<AppLog>>({
@@ -205,7 +193,6 @@ function SuccessLogsView() {
   );
 }
 
-// ── Failed Logs view ──────────────────────────────────────────────────────────
 function FailedLogsView() {
   const [page, setPage] = useState(0);
   const { data, isLoading, isError } = useQuery<PagedResponse<AppLog>>({
@@ -261,16 +248,62 @@ function ErrorBanner() {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function CountBadge({ count }: { count: number | undefined }) {
+  if (count === undefined) return null;
+  return (
+    <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-muted text-muted-foreground leading-none">
+      {count > 9999 ? "9999+" : count}
+    </span>
+  );
+}
+
 export default function Logs() {
   const [activeTab, setActiveTab] = useState<TabKey>("audit");
+
+  const { data: auditCount } = useQuery<{ total: number }>({
+    queryKey: ["audit-log-count"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}api/settings/audit-log?page=0&limit=1`);
+      if (!r.ok) throw new Error();
+      return r.json();
+    },
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  const { data: successCount } = useQuery<{ total: number }>({
+    queryKey: ["logs-success-count"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}api/logs?tab=success&page=0&limit=1`);
+      if (!r.ok) throw new Error();
+      return r.json();
+    },
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  const { data: failedCount } = useQuery<{ total: number }>({
+    queryKey: ["logs-failed-count"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}api/logs?tab=failed&page=0&limit=1`);
+      if (!r.ok) throw new Error();
+      return r.json();
+    },
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  const TABS: { key: TabKey; label: string; icon: React.ReactNode; iconClass: string; count: number | undefined }[] = [
+    { key: "audit",   label: "Audit Logs",   icon: <ClipboardList className="w-3.5 h-3.5" />, iconClass: "text-purple-400", count: auditCount?.total   },
+    { key: "success", label: "Success Logs", icon: <CheckCircle2  className="w-3.5 h-3.5" />, iconClass: "text-success",    count: successCount?.total },
+    { key: "failed",  label: "Failed Logs",  icon: <XCircle       className="w-3.5 h-3.5" />, iconClass: "text-destructive", count: failedCount?.total  },
+  ];
 
   return (
     <div className="w-full">
       <Card>
-        {/* Tab toggle bar */}
         <div className="flex flex-wrap gap-1 p-3 pb-0 border-b border-border">
-          {TABS.map(({ key, label, icon, iconClass }) => (
+          {TABS.map(({ key, label, icon, iconClass, count }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
@@ -284,11 +317,11 @@ export default function Logs() {
               <span className={activeTab === key ? iconClass : ""}>{icon}</span>
               <span className="hidden sm:inline">{label}</span>
               <span className="sm:hidden">{label.split(" ")[0]}</span>
+              <CountBadge count={count} />
             </button>
           ))}
         </div>
 
-        {/* Active view */}
         <CardContent className="p-3 sm:p-4">
           {activeTab === "audit"   && <AuditLogsView />}
           {activeTab === "success" && <SuccessLogsView />}

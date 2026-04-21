@@ -1,13 +1,5 @@
-import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const auth = getAuth(req);
-  const userId = auth?.userId;
-  if (!userId) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  (req as Request & { userId: string }).userId = userId;
+export function requireAuth(_req: Request, _res: Response, next: NextFunction): void {
   next();
 }

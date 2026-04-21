@@ -126,7 +126,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const systemOnline = marketOpen && brokerConnected;
 
   const isBrokerConnected = isBrokerStatusLoading ? null : (brokerStatus?.connected ?? false);
-  const BROKER_BANNER_PAGES = ["/", "/dashboard", "/positions", "/orders"];
+  const BROKER_BANNER_PAGES = ["/", "/dashboard"];
   const showBrokerBanner = isBrokerConnected === false && BROKER_BANNER_PAGES.includes(location);
 
   const { data: ksStatus } = useQuery<{ isActive?: boolean; killSwitchStatus?: string; canDeactivateToday?: boolean }>({
