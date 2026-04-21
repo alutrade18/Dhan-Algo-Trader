@@ -1,17 +1,19 @@
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { lazy, Suspense, useEffect, useState } from "react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ClerkProvider,
-  RedirectToSignIn,
+  SignIn,
+  SignUp,
+  Show,
   useAuth,
+  useClerk,
 } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
-import { setAuthTokenProvider, installFetchInterceptor } from "@/lib/api-fetch";
 import { marketSocket } from "@/lib/market-socket";
 
 const Dashboard    = lazy(() => import("@/pages/dashboard"));
@@ -28,6 +30,21 @@ const TradeHistory = lazy(() => import("@/pages/trade-history"));
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
 
+// NOTE: in dev this env var will be empty; in production it is auto-set by Replit
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
+
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
+
+// Clerk passes full paths — strip the base prefix so Wouter doesn't double it
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
 const queryClient = new QueryClient();
 
 function PageLoader() {
@@ -39,6 +56,35 @@ function PageLoader() {
       </div>
     </div>
   );
+}
+
+// Invalidates React Query cache when the signed-in user changes
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        qc.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, qc]);
+
+  return null;
+}
+
+// Wires Socket.IO with Clerk token — web API calls use session cookies automatically
+function SocketAuthInitializer() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    void marketSocket.init(getToken);
+  }, [getToken]);
+  return null;
 }
 
 function AppRoutes() {
@@ -70,7 +116,7 @@ function AppInitializer() {
   const { isLoading, isError, refetch } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}api/settings`, {});
+      const r = await fetch(`${BASE}api/settings`);
       if (!r.ok) throw new Error("Failed to load settings");
       return r.json();
     },
@@ -115,72 +161,81 @@ function AppInitializer() {
   return <AppRoutes />;
 }
 
-// Registers Clerk token provider for API calls and Socket.IO connection.
-// Renders children only after auth is wired up.
-function AuthInitializer({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth();
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setAuthTokenProvider(getToken);
-    installFetchInterceptor();
-    void marketSocket.init(getToken);
-    setReady(true);
-  }, [getToken]);
-
-  if (!ready) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="relative h-10 w-10">
-          <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+function SignInPage() {
+  // To update login providers, app branding, or OAuth settings use the Auth
+  // pane in the workspace toolbar.
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={`${basePath}/sign-up`}
+      />
+    </div>
+  );
 }
 
-function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+function SignUpPage() {
+  // To update login providers, app branding, or OAuth settings use the Auth
+  // pane in the workspace toolbar.
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+      />
+    </div>
+  );
+}
 
-  if (!isLoaded) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="relative h-10 w-10">
-          <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-        </div>
-      </div>
-    );
-  }
+// For protected routes: show app if signed in, redirect to sign-in if not
+function ProtectedApp() {
+  return (
+    <>
+      <Show when="signed-in">
+        <SocketAuthInitializer />
+        <AppInitializer />
+        <Toaster />
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/sign-in" />
+      </Show>
+    </>
+  );
+}
 
-  if (!isSignedIn) {
-    return <RedirectToSignIn />;
-  }
+function AppRouter() {
+  const [, setLocation] = useLocation();
 
-  return <>{children}</>;
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <TooltipProvider>
+          <Switch>
+            <Route path="/sign-in/*?" component={SignInPage} />
+            <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route component={ProtectedApp} />
+          </Switch>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
 }
 
 function App() {
   return (
-    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
-      <ThemeProvider>
-        <WouterRouter base={basePath}>
-          <AuthGate>
-            <QueryClientProvider client={queryClient}>
-              <TooltipProvider>
-                <AuthInitializer>
-                  <AppInitializer />
-                  <Toaster />
-                </AuthInitializer>
-              </TooltipProvider>
-            </QueryClientProvider>
-          </AuthGate>
-        </WouterRouter>
-      </ThemeProvider>
-    </ClerkProvider>
+    <ThemeProvider>
+      <WouterRouter base={basePath}>
+        <AppRouter />
+      </WouterRouter>
+    </ThemeProvider>
   );
 }
 

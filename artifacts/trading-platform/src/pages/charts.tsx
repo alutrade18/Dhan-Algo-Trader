@@ -111,8 +111,8 @@ export default function Charts() {
   const volContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const volChartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null);
-  const volSeriesRef = useRef<ISeriesApi<typeof HistogramSeries> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const liveRef = useRef<CandlestickData<UTCTimestamp> | null>(null);
   const priceLineRef = useRef<IPriceLine | null>(null);
 
