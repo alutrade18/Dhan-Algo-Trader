@@ -402,14 +402,15 @@ export const dhanClient = {
     toDate?: string;
   }) {
     // Compute today's date in IST (UTC+5:30) so the range always covers the current trading day
+    // Dhan intraday fromDate/toDate must be "YYYY-MM-DD" only (no time component)
     const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
     const todayIST = [
       nowIST.getUTCFullYear(),
       String(nowIST.getUTCMonth() + 1).padStart(2, "0"),
       String(nowIST.getUTCDate()).padStart(2, "0"),
     ].join("-");
-    const from = data.fromDate ?? `${todayIST} 09:15:00`;
-    const to   = data.toDate   ?? `${todayIST} 15:30:00`;
+    const from = data.fromDate ?? todayIST;
+    const to   = data.toDate   ?? todayIST;
     return dhanRequest("POST", "/charts/intraday", {
       securityId: data.securityId,
       exchangeSegment: data.exchangeSegment,

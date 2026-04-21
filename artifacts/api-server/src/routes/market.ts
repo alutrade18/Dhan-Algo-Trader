@@ -113,21 +113,27 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
       instrumentType: parsed.data.instrumentType,
     });
 
-    // Dhan's /charts/intraday returns columnar arrays (NOT row arrays like /charts/historical):
-    // { open: [...], high: [...], low: [...], close: [...], volume: [...], start_Time: ["<epoch_secs>", ...] }
+    // Dhan's /charts/intraday returns columnar arrays:
+    // { open: [...], high: [...], low: [...], close: [...], volume: [...], timestamp: [...] }
+    // The `timestamp` values are seconds since Jan 1, 1980 (not Unix/1970 epoch).
+    // Field is "timestamp" per the official Dhan OpenAPI spec (ChartsResponse schema).
     const r = result as Record<string, unknown>;
-    const times   = Array.isArray(r.start_Time) ? (r.start_Time as unknown[]) : [];
-    const opens   = Array.isArray(r.open)       ? (r.open   as number[]) : [];
-    const highs   = Array.isArray(r.high)       ? (r.high   as number[]) : [];
-    const lows    = Array.isArray(r.low)        ? (r.low    as number[]) : [];
-    const closes  = Array.isArray(r.close)      ? (r.close  as number[]) : [];
-    const volumes = Array.isArray(r.volume)     ? (r.volume as number[]) : [];
+    const times   = Array.isArray(r.timestamp) ? (r.timestamp as unknown[]) : [];
+    const opens   = Array.isArray(r.open)      ? (r.open     as number[]) : [];
+    const highs   = Array.isArray(r.high)      ? (r.high     as number[]) : [];
+    const lows    = Array.isArray(r.low)       ? (r.low      as number[]) : [];
+    const closes  = Array.isArray(r.close)     ? (r.close    as number[]) : [];
+    const volumes = Array.isArray(r.volume)    ? (r.volume   as number[]) : [];
 
-    // Convert epoch-seconds to IST datetime string ("YYYY-MM-DD HH:MM:SS")
-    function epochToIST(epochSec: unknown): string {
-      const ms = Number(epochSec) * 1000;
-      if (isNaN(ms) || ms <= 0) return "";
-      const d = new Date(ms + 5.5 * 60 * 60 * 1000); // shift UTC → IST
+    // Jan 1, 1980 00:00:00 UTC expressed as Unix seconds (for epoch conversion)
+    const DHAN_EPOCH_OFFSET = 315_532_800; // seconds between 1970-01-01 and 1980-01-01
+
+    // Convert Dhan's 1980-epoch seconds → IST datetime string ("YYYY-MM-DD HH:MM:SS")
+    function dhanTsToIST(dhanSec: unknown): string {
+      const unixSec = Number(dhanSec) + DHAN_EPOCH_OFFSET;
+      if (isNaN(unixSec) || unixSec <= 0) return "";
+      const ms = (unixSec + 5.5 * 3600) * 1000; // shift to IST
+      const d = new Date(ms);
       return [
         d.getUTCFullYear(),
         String(d.getUTCMonth() + 1).padStart(2, "0"),
@@ -140,14 +146,14 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
     }
 
     req.log.info(
-      { timesCount: times.length, firstTime: times[0], lastTime: times[times.length - 1] },
+      { timesCount: times.length, firstTime: times[0], lastTime: times[times.length - 1], keys: Object.keys(r) },
       "Intraday candles fetched"
     );
 
     res.json({
       data: times
         .map((ts, i) => ({
-          timestamp: epochToIST(ts),
+          timestamp: dhanTsToIST(ts),
           open:   Number(opens[i]   ?? 0),
           high:   Number(highs[i]   ?? 0),
           low:    Number(lows[i]    ?? 0),
