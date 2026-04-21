@@ -215,7 +215,14 @@ export default function Charts() {
     const series = candleSeriesRef.current;
     const volSeries = volSeriesRef.current;
     const chart = chartRef.current;
-    if (!series || !volSeries || !chart || !rawCandles) return;
+    const volChart = volChartRef.current;
+    const container = chartContainerRef.current;
+    const volContainer = volContainerRef.current;
+    if (!series || !volSeries || !chart || !volChart || !rawCandles) return;
+
+    // Force correct dimensions — the container may have been zero-width at mount time
+    if (container) chart.applyOptions({ width: container.clientWidth });
+    if (volContainer) volChart.applyOptions({ width: volContainer.clientWidth });
 
     const seen = new Set<number>();
     const candleData: CandlestickData<UTCTimestamp>[] = [];
@@ -393,39 +400,40 @@ export default function Charts() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-[340px] gap-2 text-muted-foreground">
-            <RefreshCw className="w-5 h-5 animate-spin" />
-            <span className="text-sm">Loading chart data…</span>
-          </div>
-        ) : !hasData ? (
-          <div className="flex flex-col items-center justify-center h-[340px] gap-2">
-            <Activity className="w-6 h-6 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground text-center">
-              No intraday data available
-              <br />
-              <span className="text-xs">
-                Market may be closed or broker not connected
-              </span>
-            </p>
-          </div>
-        ) : null}
-        <div
-          ref={chartContainerRef}
-          className={cn("w-full", !hasData && "hidden")}
-          style={{ height: 340 }}
-        />
+        <div className="relative" style={{ height: 340 }}>
+          {(isLoading || !hasData) && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-card/80">
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Loading chart data…</span>
+                </>
+              ) : (
+                <>
+                  <Activity className="w-6 h-6 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    No intraday data available
+                    <br />
+                    <span className="text-xs">Market may be closed or broker not connected</span>
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+          <div ref={chartContainerRef} className="w-full h-full" />
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl px-4 pt-3 pb-2 overflow-hidden">
         <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">
           Volume
         </p>
-        <div
-          ref={volContainerRef}
-          className="w-full"
-          style={{ height: 90 }}
-        />
+        <div className="relative" style={{ height: 90 }}>
+          {(isLoading || !hasData) && (
+            <div className="absolute inset-0 bg-card/80 z-10" />
+          )}
+          <div ref={volContainerRef} className="w-full h-full" />
+        </div>
       </div>
 
       {hasData && (
