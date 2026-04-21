@@ -59,6 +59,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@clerk/react": "^6.4.2",
     "lightweight-charts": "^5.1.0",
     "socket.io-client": "^4.8.3"
   }

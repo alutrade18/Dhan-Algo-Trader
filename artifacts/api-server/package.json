@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@clerk/backend": "^3.2.13",
     "@clerk/express": "^2.1.0",
     "@types/ws": "^8.18.1",
     "@workspace/api-zod": "workspace:*",
@@ -26,11 +27,11 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
+    "cross-env": "^7.0.3",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
     "pino-pretty": "^13",

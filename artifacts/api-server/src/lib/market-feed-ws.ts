@@ -335,30 +335,34 @@ class MarketFeedWS extends EventEmitter {
     }
   }
 
-  unsubscribe(exchangeSegment: string, securityIds: number[]) {
+  unsubscribe(exchangeSegment: string, securityIds: number[], mode?: "ticker" | "quote" | "full") {
     const exchNum = EXCHANGE_NUM_MAP[exchangeSegment] ?? 1;
+    // When mode is specified, only remove from that specific mode; otherwise remove from all.
+    const modes: ReadonlyArray<"ticker" | "quote" | "full"> = mode
+      ? [mode]
+      : ["ticker", "quote", "full"];
 
-    for (const mode of ["ticker", "quote", "full"] as const) {
-      const requestCode = mode === "full" ? REQUEST_CODE.FULL : mode === "quote" ? REQUEST_CODE.QUOTE : REQUEST_CODE.TICKER;
-      const key = `${exchangeSegment}:${mode}`;
+    for (const m of modes) {
+      const requestCode = m === "full" ? REQUEST_CODE.FULL : m === "quote" ? REQUEST_CODE.QUOTE : REQUEST_CODE.TICKER;
+      const key = `${exchangeSegment}:${m}`;
       const sub = this.subscriptions.get(key);
-      if (sub) {
-        for (const id of securityIds) sub.securityIds.delete(id);
-        if (sub.securityIds.size === 0) this.subscriptions.delete(key);
+      if (!sub) continue;
 
-        if (this.ws?.readyState === WebSocket.OPEN) {
-          // Unsubscribe code = subscribe code + 1 (per Dhan Python SDK)
-          const unsubCode = UNSUB_CODE[requestCode] ?? requestCode + 1;
-          const msg = JSON.stringify({
-            RequestCode: unsubCode,
-            InstrumentCount: securityIds.length,
-            InstrumentList: securityIds.map(id => ({
-              ExchangeSegment: EXCHANGE_MAP[exchNum] ?? "NSE_EQ",
-              SecurityId: String(id),
-            })),
-          });
-          this.ws.send(msg);
-        }
+      for (const id of securityIds) sub.securityIds.delete(id);
+      if (sub.securityIds.size === 0) this.subscriptions.delete(key);
+
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        // Unsubscribe code = subscribe code + 1 (per Dhan Python SDK)
+        const unsubCode = UNSUB_CODE[requestCode] ?? requestCode + 1;
+        const msg = JSON.stringify({
+          RequestCode: unsubCode,
+          InstrumentCount: securityIds.length,
+          InstrumentList: securityIds.map(id => ({
+            ExchangeSegment: EXCHANGE_MAP[exchNum] ?? "NSE_EQ",
+            SecurityId: String(id),
+          })),
+        });
+        this.ws.send(msg);
       }
     }
   }

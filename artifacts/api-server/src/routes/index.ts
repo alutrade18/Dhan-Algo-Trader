@@ -19,6 +19,7 @@ import {
   quoteRateLimit,
   nonTradingRateLimit,
 } from "../middleware/rate-limit";
+import { requireAuth } from "../middleware/require-auth";
 
 const router: IRouter = Router();
 
@@ -46,6 +47,8 @@ router.use("/market/securities", dataRateLimit);
 // ── NON-TRADING APIs: 20/sec (management, info, config endpoints) ─────────────
 router.use([
   "/health",
+  "/healthz",
+  "/rate-limits",
   "/dashboard",
   "/positions",     // GET positions (read-only)
   "/funds",         // GET fund limits
@@ -58,8 +61,25 @@ router.use([
   "/postback",
 ], nonTradingRateLimit);
 
-// ── ROUTE REGISTRATIONS ───────────────────────────────────────────────────────
+// ── PUBLIC ROUTES (no auth required) ─────────────────────────────────────────
+// Health check endpoints are publicly accessible for uptime monitoring
 router.use(healthRouter);
+
+// Dhan postback uses its own shared secret for authentication
+router.use((req, res, next) => {
+  const io = getIO();
+  if (io && req.path === "/postback") {
+    createPostbackRouter(io)(req, res, next);
+  } else {
+    next();
+  }
+});
+
+// ── AUTHENTICATION ────────────────────────────────────────────────────────────
+// All remaining routes require a valid Clerk session
+router.use(requireAuth);
+
+// ── PROTECTED ROUTE REGISTRATIONS ────────────────────────────────────────────
 router.use(dashboardRouter);
 router.use(ordersRouter);
 router.use(positionsRouter);
@@ -71,13 +91,5 @@ router.use(riskRouter);
 router.use(tradesRouter);
 router.use(logsRouter);
 router.use(instrumentsRouter);
-router.use((req, res, next) => {
-  const io = getIO();
-  if (io) {
-    createPostbackRouter(io)(req, res, next);
-  } else {
-    next();
-  }
-});
 
 export default router;

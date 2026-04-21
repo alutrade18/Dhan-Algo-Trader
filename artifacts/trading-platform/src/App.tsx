@@ -1,11 +1,18 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  ClerkProvider,
+  RedirectToSignIn,
+  useAuth,
+} from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/app-layout";
 import { ThemeProvider } from "@/lib/theme";
 import NotFound from "@/pages/not-found";
+import { setAuthTokenProvider, installFetchInterceptor } from "@/lib/api-fetch";
+import { marketSocket } from "@/lib/market-socket";
 
 const Dashboard    = lazy(() => import("@/pages/dashboard"));
 const Charts       = lazy(() => import("@/pages/charts"));
@@ -63,7 +70,7 @@ function AppInitializer() {
   const { isLoading, isError, refetch } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}api/settings`);
+      const r = await fetch(`${BASE}api/settings`, {});
       if (!r.ok) throw new Error("Failed to load settings");
       return r.json();
     },
@@ -108,18 +115,72 @@ function AppInitializer() {
   return <AppRoutes />;
 }
 
+// Registers Clerk token provider for API calls and Socket.IO connection.
+// Renders children only after auth is wired up.
+function AuthInitializer({ children }: { children: React.ReactNode }) {
+  const { getToken } = useAuth();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setAuthTokenProvider(getToken);
+    installFetchInterceptor();
+    void marketSocket.init(getToken);
+    setReady(true);
+  }, [getToken]);
+
+  if (!ready) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="relative h-10 w-10">
+          <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="relative h-10 w-10">
+          <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return <RedirectToSignIn />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
-    <ThemeProvider>
-      <WouterRouter base={basePath}>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <AppInitializer />
-            <Toaster />
-          </TooltipProvider>
-        </QueryClientProvider>
-      </WouterRouter>
-    </ThemeProvider>
+    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+      <ThemeProvider>
+        <WouterRouter base={basePath}>
+          <AuthGate>
+            <QueryClientProvider client={queryClient}>
+              <TooltipProvider>
+                <AuthInitializer>
+                  <AppInitializer />
+                  <Toaster />
+                </AuthInitializer>
+              </TooltipProvider>
+            </QueryClientProvider>
+          </AuthGate>
+        </WouterRouter>
+      </ThemeProvider>
+    </ClerkProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 import http from "http";
 import { Server as SocketIO } from "socket.io";
+import { verifyToken } from "@clerk/backend";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { dhanClient } from "./lib/dhan-client";
@@ -35,6 +36,114 @@ const io = new SocketIO(httpServer, {
 
 setIO(io);
 
+// ── Per-socket subscription tracking ─────────────────────────────────────────
+// socketSubs: socketId → Map<"exchange:mode", Set<securityId>>
+// Prevents one socket from manipulating subscriptions owned by another socket.
+// Keyed by "exchange:mode" so mode isolation is preserved end-to-end.
+const socketSubs = new Map<string, Map<string, Set<number>>>();
+
+type ModeStr = "ticker" | "quote" | "full";
+
+interface GlobalUnsub {
+  exchange: string;
+  mode: ModeStr;
+  securityIds: number[];
+}
+
+function addSocketSub(socketId: string, exchange: string, securityIds: number[], mode: ModeStr) {
+  if (!socketSubs.has(socketId)) socketSubs.set(socketId, new Map());
+  const key = `${exchange}:${mode}`;
+  const subs = socketSubs.get(socketId)!;
+  if (!subs.has(key)) subs.set(key, new Set());
+  const idSet = subs.get(key)!;
+  for (const id of securityIds) idSet.add(id);
+}
+
+/**
+ * Removes `securityIds` from `socketId`'s subscription registry across all modes
+ * (or a specific mode if provided).  Returns per-mode lists of IDs that should be
+ * globally unsubscribed because no other socket retains them in that exact mode.
+ */
+function removeSocketSub(
+  socketId: string,
+  exchange: string,
+  securityIds: number[],
+  mode?: ModeStr,
+): GlobalUnsub[] {
+  const subs = socketSubs.get(socketId);
+  if (!subs) return [];
+  const modes: ModeStr[] = mode ? [mode] : ["ticker", "quote", "full"];
+  const result: GlobalUnsub[] = [];
+
+  for (const m of modes) {
+    const key = `${exchange}:${m}`;
+    const idSet = subs.get(key);
+    if (!idSet) continue;
+    const removable: number[] = [];
+
+    for (const id of securityIds) {
+      if (!idSet.has(id)) continue;
+      idSet.delete(id);
+      // Globally unsubscribe this mode only if no other socket still needs it
+      const stillNeeded = [...socketSubs.entries()].some(
+        ([sid, subMap]) => sid !== socketId && subMap.get(key)?.has(id),
+      );
+      if (!stillNeeded) removable.push(id);
+    }
+
+    if (idSet.size === 0) subs.delete(key);
+    if (removable.length > 0) result.push({ exchange, mode: m, securityIds: removable });
+  }
+
+  return result;
+}
+
+/**
+ * Removes a socket from the registry on disconnect and returns per-mode lists of
+ * IDs that should be globally unsubscribed because no remaining socket needs them.
+ */
+function cleanupSocket(socketId: string): GlobalUnsub[] {
+  const subs = socketSubs.get(socketId);
+  socketSubs.delete(socketId);
+  if (!subs) return [];
+  const result: GlobalUnsub[] = [];
+
+  for (const [key, idSet] of subs.entries()) {
+    const colonIdx = key.lastIndexOf(":");
+    const exchange = key.slice(0, colonIdx);
+    const mode = key.slice(colonIdx + 1) as ModeStr;
+    const removable: number[] = [];
+
+    for (const id of idSet) {
+      const stillNeeded = [...socketSubs.entries()].some(
+        ([, subMap]) => subMap.get(key)?.has(id),
+      );
+      if (!stillNeeded) removable.push(id);
+    }
+
+    if (removable.length > 0) result.push({ exchange, mode, securityIds: removable });
+  }
+
+  return result;
+}
+
+// ── Socket.IO authentication middleware ───────────────────────────────────────
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth?.token as string | undefined;
+  if (!token) {
+    logger.warn({ socketId: socket.id }, "Socket.IO connection rejected: no auth token");
+    return next(new Error("Unauthorized: authentication required"));
+  }
+  try {
+    await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    next();
+  } catch (err) {
+    logger.warn({ socketId: socket.id, err }, "Socket.IO connection rejected: invalid token");
+    next(new Error("Unauthorized: invalid or expired token"));
+  }
+});
+
+// ── Market data events from broker feed ───────────────────────────────────────
 marketFeedWS.on("tick", (data) => io.emit("market:tick", data));
 marketFeedWS.on("quote", (data) => io.emit("market:quote", data));
 marketFeedWS.on("depth", (data) => io.emit("market:depth", data));
@@ -43,16 +152,27 @@ orderUpdateWS.on("orderUpdate", (data) => io.emit("order:update", data));
 io.on("connection", (socket) => {
   logger.info({ socketId: socket.id }, "Socket.io client connected");
 
-  socket.on("market:subscribe", ({ exchange, securityIds, mode }: { exchange: string; securityIds: number[]; mode?: "ticker" | "quote" | "full" }) => {
-    marketFeedWS.subscribe(exchange, securityIds, mode ?? "ticker");
+  socket.on("market:subscribe", ({ exchange, securityIds, mode }: { exchange: string; securityIds: number[]; mode?: ModeStr }) => {
+    const resolvedMode: ModeStr = mode ?? "ticker";
+    addSocketSub(socket.id, exchange, securityIds, resolvedMode);
+    marketFeedWS.subscribe(exchange, securityIds, resolvedMode);
   });
 
   socket.on("market:unsubscribe", ({ exchange, securityIds }: { exchange: string; securityIds: number[] }) => {
-    marketFeedWS.unsubscribe(exchange, securityIds);
+    // Check all modes this socket has for these IDs; only globally remove per-mode
+    // if no other socket still needs that exact exchange+mode combination.
+    const toRemove = removeSocketSub(socket.id, exchange, securityIds);
+    for (const { exchange: exch, mode, securityIds: ids } of toRemove) {
+      marketFeedWS.unsubscribe(exch, ids, mode);
+    }
   });
 
   socket.on("disconnect", () => {
     logger.info({ socketId: socket.id }, "Socket.io client disconnected");
+    const cleanups = cleanupSocket(socket.id);
+    for (const { exchange, mode, securityIds } of cleanups) {
+      marketFeedWS.unsubscribe(exchange, securityIds, mode);
+    }
   });
 });
 
