@@ -8,10 +8,10 @@ on:
     inputs:
       stale_pr_days:
         description: >
-          Close security auto-fix PRs older than this many days
-          (overrides the default STALE_PR_DAYS env var for this run only).
-          Leave blank to use the default (3 days).
+          Close security auto-fix PRs older than this many days.
+          Overrides the scheduled-run default (3 days) for this manual run only.
         type: number
+        default: 7
         required: false
 
 permissions:
