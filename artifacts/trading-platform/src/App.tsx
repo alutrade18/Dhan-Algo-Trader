@@ -22,7 +22,13 @@ const TradeHistory = lazy(() => import("@/pages/trade-history"));
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchIntervalInBackground: false,
+    },
+  },
+});
 
 function PageLoader() {
   return (

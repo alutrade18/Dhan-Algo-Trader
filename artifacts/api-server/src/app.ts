@@ -1,8 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
-import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middleware/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { requestLogger } from "./middleware/request-logger";
@@ -44,9 +42,7 @@ app.use(
   cors({
     credentials: true,
     origin: (origin, callback) => {
-      // Allow server-to-server / curl / Postman (no Origin header)
       if (!origin) return callback(null, true);
-      // Allow Replit preview and deployed app domains
       if (
         /\.replit\.dev$/.test(origin) ||
         /\.riker\.replit\.dev$/.test(origin) ||
@@ -60,19 +56,13 @@ app.use(
   }),
 );
 
-// Clerk proxy — must be mounted BEFORE body parsers so it can stream raw bytes
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(clerkMiddleware());
 
 app.use(requestLogger);
 
 app.use("/api", router);
 
-// JSON error handler — ensures all errors (including CORS rejections) return JSON
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   logger.warn({ err: err.message }, "Unhandled middleware error");
   res.status(500).json({ success: false, error: err.message ?? "Internal server error" });

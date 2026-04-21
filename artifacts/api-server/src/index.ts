@@ -1,6 +1,5 @@
 import http from "http";
 import { Server as SocketIO } from "socket.io";
-import { verifyToken } from "@clerk/backend";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { dhanClient } from "./lib/dhan-client";
@@ -138,27 +137,26 @@ function cleanupSocket(socketId: string): GlobalUnsub[] {
   return result;
 }
 
-// ── Socket.IO authentication middleware ───────────────────────────────────────
-io.use(async (socket, next) => {
-  const token = socket.handshake.auth?.token as string | undefined;
-  if (!token) {
-    logger.warn({ socketId: socket.id }, "Socket.IO connection rejected: no auth token");
-    return next(new Error("Unauthorized: authentication required"));
-  }
-  try {
-    await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
-    next();
-  } catch (err) {
-    logger.warn({ socketId: socket.id, err }, "Socket.IO connection rejected: invalid token");
-    next(new Error("Unauthorized: invalid or expired token"));
-  }
-});
-
 // ── Market data events from broker feed ───────────────────────────────────────
 marketFeedWS.on("tick", (data) => io.emit("market:tick", data));
 marketFeedWS.on("quote", (data) => io.emit("market:quote", data));
 marketFeedWS.on("depth", (data) => io.emit("market:depth", data));
-orderUpdateWS.on("orderUpdate", (data) => io.emit("order:update", data));
+orderUpdateWS.on("orderUpdate", (data) => {
+  // C4: PARTIALLY_FILLED requires special handling — the order is live but not
+  // complete. Emit the standard event AND a dedicated partial-fill event so
+  // the frontend can highlight the row without treating it as done.
+  io.emit("order:update", data);
+  const status = String((data as Record<string, unknown>).Status ?? "");
+  if (status === "PARTIALLY_FILLED") {
+    const tradedQty = (data as Record<string, unknown>).TradedQty;
+    const totalQty  = (data as Record<string, unknown>).Quantity;
+    logger.info(
+      { orderId: (data as Record<string, unknown>).OrderNo, tradedQty, totalQty },
+      "[C4] Partially-filled order — still open on exchange",
+    );
+    io.emit("order:partial-fill", data);
+  }
+});
 
 io.on("connection", (socket) => {
   logger.info({ socketId: socket.id }, "Socket.io client connected");
