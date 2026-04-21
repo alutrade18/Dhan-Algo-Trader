@@ -50,6 +50,12 @@ function daysAgoISO(n: number): string {
   return d.toISOString().split("T")[0];
 }
 
+function isoToDisplay(iso: string): string {
+  if (!iso) return "";
+  const [yyyy, mm, dd] = iso.split("-");
+  return `${dd}-${mm}-${yyyy}`;
+}
+
 function formatTime(dt: string): string {
   if (!dt) return "—";
   try {
@@ -145,7 +151,7 @@ type TransactionType = "BUY" | "SELL";
 type OrderType = "LIMIT" | "MARKET" | "STOP_LOSS" | "STOP_LOSS_MARKET";
 type ProductType = "INTRADAY" | "CNC" | "MARGIN" | "MTF" | "CO" | "BO";
 type Validity = "DAY" | "IOC";
-type Preset = "today" | "7d" | "30d" | "365d" | "custom";
+type Preset = "live" | "7d" | "30d" | "custom";
 
 interface DhanOrder {
   orderId: string;
@@ -527,11 +533,9 @@ function CancelConfirm({ orderId, onConfirm, onDismiss, loading }: CancelConfirm
 
 // ── main page ─────────────────────────────────────────────────────────────────
 
-const PRESETS: { id: Preset; label: string; days: number | null }[] = [
-  { id: "today", label: "Today",  days: 0   },
-  { id: "7d",    label: "7d",     days: 7   },
-  { id: "30d",   label: "30d",    days: 30  },
-  { id: "365d",  label: "365d",   days: 365 },
+const HISTORY_PRESETS: { id: Preset; label: string; days: number }[] = [
+  { id: "7d",  label: "7d",  days: 7  },
+  { id: "30d", label: "30d", days: 30 },
 ];
 
 export default function OrdersPage() {
@@ -569,7 +573,7 @@ export default function OrdersPage() {
   }, []);
 
   // ── filter / preset state ────────────────────────────────────────────────
-  const [activePreset, setActivePreset] = useState<Preset>("today");
+  const [activePreset, setActivePreset] = useState<Preset>("live");
   const [fromDate, setFromDate] = useState<string>(daysAgoISO(7));
   const [toDate, setToDate] = useState<string>(todayISO());
 
@@ -579,28 +583,30 @@ export default function OrdersPage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyFetched, setHistoryFetched] = useState(false);
 
-  const isToday = activePreset === "today";
+  const isLive = activePreset === "live";
 
-  // ── today auto-refresh (pauses when tab is hidden to avoid rate limits) ──
+  // ── live auto-refresh: only fires when on live view AND tab is visible ───
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
 
   useEffect(() => {
-    const INTERVAL_MS = 5000; // poll every 5s (was 2s) to reduce Dhan API rate-limit pressure
+    const INTERVAL_MS = 5000;
 
     function startInterval() {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-      if (isToday) {
+      if (isLive) {
         autoRefreshRef.current = setInterval(() => {
           if (document.visibilityState === "visible") void fetchOrders();
         }, INTERVAL_MS);
+      } else {
+        autoRefreshRef.current = null;
       }
     }
 
     function handleVisibility() {
-      if (document.visibilityState === "visible" && isToday) {
-        void fetchOrders(); // immediate refresh when tab comes back
+      if (document.visibilityState === "visible" && isLive) {
+        void fetchOrders();
       }
     }
 
@@ -610,7 +616,7 @@ export default function OrdersPage() {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [fetchOrders, isToday]);
+  }, [fetchOrders, isLive]);
 
   // ── history fetch ────────────────────────────────────────────────────────
   const fetchHistory = useCallback(async (from: string, to: string) => {
@@ -639,9 +645,9 @@ export default function OrdersPage() {
   // ── preset click handler ─────────────────────────────────────────────────
   function handlePreset(p: Preset) {
     setActivePreset(p);
-    if (p === "today" || p === "custom") return;
-    const preset = PRESETS.find((x) => x.id === p);
-    if (!preset || preset.days === null) return;
+    if (p === "live" || p === "custom") return;
+    const preset = HISTORY_PRESETS.find((x) => x.id === p);
+    if (!preset) return;
     const from = daysAgoISO(preset.days);
     const to   = todayISO();
     setFromDate(from);
@@ -655,7 +661,7 @@ export default function OrdersPage() {
   }
 
   function handleRefresh() {
-    if (isToday) void fetchOrders(true);
+    if (isLive) void fetchOrders(true);
     else void fetchHistory(fromDate, toDate);
   }
 
@@ -685,7 +691,7 @@ export default function OrdersPage() {
 
   // ── export ───────────────────────────────────────────────────────────────
   function handleExport() {
-    if (isToday) {
+    if (isLive) {
       if (orders.length === 0) { toast({ title: "No data to export", variant: "destructive" }); return; }
       const rows = orders.map((o) => ({
         "Order ID": o.orderId,
@@ -726,14 +732,14 @@ export default function OrdersPage() {
   }
 
   // ── derived stats ─────────────────────────────────────────────────────────
-  const totalOrders = isToday ? orders.length : historyOrders.length;
-  const tradedCount = isToday
+  const totalOrders    = isLive ? orders.length : historyOrders.length;
+  const tradedCount    = isLive
     ? orders.filter((o) => o.orderStatus === "TRADED").length
     : historyOrders.length;
-  const pendingCount = isToday
+  const pendingCount   = isLive
     ? orders.filter((o) => o.orderStatus === "PENDING" || o.orderStatus === "TRANSIT").length
     : 0;
-  const rejCancelCount = isToday
+  const rejCancelCount = isLive
     ? orders.filter((o) => o.orderStatus === "REJECTED" || o.orderStatus === "CANCELLED").length
     : 0;
 
@@ -746,16 +752,16 @@ export default function OrdersPage() {
 
         {/* ── Top header ────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <p className="text-sm font-bold text-foreground hidden sm:block">Today&apos;s Orders</p>
+          <p className="text-sm font-bold text-foreground hidden sm:block">Order Book</p>
           <div className="flex items-center gap-2 sm:ml-auto">
             <Button
               variant="outline" size="sm"
               onClick={handleRefresh}
-              disabled={isToday ? ordersRefreshing : historyLoading}
+              disabled={isLive ? ordersRefreshing : historyLoading}
               className="gap-1.5"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${(isToday ? ordersRefreshing : historyLoading) ? "animate-spin" : ""}`} />
-              {(isToday ? ordersRefreshing : historyLoading) ? "Refreshing…" : "Refresh"}
+              <RefreshCw className={`h-3.5 w-3.5 ${(isLive ? ordersRefreshing : historyLoading) ? "animate-spin" : ""}`} />
+              {(isLive ? ordersRefreshing : historyLoading) ? "Refreshing…" : "Refresh"}
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
               <Download className="h-3.5 w-3.5" />
@@ -764,11 +770,29 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* ── Filter bar: presets + date range ──────────────────── */}
-        <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-          {/* Preset tabs */}
-          <div className="flex items-center gap-1 shrink-0">
-            {PRESETS.map((p) => (
+        {/* ── Filter bar ────────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+
+          {/* Left: Live chip + history preset tabs + Custom tab */}
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+
+            {/* Live indicator — click to go back to live auto-refresh view */}
+            <button
+              onClick={() => setActivePreset("live")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                isLive
+                  ? "bg-success/15 text-success border-success/30"
+                  : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isLive ? "bg-success animate-pulse" : "bg-muted-foreground/50"}`} />
+              Live
+            </button>
+
+            <div className="w-px h-4 bg-border shrink-0" />
+
+            {/* 7d and 30d history presets */}
+            {HISTORY_PRESETS.map((p) => (
               <button
                 key={p.id}
                 onClick={() => handlePreset(p.id)}
@@ -781,13 +805,25 @@ export default function OrdersPage() {
                 {p.label}
               </button>
             ))}
+
+            {/* Custom preset tab */}
+            <button
+              onClick={() => setActivePreset("custom")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                activePreset === "custom"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              }`}
+            >
+              Custom
+            </button>
           </div>
 
-          {/* Date range — hidden when Today is active (auto-refreshes, no fetch needed) */}
-          {!isToday && (
+          {/* Right: date pickers + Fetch — only when NOT in live view */}
+          {!isLive && (
             <>
               <div className="hidden sm:block w-px h-5 bg-border shrink-0" />
-              <div className="flex items-center gap-2 flex-1">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 <DateInput
                   label="From"
                   value={fromDate}
@@ -801,7 +837,7 @@ export default function OrdersPage() {
                   max={todayISO()}
                   onChange={(v) => { setToDate(v); setActivePreset("custom"); }}
                 />
-                {/* Fetch button only shown for Custom preset — other presets auto-fetch on click */}
+                {/* Fetch button: only for custom — 7d/30d auto-fetch on click */}
                 {activePreset === "custom" && (
                   <Button
                     size="sm" className="h-8 px-4 gap-1.5 shrink-0"
@@ -823,8 +859,8 @@ export default function OrdersPage() {
 
         {/* ── Stat cards ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <StatCard icon={<ClipboardList className="h-4 w-4" />} label={isToday ? "Total Orders Today" : "Total Trades"} value={totalOrders} />
-          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label={isToday ? "Traded" : "Executed Trades"} value={tradedCount} color="text-success" />
+          <StatCard icon={<ClipboardList className="h-4 w-4" />} label={isLive ? "Today's Orders" : "Total Trades"} value={totalOrders} />
+          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label={isLive ? "Traded" : "Executed Trades"} value={tradedCount} color="text-success" />
           <StatCard icon={<Clock className="h-4 w-4" />} label="Pending / Transit" value={pendingCount} color={pendingCount > 0 ? "text-warning" : "text-foreground"} />
           <StatCard icon={<XCircle className="h-4 w-4" />} label="Rejected / Cancelled" value={rejCancelCount} color={rejCancelCount > 0 ? "text-destructive" : "text-foreground"} />
         </div>
@@ -832,8 +868,8 @@ export default function OrdersPage() {
         {/* ── Main table ─────────────────────────────────────────── */}
         <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col" style={{ minHeight: "calc(100vh - 22rem)" }}>
 
-          {/* ── TODAY view ─────────────────────────────────────── */}
-          {isToday && (
+          {/* ── LIVE view (today's orders, auto-refreshes every 5s) ── */}
+          {isLive && (
             ordersError ? (
               <div className="flex flex-col items-center gap-3 py-12 px-4 text-center">
                 <AlertCircle className="h-8 w-8 text-destructive/70" />
@@ -934,7 +970,7 @@ export default function OrdersPage() {
           )}
 
           {/* ── HISTORY view ───────────────────────────────────── */}
-          {!isToday && (
+          {!isLive && (
             <>
               {historyError && (
                 <div className="flex flex-col items-center gap-2 py-10 px-4 text-center">
@@ -972,7 +1008,7 @@ export default function OrdersPage() {
                 historyOrders.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
                     <ClipboardList className="h-7 w-7 opacity-30" />
-                    <p className="text-sm">No trades found for {fromDate} → {toDate}</p>
+                    <p className="text-sm">No trades found for {isoToDisplay(fromDate)} → {isoToDisplay(toDate)}</p>
                     <p className="text-xs opacity-60">Only executed (filled) trades appear in history</p>
                   </div>
                 ) : (
