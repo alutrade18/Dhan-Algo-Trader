@@ -361,6 +361,107 @@ jobs:
             git push origin HEAD:"$BRANCH"
           fi
 
+      # Close open security auto-fix PRs that are either:
+      #   (a) older than STALE_PR_DAYS — they are stale regardless of today's run, OR
+      #   (b) superseded by today's run (has_changes == true) — close all prior
+      #       ones so at most one security auto-fix PR is ever open at a time.
+      # Running the step unconditionally (no `if` guard) means stale PRs are
+      # also cleaned up on days where no new lockfile changes are detected.
+      - name: Close stale security auto-fix PRs
+        uses: actions/github-script@v7
+        env:
+          # Number of days after which a security auto-fix PR is considered stale
+          # and will be auto-closed even on days with no new lockfile changes.
+          # On days where new patches are available a new PR supersedes all prior
+          # ones regardless of age.  Tune to match your team's review cadence.
+          STALE_PR_DAYS: '3'
+          TODAY_BRANCH: ${{ steps.branch-info.outputs.branch }}
+          HAS_CHANGES: ${{ steps.check-changes.outputs.has_changes }}
+        with:
+          script: |
+            const staleDays   = Math.max(1, parseInt(process.env.STALE_PR_DAYS, 10) || 3);
+            const todayBranch = process.env.TODAY_BRANCH;
+            const hasChanges  = process.env.HAS_CHANGES === 'true';
+
+            // Fetch all open PRs (paginate to handle repos with many open PRs)
+            const openPRs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            for (const pr of openPRs) {
+              const headRef = pr.head.ref;
+
+              // Target only security auto-fix branches that are NOT today's branch
+              if (!headRef.startsWith('security/auto-fix-') || headRef === todayBranch) continue;
+
+              // Require both the 'security' and 'automated' labels
+              const labels = (pr.labels || []).map(l => l.name);
+              if (!labels.includes('security') || !labels.includes('automated')) continue;
+
+              const ageDays   = Math.floor((Date.now() - new Date(pr.created_at).getTime()) / 86400000);
+              const isStale   = ageDays >= staleDays;
+
+              // Close if: stale (older than threshold) OR superseded by today's new PR
+              if (!isStale && !hasChanges) {
+                console.log(`PR #${pr.number} (${headRef}) is ${ageDays}d old and no new PR today — skipping.`);
+                continue;
+              }
+
+              const reason = hasChanges && isStale
+                ? `stale (${ageDays}d > ${staleDays}d threshold) and superseded by today's patches`
+                : hasChanges
+                  ? `superseded by today's patches (${ageDays}d old, threshold: ${staleDays}d)`
+                  : `stale — open for ${ageDays}d, exceeding the ${staleDays}-day review window`;
+
+              console.log(`Closing PR #${pr.number} (${headRef}): ${reason}.`);
+
+              const bodyLines = [
+                `## Closed by the security auto-fix workflow`,
+                ``,
+                isStale
+                  ? `This PR was open for **${ageDays} day(s)**, exceeding the configured ${staleDays}-day staleness threshold.`
+                  : `This PR was open for **${ageDays} day(s)**.`,
+              ];
+
+              if (hasChanges) {
+                bodyLines.push(
+                  ``,
+                  `It has been superseded by the \`${todayBranch}\` PR opened with today's latest patches.`,
+                  `Only one security auto-fix PR is kept open at a time to prevent outdated patches`,
+                  `from competing with the current fix.`,
+                );
+              } else {
+                bodyLines.push(
+                  ``,
+                  `No new lockfile changes were detected today, but this PR exceeded the staleness`,
+                  `threshold and has been closed to keep the review queue clean.`,
+                );
+              }
+
+              bodyLines.push(
+                ``,
+                `Adjust the threshold via \`STALE_PR_DAYS\` in the \`Close stale security auto-fix PRs\``,
+                `step of \`.github/workflows/auto-fix-vulnerabilities.yml\`.`,
+              );
+
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: pr.number,
+                body:         bodyLines.join('\n'),
+              });
+
+              await github.rest.pulls.update({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                pull_number:  pr.number,
+                state:        'closed',
+              });
+            }
+
       - name: Open or update pull request
         if: steps.check-changes.outputs.has_changes == 'true'
         uses: actions/github-script@v7
