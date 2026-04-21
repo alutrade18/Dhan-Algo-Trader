@@ -1,0 +1,266 @@
+name: Auto-fix Dependency Vulnerabilities
+
+on:
+  schedule:
+    # Run daily at 09:00 UTC — one hour after the security audit at 08:00
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    name: Auto-fix Safe Dependency Updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Check remote before any git operations so same-day reruns push cleanly.
+      - name: Determine branch name and check remote existence
+        id: branch-info
+        run: |
+          DATE=$(date -u '+%Y-%m-%d')
+          BRANCH="security/auto-fix-${DATE}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE"     >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "branch_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Capture pre-fix audit report
+        run: pnpm audit --json 2>/dev/null > /tmp/audit-before.json || true
+
+      - name: Apply safe fixes via pnpm audit --fix
+        run: pnpm audit --fix || true
+
+      - name: Reinstall after fix
+        run: pnpm install
+
+      - name: Capture post-fix audit report
+        run: pnpm audit --json 2>/dev/null > /tmp/audit-after.json || true
+
+      # Stage dependency files first, then check the index — this ensures
+      # has_changes reflects exactly what will be committed, avoiding a
+      # "nothing to commit" failure when unrelated files happen to be dirty.
+      - name: Stage dependency files and check for changes
+        id: check-changes
+        run: |
+          git add -A -- pnpm-lock.yaml pnpm-workspace.yaml
+          find . -name 'package.json' -not -path '*/node_modules/*' \
+            -exec git add -- {} +
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency changes — audit is already clean or no auto-fixable patches available."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Dependency changes detected — a PR will be opened."
+          fi
+
+      - name: Build PR description
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          node << 'JSEOF'
+          const fs = require('fs');
+
+          function parseAudit(path) {
+            try {
+              const raw = fs.readFileSync(path, 'utf8').trim();
+              const jsonStart = raw.indexOf('{');
+              if (jsonStart === -1) return null;
+              return JSON.parse(raw.slice(jsonStart));
+            } catch (_) { return null; }
+          }
+
+          const before = parseAudit('/tmp/audit-before.json');
+          const after  = parseAudit('/tmp/audit-after.json');
+
+          const bv = (before && before.metadata && before.metadata.vulnerabilities) || {};
+          const av = (after  && after.metadata  && after.metadata.vulnerabilities)  || {};
+
+          const levels = ['critical', 'high', 'moderate', 'low'];
+          const severityRows = levels.map(level => {
+            const b = bv[level] || 0;
+            const a = av[level] || 0;
+            const diff = b - a;
+            const label = level.charAt(0).toUpperCase() + level.slice(1);
+            const fixed = diff > 0 ? `-${diff}` : diff === 0 ? '–' : `+${Math.abs(diff)}`;
+            return `| ${label} | ${b} | ${a} | ${fixed} |`;
+          });
+
+          const totalBefore = levels.reduce((s, l) => s + (bv[l] || 0), 0);
+          const totalAfter  = levels.reduce((s, l) => s + (av[l] || 0), 0);
+          const totalFixed  = totalBefore - totalAfter;
+
+          // Build an advisory map supporting both audit JSON formats:
+          //   v1: { advisories: { "<id>": { module_name, severity, patched_versions } } }
+          //   v2: { vulnerabilities: { "<pkg>": { name, severity, fixAvailable } } }
+          function advisoryMap(audit) {
+            const map = new Map();
+            if (!audit) return map;
+            for (const [id, adv] of Object.entries(audit.advisories || {})) {
+              map.set(`adv:${id}`, {
+                name:  adv.module_name || adv.name || '(unknown)',
+                sev:   adv.severity    || '?',
+                fixed: adv.patched_versions || adv.fixedIn || '—',
+              });
+            }
+            for (const [pkg, vuln] of Object.entries(audit.vulnerabilities || {})) {
+              const key = `vuln:${pkg}`;
+              if (!map.has(key)) {
+                const fixInfo = vuln.fixAvailable;
+                map.set(key, {
+                  name:  vuln.name || pkg,
+                  sev:   vuln.severity || '?',
+                  fixed: fixInfo === true ? 'available'
+                       : (typeof fixInfo === 'object' && fixInfo)
+                           ? `${fixInfo.name}@${fixInfo.version}`
+                           : '—',
+                });
+              }
+            }
+            return map;
+          }
+
+          const beforeMap = advisoryMap(before);
+          const afterMap  = advisoryMap(after);
+
+          const seen = new Set();
+          const fixedPkgs = [];
+          for (const [id, adv] of beforeMap) {
+            if (!afterMap.has(id) && !seen.has(adv.name)) {
+              seen.add(adv.name);
+              fixedPkgs.push(adv);
+            }
+          }
+
+          let pkgSection;
+          if (fixedPkgs.length === 0) {
+            pkgSection = ['*No individual package records matched — check `git diff pnpm-lock.yaml` for details.*'];
+          } else {
+            pkgSection = [
+              '| Package | Severity resolved | Patched version |',
+              '|---------|:-----------------:|-----------------|',
+              ...fixedPkgs.map(a => `| \`${a.name}\` | ${a.sev} | ${a.fixed} |`),
+            ];
+          }
+
+          const body = [
+            '## Automated Dependency Security Fix',
+            '',
+            'Generated by the **Auto-fix Dependency Vulnerabilities** workflow.',
+            '`pnpm audit --fix` was applied — lockfile changes only, no source-code modifications.',
+            '',
+            '### Vulnerability severity — before vs after',
+            '',
+            '| Severity | Before | After | Fixed |',
+            '|----------|-------:|------:|------:|',
+            ...severityRows,
+            `| **Total** | **${totalBefore}** | **${totalAfter}** | **${totalFixed > 0 ? '-'+totalFixed : totalFixed}** |`,
+            '',
+            totalAfter > 0
+              ? '> **Note:** Some vulnerabilities remain and may require manual overrides in `pnpm-workspace.yaml`.'
+              : '> All detected vulnerabilities were resolved.',
+            '',
+            '### Packages updated',
+            '',
+            ...pkgSection,
+            '',
+            '### Review checklist',
+            '- [ ] CI passes on this PR',
+            '- [ ] No breaking changes in updated packages',
+            '- [ ] Merge promptly to close the vulnerability window',
+          ].join('\n');
+
+          fs.writeFileSync('/tmp/pr-body.md', body);
+          console.log('PR description written.');
+          JSEOF
+
+      - name: Commit and push fix branch
+        if: steps.check-changes.outputs.has_changes == 'true'
+        env:
+          BRANCH: ${{ steps.branch-info.outputs.branch }}
+          DATE: ${{ steps.branch-info.outputs.date }}
+          BRANCH_EXISTS: ${{ steps.branch-info.outputs.branch_exists }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(security): auto-apply pnpm audit --fix patches [${DATE}]"
+          if [ "$BRANCH_EXISTS" = "true" ]; then
+            git push origin HEAD:"$BRANCH" --force
+          else
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Open or update pull request
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        env:
+          BRANCH: ${{ steps.branch-info.outputs.branch }}
+          DATE: ${{ steps.branch-info.outputs.date }}
+        with:
+          script: |
+            const fs     = require('fs');
+            const body   = fs.readFileSync('/tmp/pr-body.md', 'utf8');
+            const branch = process.env.BRANCH;
+            const date   = process.env.DATE;
+
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              state: 'open',
+              head:  `${context.repo.owner}:${branch}`,
+            });
+
+            if (existing.data.length > 0) {
+              const pr = existing.data[0];
+              await github.rest.pulls.update({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                pull_number:  pr.number,
+                body,
+              });
+              console.log(`Updated existing PR #${pr.number}: ${pr.html_url}`);
+              await core.summary.addRaw(`Updated existing PR: ${pr.html_url}`).write();
+              return;
+            }
+
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: `fix(security): auto-apply dependency patches [${date}]`,
+              head:  branch,
+              base:  'main',
+              body,
+            });
+
+            try {
+              await github.rest.issues.addLabels({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: pr.data.number,
+                labels:       ['security', 'automated', 'dependencies'],
+              });
+            } catch (_) {}
+
+            console.log(`PR created: ${pr.data.html_url}`);
+            await core.summary.addRaw(`PR created: ${pr.data.html_url}`).write();
