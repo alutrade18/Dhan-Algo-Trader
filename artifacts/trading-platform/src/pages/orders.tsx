@@ -564,17 +564,35 @@ export default function OrdersPage() {
 
   const isToday = activePreset === "today";
 
-  // ── today auto-refresh ───────────────────────────────────────────────────
+  // ── today auto-refresh (pauses when tab is hidden to avoid rate limits) ──
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
 
   useEffect(() => {
-    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    if (isToday) {
-      autoRefreshRef.current = setInterval(() => void fetchOrders(), 2000);
+    const INTERVAL_MS = 5000; // poll every 5s (was 2s) to reduce Dhan API rate-limit pressure
+
+    function startInterval() {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+      if (isToday) {
+        autoRefreshRef.current = setInterval(() => {
+          if (document.visibilityState === "visible") void fetchOrders();
+        }, INTERVAL_MS);
+      }
     }
-    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+
+    function handleVisibility() {
+      if (document.visibilityState === "visible" && isToday) {
+        void fetchOrders(); // immediate refresh when tab comes back
+      }
+    }
+
+    startInterval();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchOrders, isToday]);
 
   // ── history fetch ────────────────────────────────────────────────────────
@@ -948,7 +966,7 @@ export default function OrdersPage() {
                               <SideBadge side={t.transactionType} />
                             </div>
                             {t.orderId && (
-                              <p className="text-[10px] text-muted-foreground font-mono">Order ID: …{t.orderId.slice(-10)}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">Order ID: {t.orderId}</p>
                             )}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
@@ -985,7 +1003,7 @@ export default function OrdersPage() {
                               <tr key={t.exchangeTradeId ?? idx} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
                                 <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatDateTime(t.createTime)}</td>
                                 <td className="px-4 py-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
-                                  {t.orderId ? `…${t.orderId.slice(-10)}` : "—"}
+                                  {t.orderId ?? "—"}
                                 </td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>

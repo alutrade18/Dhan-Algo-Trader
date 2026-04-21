@@ -44,14 +44,20 @@ router.get("/orders/history", async (req, res): Promise<void> => {
     return;
   }
 
-  // Dhan supports up to 90 days per /trades call; chunk if range > 90 days
-  const MS_PER_DAY = 86_400_000;
-  const CHUNK_DAYS = 90;
+  // Dhan supports up to 90 days per /trades call; chunk if range > 90 days.
+  // Add a 1.2s pause between chunks to stay within Dhan's per-second rate limit.
+  const MS_PER_DAY  = 86_400_000;
+  const CHUNK_DAYS  = 90;
+  const CHUNK_DELAY = 1_200; // ms between consecutive Dhan API chunk calls
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   const allTrades: unknown[] = [];
 
   try {
     let chunkStart = from;
+    let firstChunk = true;
     while (chunkStart <= to) {
+      if (!firstChunk) await sleep(CHUNK_DELAY);
+      firstChunk = false;
       const chunkEnd = new Date(Math.min(chunkStart.getTime() + (CHUNK_DAYS - 1) * MS_PER_DAY, to.getTime()));
       const f = chunkStart.toISOString().split("T")[0];
       const t = chunkEnd.toISOString().split("T")[0];
