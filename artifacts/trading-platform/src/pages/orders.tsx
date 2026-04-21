@@ -252,26 +252,43 @@ function DateInput({
   max?: string;
   label: string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const display = value ? value.split("-").reverse().join("-") : "";
+
+  function openPicker() {
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try { el.showPicker(); } catch { el.click(); }
+    } else {
+      el.click();
+    }
+  }
+
   return (
     <div className="flex items-center gap-1.5 flex-1 min-w-0">
       <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
-      <div className="relative flex-1 min-w-0">
-        <div className="flex items-center border border-border/50 rounded-md px-2 py-1 bg-transparent pointer-events-none select-none h-8">
-          <span className={`text-sm font-mono ${display ? "text-foreground" : "text-muted-foreground"}`}>
-            {display || "DD-MM-YYYY"}
-          </span>
-        </div>
+      <button
+        type="button"
+        onClick={openPicker}
+        className="relative flex items-center gap-1.5 border border-border/50 rounded-md px-2 py-1 bg-transparent h-8 flex-1 min-w-0 hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer group"
+      >
+        <span className={`text-sm font-mono flex-1 text-left truncate ${display ? "text-foreground" : "text-muted-foreground"}`}>
+          {display || "DD-MM-YYYY"}
+        </span>
+        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
         <input
+          ref={inputRef}
           type="date"
           value={value}
           min={min}
           max={max}
           onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          tabIndex={-1}
+          className="absolute inset-0 opacity-0 w-0 h-0 pointer-events-none"
           style={{ colorScheme: "dark" }}
         />
-      </div>
+      </button>
     </div>
   );
 }
