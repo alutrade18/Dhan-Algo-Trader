@@ -53,7 +53,10 @@ function daysAgoISO(n: number): string {
 function formatTime(dt: string): string {
   if (!dt) return "—";
   try {
-    return new Date(dt).toLocaleTimeString("en-IN", {
+    const normalized = dt.replace(" ", "T");
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return dt || "—";
+    return date.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -61,7 +64,26 @@ function formatTime(dt: string): string {
       timeZone: "Asia/Kolkata",
     });
   } catch {
-    return dt;
+    return dt || "—";
+  }
+}
+
+function formatDateTime(dt: string): string {
+  if (!dt) return "—";
+  try {
+    const normalized = dt.replace(" ", "T");
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return dt || "—";
+    const ist = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const dd   = String(ist.getDate()).padStart(2, "0");
+    const mm   = String(ist.getMonth() + 1).padStart(2, "0");
+    const yyyy = ist.getFullYear();
+    const hh   = String(ist.getHours()).padStart(2, "0");
+    const min  = String(ist.getMinutes()).padStart(2, "0");
+    const ss   = String(ist.getSeconds()).padStart(2, "0");
+    return `${dd}-${mm}-${yyyy} ${hh}:${min}:${ss}`;
+  } catch {
+    return dt || "—";
   }
 }
 
@@ -214,6 +236,43 @@ function ProductBadge({ product }: { product: ProductType }) {
     <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground border border-border">
       {product}
     </span>
+  );
+}
+
+function DateInput({
+  value,
+  onChange,
+  min,
+  max,
+  label,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  min?: string;
+  max?: string;
+  label: string;
+}) {
+  const display = value ? value.split("-").reverse().join("-") : "";
+  return (
+    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
+      <div className="relative flex-1 min-w-0">
+        <div className="flex items-center border border-border/50 rounded-md px-2 py-1 bg-transparent pointer-events-none select-none h-8">
+          <span className={`text-sm font-mono ${display ? "text-foreground" : "text-muted-foreground"}`}>
+            {display || "DD-MM-YYYY"}
+          </span>
+        </div>
+        <input
+          type="date"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          style={{ colorScheme: "dark" }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -693,32 +752,19 @@ export default function OrdersPage() {
 
           {/* Date pickers */}
           <div className="flex items-center gap-2 flex-1">
-            <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
-            <div className="flex items-center gap-2 flex-1">
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <span className="text-[11px] text-muted-foreground shrink-0">From</span>
-                <input
-                  type="date"
-                  value={fromDate}
-                  max={toDate}
-                  onChange={(e) => { setFromDate(e.target.value); setActivePreset("custom"); }}
-                  className="flex-1 min-w-0 bg-transparent text-sm font-mono text-foreground outline-none border border-border/50 rounded-md px-2 py-1 [color-scheme:dark] focus:border-primary/60 transition-colors"
-                  style={{ colorScheme: "dark" }}
-                />
-              </div>
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <span className="text-[11px] text-muted-foreground shrink-0">To</span>
-                <input
-                  type="date"
-                  value={toDate}
-                  min={fromDate}
-                  max={todayISO()}
-                  onChange={(e) => { setToDate(e.target.value); setActivePreset("custom"); }}
-                  className="flex-1 min-w-0 bg-transparent text-sm font-mono text-foreground outline-none border border-border/50 rounded-md px-2 py-1 [color-scheme:dark] focus:border-primary/60 transition-colors"
-                  style={{ colorScheme: "dark" }}
-                />
-              </div>
-            </div>
+            <DateInput
+              label="From"
+              value={fromDate}
+              max={toDate}
+              onChange={(v) => { setFromDate(v); setActivePreset("custom"); }}
+            />
+            <DateInput
+              label="To"
+              value={toDate}
+              min={fromDate}
+              max={todayISO()}
+              onChange={(v) => { setToDate(v); setActivePreset("custom"); }}
+            />
             <Button
               size="sm" className="h-8 px-4 gap-1.5 shrink-0"
               onClick={handleCustomFetch}
@@ -901,6 +947,9 @@ export default function OrdersPage() {
                               <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>
                               <SideBadge side={t.transactionType} />
                             </div>
+                            {t.orderId && (
+                              <p className="text-[10px] text-muted-foreground font-mono">Order ID: …{t.orderId.slice(-10)}</p>
+                            )}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
                               <ProductBadge product={t.productType} />
@@ -910,7 +959,7 @@ export default function OrdersPage() {
                               <div><span className="text-muted-foreground">Price</span><p className="font-mono font-medium">{formatCurrency(t.tradedPrice)}</p></div>
                               <div><span className="text-muted-foreground">Value</span><p className="font-mono font-medium">{formatCurrency(value)}</p></div>
                             </div>
-                            <p className="text-[10px] text-muted-foreground font-mono">{formatTime(t.createTime)}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono">{formatDateTime(t.createTime)}</p>
                           </div>
                         );
                       })}
@@ -921,8 +970,8 @@ export default function OrdersPage() {
                       <table className="w-full table-auto text-sm">
                         <thead>
                           <tr className="border-b border-border bg-muted/30">
-                            {["Time", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Value"].map((h, i) => (
-                              <th key={h} className={`px-4 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap ${i >= 5 ? "text-right" : "text-left"}`}>
+                            {["Create Time", "Order ID", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Value"].map((h, i) => (
+                              <th key={h} className={`px-4 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap ${i >= 6 ? "text-right" : "text-left"}`}>
                                 {h}
                               </th>
                             ))}
@@ -934,7 +983,10 @@ export default function OrdersPage() {
                             const value = t.tradeValue ?? t.tradedQuantity * t.tradedPrice;
                             return (
                               <tr key={t.exchangeTradeId ?? idx} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
-                                <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(t.createTime)}</td>
+                                <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatDateTime(t.createTime)}</td>
+                                <td className="px-4 py-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                                  {t.orderId ? `…${t.orderId.slice(-10)}` : "—"}
+                                </td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>
                                   {t.customSymbol && <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{t.customSymbol}</p>}
@@ -953,7 +1005,7 @@ export default function OrdersPage() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-border bg-muted/10">
-                            <td colSpan={7} className="px-4 py-2 text-xs text-muted-foreground text-right font-medium">Total Trade Value</td>
+                            <td colSpan={8} className="px-4 py-2 text-xs text-muted-foreground text-right font-medium">Total Trade Value</td>
                             <td className="px-4 py-2 text-right text-xs font-mono font-bold">
                               {formatCurrency(historyOrders.reduce((sum, t) => sum + (t.tradeValue ?? t.tradedQuantity * t.tradedPrice), 0))}
                             </td>
