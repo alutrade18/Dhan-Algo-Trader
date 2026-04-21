@@ -74,12 +74,12 @@ function formatTime(dt: string): string {
   }
 }
 
-function formatDateTime(dt: string): string {
-  if (!dt) return "—";
+function formatDateTime(dt: string | null | undefined): string {
+  if (!dt || dt === "NA" || dt === "null" || dt === "0") return "—";
   try {
     const normalized = dt.replace(" ", "T");
     const date = new Date(normalized);
-    if (isNaN(date.getTime())) return dt || "—";
+    if (isNaN(date.getTime()) || date.getFullYear() < 2000) return "—";
     const ist = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
     const dd   = String(ist.getDate()).padStart(2, "0");
     const mm   = String(ist.getMonth() + 1).padStart(2, "0");
@@ -89,8 +89,18 @@ function formatDateTime(dt: string): string {
     const ss   = String(ist.getSeconds()).padStart(2, "0");
     return `${dd}-${mm}-${yyyy} ${hh}:${min}:${ss}`;
   } catch {
-    return dt || "—";
+    return "—";
   }
+}
+
+function bestDateTime(
+  ...fields: Array<string | null | undefined>
+): string {
+  for (const f of fields) {
+    const result = formatDateTime(f);
+    if (result !== "—") return result;
+  }
+  return "—";
 }
 
 function formatCurrency(n: number): string {
@@ -887,8 +897,8 @@ export default function OrdersPage() {
                 <table className="w-full table-auto text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
-                      {["Time", "Symbol", "Type", "Product", "Qty", "Price", "Trigger", "Status", "Action"].map((h, i) => (
-                        <th key={h} className={`px-4 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap ${i >= 4 && i <= 6 ? "text-right" : "text-left"}`}>
+                      {["Time", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Trigger", "Status", "Action"].map((h) => (
+                        <th key={h} className="px-3 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-left">
                           {h}
                         </th>
                       ))}
@@ -898,14 +908,14 @@ export default function OrdersPage() {
                     {ordersLoading ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <tr key={i} className="border-b border-border/50 last:border-0">
-                          {Array.from({ length: 9 }).map((_, j) => (
-                            <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                          {Array.from({ length: 10 }).map((_, j) => (
+                            <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
                           ))}
                         </tr>
                       ))
                     ) : orders.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-16 text-center">
+                        <td colSpan={10} className="py-16 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <ClipboardList className="h-8 w-8 opacity-40" />
                             <p className="text-sm">No orders placed today</p>
@@ -913,10 +923,12 @@ export default function OrdersPage() {
                         </td>
                       </tr>
                     ) : (
-                      orders.map((order) => (
+                      orders.map((order) => {
+                        const seg = formatSegment(order.exchangeSegment);
+                        return (
                         <tr key={order.orderId} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(order.createTime)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="px-3 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(order.createTime)}</td>
+                          <td className="px-3 py-3 whitespace-nowrap">
                             <span className="font-mono font-semibold text-sm">{order.tradingSymbol}</span>
                             {order.omsErrorDescription && (
                               <Tooltip>
@@ -927,21 +939,24 @@ export default function OrdersPage() {
                               </Tooltip>
                             )}
                           </td>
-                          <td className="px-4 py-3"><SideBadge side={order.transactionType} /></td>
-                          <td className="px-4 py-3"><ProductBadge product={order.productType} /></td>
-                          <td className="px-4 py-3 text-right text-xs font-mono">
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
+                          </td>
+                          <td className="px-3 py-3"><SideBadge side={order.transactionType} /></td>
+                          <td className="px-3 py-3"><ProductBadge product={order.productType} /></td>
+                          <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
                             {order.filledQty > 0 ? (
                               <span>{order.quantity} <span className="text-muted-foreground">/ {order.filledQty} filled</span></span>
                             ) : order.quantity}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs font-mono">
+                          <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
                             {order.orderType === "MARKET" ? <span className="text-muted-foreground">MKT</span> : formatCurrency(order.price)}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs font-mono">
+                          <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
                             {(order.triggerPrice ?? 0) > 0 ? formatCurrency(order.triggerPrice!) : <span className="text-muted-foreground">—</span>}
                           </td>
-                          <td className="px-4 py-3"><StatusBadge status={order.orderStatus} /></td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3"><StatusBadge status={order.orderStatus} /></td>
+                          <td className="px-3 py-3">
                             {cancelConfirmId === order.orderId ? (
                               <CancelConfirm orderId={order.orderId}
                                 onConfirm={() => void handleCancel(order.orderId)}
@@ -961,7 +976,8 @@ export default function OrdersPage() {
                             )}
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -1047,8 +1063,8 @@ export default function OrdersPage() {
                       <table className="w-full table-auto text-sm">
                         <thead>
                           <tr className="border-b border-border bg-muted/30">
-                            {["Create Time", "Order ID", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Value"].map((h, i) => (
-                              <th key={h} className={`px-4 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap ${i >= 6 ? "text-right" : "text-left"}`}>
+                            {["Time", "Order ID", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Value"].map((h) => (
+                              <th key={h} className="px-3 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-left">
                                 {h}
                               </th>
                             ))}
@@ -1060,30 +1076,32 @@ export default function OrdersPage() {
                             const value = t.tradeValue ?? t.tradedQuantity * t.tradedPrice;
                             return (
                               <tr key={t.exchangeTradeId ?? idx} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
-                                <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatDateTime(t.createTime)}</td>
-                                <td className="px-4 py-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                                <td className="px-3 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                                  {bestDateTime(t.createTime, t.exchangeTime, t.updateTime)}
+                                </td>
+                                <td className="px-3 py-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
                                   {t.orderId ?? "—"}
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-3 py-3 whitespace-nowrap">
                                   <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>
-                                  {t.customSymbol && <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{t.customSymbol}</p>}
+                                  {t.customSymbol && <p className="text-[10px] text-muted-foreground whitespace-nowrap">{t.customSymbol}</p>}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-3 whitespace-nowrap">
                                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
                                 </td>
-                                <td className="px-4 py-3"><SideBadge side={t.transactionType} /></td>
-                                <td className="px-4 py-3"><ProductBadge product={t.productType} /></td>
-                                <td className="px-4 py-3 text-right text-xs font-mono">{t.tradedQuantity}</td>
-                                <td className="px-4 py-3 text-right text-xs font-mono">{formatCurrency(t.tradedPrice)}</td>
-                                <td className="px-4 py-3 text-right text-xs font-mono font-medium">{formatCurrency(value)}</td>
+                                <td className="px-3 py-3"><SideBadge side={t.transactionType} /></td>
+                                <td className="px-3 py-3"><ProductBadge product={t.productType} /></td>
+                                <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">{t.tradedQuantity}</td>
+                                <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">{formatCurrency(t.tradedPrice)}</td>
+                                <td className="px-3 py-3 text-xs font-mono whitespace-nowrap font-medium">{formatCurrency(value)}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-border bg-muted/10">
-                            <td colSpan={8} className="px-4 py-2 text-xs text-muted-foreground text-right font-medium">Total Trade Value</td>
-                            <td className="px-4 py-2 text-right text-xs font-mono font-bold">
+                            <td colSpan={8} className="px-3 py-2 text-xs text-muted-foreground font-medium">Total Trade Value</td>
+                            <td className="px-3 py-2 text-xs font-mono font-bold">
                               {formatCurrency(historyOrders.reduce((sum, t) => sum + (t.tradeValue ?? t.tradedQuantity * t.tradedPrice), 0))}
                             </td>
                           </tr>
