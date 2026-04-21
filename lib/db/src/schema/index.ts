@@ -6,4 +6,3 @@ export * from "./strategies";
 export * from "./rate-limit-log";
 export * from "./equity-curve-cache";
 export * from "./market-holidays";
-export * from "./watchlist";
