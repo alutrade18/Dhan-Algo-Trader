@@ -164,6 +164,154 @@ jobs:
             ];
           }
 
+          // ── Override suggestions for remaining unfixable vulnerabilities ──────────
+          //
+          // `pnpm audit --fix` only handles direct semver-compatible bumps.
+          // Vulnerabilities where fixAvailable is false (no patch exists) or is an
+          // object with isSemVerMajor:true (breaking upgrade required) are left
+          // behind.  We analyse the post-fix audit JSON and produce ready-to-paste
+          // `overrides` entries the developer can add to pnpm-workspace.yaml.
+          //
+          // The `via` array of each vulnerability entry contains advisory objects
+          // with a `range` field (the *vulnerable* semver range, e.g. "<1.2.3").
+          // We parse that range to derive the minimum safe version and emit:
+          //   "package": ">=X.Y.Z"
+
+          /**
+           * Given a vulnerable semver range string (e.g. "<1.2.3", ">=1.0.0 <2.0.0"),
+           * returns the minimum safe version string, or null when the range is too
+           * complex to parse automatically.
+           */
+          function safeVersionFromRange(range) {
+            if (!range || typeof range !== 'string') return null;
+            const r = range.trim();
+
+            // Simple upper-bound: "<X.Y.Z"  →  safe is X.Y.Z
+            const ltSimple = r.match(/^<(\d+\.\d+\.\d+(?:[-\w.+]*)?)$/);
+            if (ltSimple) return ltSimple[1];
+
+            // Upper-bound with lower: ">=A <B" or ">A <B"  →  safe is B
+            const ltComplex = r.match(/(?:^|[\s,|]+)[<](\d+\.\d+\.\d+(?:[-\w.+]*)?)(?:\s|$)/);
+            if (ltComplex) return ltComplex[1];
+
+            // Exact with lte: "<=X.Y.Z" — can't determine exact next patch; return null
+            return null;
+          }
+
+          // Collect override suggestions from the post-fix audit
+          const overrideSuggestions = new Map(); // pkg name → { version, severity, reason }
+
+          if (after) {
+            // v2 format: { vulnerabilities: { pkg: { fixAvailable, via, severity } } }
+            for (const [pkg, vuln] of Object.entries(after.vulnerabilities || {})) {
+              const fixInfo = vuln.fixAvailable;
+              const isUnfixable = fixInfo === false;
+              const needsMajorBump = typeof fixInfo === 'object' && fixInfo !== null && fixInfo.isSemVerMajor === true;
+
+              if (!isUnfixable && !needsMajorBump) continue;
+
+              // Walk via entries to find advisory objects with a `range` field
+              const viaEntries = Array.isArray(vuln.via) ? vuln.via : [];
+              let safeVersion = null;
+              let advisoryUrl = null;
+
+              for (const entry of viaEntries) {
+                if (typeof entry !== 'object' || entry === null) continue;
+                advisoryUrl = advisoryUrl || entry.url || null;
+                // Prefer explicit patched-version metadata over range inference
+                if (!safeVersion) {
+                  const explicit = entry.patched_versions || entry.fixedIn || null;
+                  if (explicit) {
+                    const m = String(explicit).match(/>=?(\d+\.\d+\.\d+(?:[-\w.+]*)?)/);
+                    if (m) { safeVersion = m[1]; advisoryUrl = entry.url || advisoryUrl; break; }
+                  }
+                }
+                // Fall back to parsing the vulnerable range
+                if (!safeVersion && entry.range) {
+                  const v = safeVersionFromRange(entry.range);
+                  if (v) { safeVersion = v; advisoryUrl = entry.url || advisoryUrl; break; }
+                }
+              }
+
+              // For major-bump fixes, also consider the top-level fix target version
+              if (!safeVersion && needsMajorBump) {
+                safeVersion = fixInfo.version || null;
+              }
+
+              const key = vuln.name || pkg;
+              if (!overrideSuggestions.has(key) || (safeVersion && !overrideSuggestions.get(key).version)) {
+                overrideSuggestions.set(key, {
+                  version:  safeVersion,
+                  severity: vuln.severity || '?',
+                  reason:   needsMajorBump
+                    ? `requires breaking upgrade (fix: ${fixInfo.name}@${fixInfo.version})`
+                    : 'no patched version currently available',
+                  url: advisoryUrl,
+                });
+              }
+            }
+
+            // v1 format: { advisories: { id: { module_name, patched_versions, severity } } }
+            for (const [, adv] of Object.entries(after.advisories || {})) {
+              const name = adv.module_name || adv.name;
+              if (!name || overrideSuggestions.has(name)) continue;
+              const patchedVersions = adv.patched_versions || '';
+              // patched_versions like ">=1.2.3" → extract the version
+              const match = patchedVersions.match(/>=(\d+\.\d+\.\d+(?:[-\w.+]*)?)/);
+              const safeVersion = match ? match[1] : null;
+              overrideSuggestions.set(name, {
+                version:  safeVersion,
+                severity: adv.severity || '?',
+                reason:   'no auto-fix available',
+                url:      adv.url || null,
+              });
+            }
+          }
+
+          // Build the overrides section lines
+          let overrideSection = [];
+          if (overrideSuggestions.size > 0) {
+            const yamlLines = [];
+            const tableRows = [];
+            for (const [pkg, info] of [...overrideSuggestions.entries()].sort()) {
+              const versionSpec = info.version ? `>=${info.version}` : null;
+              if (versionSpec) {
+                yamlLines.push(`  "${pkg}": "${versionSpec}"`);
+              }
+              const versionCell = versionSpec || '_unknown — check advisory_';
+              const urlCell = info.url ? `[advisory](${info.url})` : '—';
+              tableRows.push(`| \`${pkg}\` | ${info.severity} | ${versionCell} | ${info.reason} | ${urlCell} |`);
+            }
+
+            overrideSection = [
+              '',
+              '### Suggested `pnpm-workspace.yaml` overrides',
+              '',
+              'The following vulnerabilities **could not be auto-fixed** (no patched version or requires a breaking semver-major upgrade).',
+              'Add these entries to the `overrides` section of `pnpm-workspace.yaml` to pin affected transitive dependencies to safe versions:',
+              '',
+            ];
+
+            if (yamlLines.length > 0) {
+              overrideSection.push(
+                '```yaml',
+                'overrides:',
+                ...yamlLines,
+                '```',
+                '',
+              );
+            }
+
+            overrideSection.push(
+              '| Package | Severity | Suggested override | Reason | Advisory |',
+              '|---------|:--------:|-------------------|--------|----------|',
+              ...tableRows,
+              '',
+              '> **Note:** Verify each suggestion against the advisory before applying.',
+              '> Overrides pin *all* copies of the package workspace-wide — confirm the pinned version is compatible.',
+            );
+          }
+
           const body = [
             '## Automated Dependency Security Fix',
             '',
@@ -178,16 +326,18 @@ jobs:
             `| **Total** | **${totalBefore}** | **${totalAfter}** | **${totalFixed > 0 ? '-'+totalFixed : totalFixed}** |`,
             '',
             totalAfter > 0
-              ? '> **Note:** Some vulnerabilities remain and may require manual overrides in `pnpm-workspace.yaml`.'
+              ? '> **Note:** Some vulnerabilities remain and could not be resolved automatically. See override suggestions below.'
               : '> All detected vulnerabilities were resolved.',
             '',
             '### Packages updated',
             '',
             ...pkgSection,
+            ...overrideSection,
             '',
             '### Review checklist',
             '- [ ] CI passes on this PR',
             '- [ ] No breaking changes in updated packages',
+            ...(overrideSuggestions.size > 0 ? ['- [ ] Review and apply suggested `pnpm-workspace.yaml` overrides for remaining vulnerabilities'] : []),
             '- [ ] Merge promptly to close the vulnerability window',
           ].join('\n');
 
