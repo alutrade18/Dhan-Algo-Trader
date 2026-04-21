@@ -5,6 +5,14 @@ on:
     # Run daily at 09:00 UTC — one hour after the security audit at 08:00
     - cron: '0 9 * * *'
   workflow_dispatch:
+    inputs:
+      stale_pr_days:
+        description: >
+          Close security auto-fix PRs older than this many days
+          (overrides the default STALE_PR_DAYS env var for this run only).
+          Leave blank to use the default (3 days).
+        type: number
+        required: false
 
 permissions:
   contents: write
@@ -374,7 +382,9 @@ jobs:
           # and will be auto-closed even on days with no new lockfile changes.
           # On days where new patches are available a new PR supersedes all prior
           # ones regardless of age.  Tune to match your team's review cadence.
-          STALE_PR_DAYS: '3'
+          # On manual runs, the stale_pr_days input overrides this default.
+          # On scheduled runs (where inputs.stale_pr_days is empty) this falls back to '3'.
+          STALE_PR_DAYS: ${{ inputs.stale_pr_days || '3' }}
           TODAY_BRANCH: ${{ steps.branch-info.outputs.branch }}
           HAS_CHANGES: ${{ steps.check-changes.outputs.has_changes }}
         with:
@@ -443,8 +453,9 @@ jobs:
 
               bodyLines.push(
                 ``,
-                `Adjust the threshold via \`STALE_PR_DAYS\` in the \`Close stale security auto-fix PRs\``,
-                `step of \`.github/workflows/auto-fix-vulnerabilities.yml\`.`,
+                `To adjust the threshold, trigger the workflow manually and set the **stale_pr_days** input,`,
+                `or edit \`STALE_PR_DAYS\` in the \`Close stale security auto-fix PRs\` step of`,
+                `\`.github/workflows/auto-fix-vulnerabilities.yml\` to change the default for scheduled runs.`,
               );
 
               await github.rest.issues.createComment({
