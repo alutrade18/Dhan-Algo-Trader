@@ -2,15 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-} from "recharts";
+  createChart,
+  CrosshairMode,
+  CandlestickSeries,
+  HistogramSeries,
+  type IChartApi,
+  type ISeriesApi,
+  type CandlestickData,
+  type HistogramData,
+  type UTCTimestamp,
+} from "lightweight-charts";
 import { TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,21 +26,13 @@ const INDICES = [
 
 type IndexSymbol = (typeof INDICES)[number]["symbol"];
 
-interface Candle {
+interface RawCandle {
   timestamp: string;
   open: number;
   high: number;
   low: number;
   close: number;
   volume: number;
-  displayTime?: string;
-}
-
-function formatTime(ts: string): string {
-  if (!ts) return "";
-  const parts = ts.split(" ");
-  if (parts.length === 2) return parts[1].slice(0, 5);
-  return ts.slice(11, 16) || ts;
 }
 
 function fmt(v: number, d = 2) {
@@ -49,10 +42,20 @@ function fmt(v: number, d = 2) {
   }).format(v);
 }
 
-function OhlcBox({ label, value, className }: { label: string; value: number | null; className?: string }) {
+function OhlcBox({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: number | null;
+  className?: string;
+}) {
   return (
     <div className="bg-card border border-border rounded-lg p-3">
-      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+        {label}
+      </p>
       <p className={cn("text-sm font-bold font-mono mt-1", className)}>
         {value != null ? fmt(value) : "—"}
       </p>
@@ -60,15 +63,29 @@ function OhlcBox({ label, value, className }: { label: string; value: number | n
   );
 }
 
+function parseISTtoUTC(ts: string): UTCTimestamp {
+  const [datePart, timePart] = ts.split(" ");
+  const [y, m, d] = datePart.split("-").map(Number);
+  const [h, min, s] = (timePart ?? "00:00:00").split(":").map(Number);
+  const utcMs =
+    Date.UTC(y, m - 1, d, h, min, s ?? 0) - 5.5 * 60 * 60 * 1000;
+  return (utcMs / 1000) as UTCTimestamp;
+}
+
+const CANDLE_UP = "#22c55e";
+const CANDLE_DOWN = "#ef4444";
+const CANDLE_BORDER_UP = "#16a34a";
+const CANDLE_BORDER_DOWN = "#dc2626";
+
 export default function Charts() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const initialSymbol = (params.get("symbol") ?? "NIFTY") as IndexSymbol;
   const [symbol, setSymbol] = useState<IndexSymbol>(
-    INDICES.some(i => i.symbol === initialSymbol) ? initialSymbol : "NIFTY"
+    INDICES.some((i) => i.symbol === initialSymbol) ? initialSymbol : "NIFTY"
   );
 
-  const selectedIndex = INDICES.find(i => i.symbol === symbol)!;
+  const selectedIndex = INDICES.find((i) => i.symbol === symbol)!;
 
   const [ltp, setLtp] = useState<number | null>(null);
   const [wsOpen, setWsOpen] = useState<number | null>(null);
@@ -76,7 +93,15 @@ export default function Charts() {
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: rawCandles, isLoading, isFetching, refetch } = useQuery<Candle[]>({
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const volContainerRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const volChartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null);
+  const volSeriesRef = useRef<ISeriesApi<typeof HistogramSeries> | null>(null);
+  const liveRef = useRef<CandlestickData<UTCTimestamp> | null>(null);
+
+  const { data: rawCandles, isLoading, isFetching, refetch } = useQuery<RawCandle[]>({
     queryKey: ["intraday", symbol],
     queryFn: async () => {
       const res = await fetch(`${BASE}api/market/intraday`, {
@@ -89,20 +114,140 @@ export default function Charts() {
         }),
       });
       if (!res.ok) throw new Error("Failed to fetch chart data");
-      const json = await res.json() as { data: Candle[] };
-      return (json.data ?? []).map((c) => ({
-        ...c,
-        displayTime: formatTime(c.timestamp),
-      }));
+      const json = (await res.json()) as { data: RawCandle[] };
+      return json.data ?? [];
     },
     staleTime: 55_000,
     refetchInterval: 60_000,
   });
 
+  const createChartInstance = (
+    container: HTMLDivElement,
+    height: number,
+    showTimeScale: boolean
+  ): IChartApi => {
+    return createChart(container, {
+      width: container.clientWidth,
+      height,
+      layout: {
+        background: { color: "transparent" },
+        textColor: "hsl(215, 20%, 55%)",
+        fontSize: 11,
+        fontFamily: "'Inter', 'ui-monospace', monospace",
+      },
+      grid: {
+        vertLines: { color: "rgba(255,255,255,0.04)" },
+        horzLines: { color: "rgba(255,255,255,0.04)" },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: "rgba(255,255,255,0.15)", labelBackgroundColor: "#1e293b" },
+        horzLine: { color: "rgba(255,255,255,0.15)", labelBackgroundColor: "#1e293b" },
+      },
+      rightPriceScale: {
+        borderColor: "rgba(255,255,255,0.06)",
+        scaleMargins: { top: 0.05, bottom: 0.08 },
+        minimumWidth: 72,
+      },
+      timeScale: {
+        borderColor: "rgba(255,255,255,0.06)",
+        timeVisible: true,
+        secondsVisible: false,
+        visible: showTimeScale,
+        tickMarkFormatter: (time: number) => {
+          const ist = new Date((time + 5.5 * 3600) * 1000);
+          return `${String(ist.getUTCHours()).padStart(2, "0")}:${String(ist.getUTCMinutes()).padStart(2, "0")}`;
+        },
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: { mouseWheel: true, pinch: true },
+    });
+  };
+
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    const volContainer = volContainerRef.current;
+    if (!container || !volContainer) return;
+
+    const mainChart = createChartInstance(container, 340, true);
+    chartRef.current = mainChart;
+
+    const candleSeries = mainChart.addSeries(CandlestickSeries, {
+      upColor: CANDLE_UP,
+      downColor: CANDLE_DOWN,
+      borderUpColor: CANDLE_BORDER_UP,
+      borderDownColor: CANDLE_BORDER_DOWN,
+      wickUpColor: CANDLE_UP,
+      wickDownColor: CANDLE_DOWN,
+    });
+    candleSeriesRef.current = candleSeries;
+
+    const volChart = createChartInstance(volContainer, 90, false);
+    volChartRef.current = volChart;
+
+    const volSeries = volChart.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "right",
+      color: "rgba(99,102,241,0.45)",
+    });
+    volSeriesRef.current = volSeries;
+
+    const ro = new ResizeObserver(() => {
+      mainChart.applyOptions({ width: container.clientWidth });
+      volChart.applyOptions({ width: volContainer.clientWidth });
+    });
+    ro.observe(container);
+    ro.observe(volContainer);
+
+    return () => {
+      ro.disconnect();
+      mainChart.remove();
+      volChart.remove();
+      chartRef.current = null;
+      volChartRef.current = null;
+      candleSeriesRef.current = null;
+      volSeriesRef.current = null;
+      liveRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    const volSeries = volSeriesRef.current;
+    const chart = chartRef.current;
+    if (!series || !volSeries || !chart || !rawCandles) return;
+
+    const seen = new Set<number>();
+    const candleData: CandlestickData<UTCTimestamp>[] = [];
+    const volData: HistogramData<UTCTimestamp>[] = [];
+
+    for (const c of rawCandles) {
+      const time = parseISTtoUTC(c.timestamp);
+      if (seen.has(time)) continue;
+      seen.add(time);
+      candleData.push({ time, open: c.open, high: c.high, low: c.low, close: c.close });
+      volData.push({
+        time,
+        value: c.volume,
+        color: c.close >= c.open ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)",
+      });
+    }
+
+    candleData.sort((a, b) => a.time - b.time);
+    volData.sort((a, b) => a.time - b.time);
+
+    series.setData(candleData);
+    volSeries.setData(volData);
+    chart.timeScale().fitContent();
+
+    liveRef.current = candleData[candleData.length - 1] ?? null;
+  }, [rawCandles]);
+
   useEffect(() => {
     setLtp(null);
     setWsOpen(null);
     prevLtpRef.current = null;
+    liveRef.current = null;
 
     const unsub = marketSocket.subscribeQuote(
       selectedIndex.exchange,
@@ -117,6 +262,29 @@ export default function Charts() {
           }
           prevLtpRef.current = data.ltp;
           setLtp(data.ltp);
+
+          const series = candleSeriesRef.current;
+          const volSeries = volSeriesRef.current;
+          if (series && liveRef.current) {
+            const updated: CandlestickData<UTCTimestamp> = {
+              ...liveRef.current,
+              close: data.ltp,
+              high: Math.max(liveRef.current.high, data.ltp),
+              low: Math.min(liveRef.current.low, data.ltp),
+            };
+            liveRef.current = updated;
+            series.update(updated);
+            if (volSeries && data.volume != null) {
+              volSeries.update({
+                time: updated.time,
+                value: data.volume,
+                color:
+                  updated.close >= updated.open
+                    ? "rgba(34,197,94,0.35)"
+                    : "rgba(239,68,68,0.35)",
+              });
+            }
+          }
         }
         if (data.open != null) setWsOpen(data.open);
       }
@@ -127,32 +295,23 @@ export default function Charts() {
     };
   }, [symbol, selectedIndex.exchange, selectedIndex.securityId]);
 
-  const chartCandles: Candle[] = (() => {
-    if (!rawCandles?.length) return [];
-    const candles = [...rawCandles];
-    if (ltp != null && candles.length > 0) {
-      candles[candles.length - 1] = { ...candles[candles.length - 1], close: ltp };
-    }
-    return candles;
-  })();
-
+  const lastCandle = rawCandles?.[rawCandles.length - 1];
   const openPrice = wsOpen ?? rawCandles?.[0]?.open ?? null;
-  const lastClose = chartCandles[chartCandles.length - 1]?.close ?? null;
-  const currentPrice = ltp ?? lastClose;
-  const change = openPrice != null && currentPrice != null ? currentPrice - openPrice : null;
-  const changePct = openPrice != null && openPrice > 0 && change != null ? (change / openPrice) * 100 : null;
+  const currentPrice = ltp ?? lastCandle?.close ?? null;
+  const change =
+    openPrice != null && currentPrice != null ? currentPrice - openPrice : null;
+  const changePct =
+    openPrice != null && openPrice > 0 && change != null
+      ? (change / openPrice) * 100
+      : null;
   const isPositive = (change ?? 0) >= 0;
 
-  const priceColor = isPositive ? "#22c55e" : "#ef4444";
-
-  const allLows = chartCandles.map(c => c.low).filter(Boolean);
-  const allHighs = chartCandles.map(c => c.high).filter(Boolean);
-  const domainPad = (v: number) => v * 0.0005;
-  const yMin = allLows.length ? Math.min(...allLows) - domainPad(Math.min(...allLows)) : "auto";
-  const yMax = allHighs.length ? Math.max(...allHighs) + domainPad(Math.max(...allHighs)) : "auto";
-
+  const allHighs = rawCandles?.map((c) => c.high) ?? [];
+  const allLows = rawCandles?.map((c) => c.low) ?? [];
   const dayHigh = allHighs.length ? Math.max(...allHighs) : null;
   const dayLow = allLows.length ? Math.min(...allLows) : null;
+
+  const hasData = (rawCandles?.length ?? 0) > 0;
 
   return (
     <div className="space-y-4">
@@ -185,165 +344,100 @@ export default function Charts() {
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">
-            NSE · {selectedIndex.label} · Intraday
+            NSE · {selectedIndex.label} · 1-min Candles
           </p>
           <div
             className={cn(
               "text-4xl font-bold font-mono tracking-tight transition-colors duration-300",
-              flash === "up" ? "text-success" : flash === "down" ? "text-destructive" : "text-foreground",
+              flash === "up"
+                ? "text-success"
+                : flash === "down"
+                ? "text-destructive"
+                : "text-foreground"
             )}
           >
             {currentPrice != null ? fmt(currentPrice) : "—"}
           </div>
           {change != null && changePct != null && (
-            <div className={cn(
-              "flex items-center gap-1.5 text-sm font-mono mt-1.5",
-              isPositive ? "text-success" : "text-destructive",
-            )}>
-              {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              <span>{isPositive ? "+" : ""}{fmt(change)}</span>
-              <span className="opacity-80">({isPositive ? "+" : ""}{fmt(changePct)}%)</span>
+            <div
+              className={cn(
+                "flex items-center gap-1.5 text-sm font-mono mt-1.5",
+                isPositive ? "text-success" : "text-destructive"
+              )}
+            >
+              {isPositive ? (
+                <TrendingUp className="w-4 h-4" />
+              ) : (
+                <TrendingDown className="w-4 h-4" />
+              )}
+              <span>
+                {isPositive ? "+" : ""}
+                {fmt(change)}
+              </span>
+              <span className="opacity-80">
+                ({isPositive ? "+" : ""}
+                {fmt(changePct)}%)
+              </span>
             </div>
           )}
         </div>
         <div className="flex items-center gap-1.5 mb-2">
           <Activity className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">1-min candles · live</span>
+          <span className="text-xs text-muted-foreground">
+            Candlestick · live WS
+          </span>
           {ltp != null && (
             <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
           )}
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="h-[340px] w-full">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
-              <RefreshCw className="w-5 h-5 animate-spin" />
-              <span className="text-sm">Loading chart data…</span>
-            </div>
-          ) : chartCandles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2">
-              <Activity className="w-6 h-6 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground text-center">
-                No intraday data available
-                <br />
-                <span className="text-xs">Market may be closed or broker not connected</span>
-              </p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartCandles} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id={`grad-${symbol}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={priceColor} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={priceColor} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis
-                  dataKey="displayTime"
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  tickLine={false}
-                  axisLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={70}
-                />
-                <YAxis
-                  domain={[yMin, yMax]}
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  tickFormatter={(v) =>
-                    new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(v)
-                  }
-                  tickLine={false}
-                  axisLine={false}
-                  width={68}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    borderColor: "hsl(var(--border))",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    padding: "8px 12px",
-                  }}
-                  itemStyle={{ color: "hsl(var(--foreground))" }}
-                  labelStyle={{ color: "hsl(var(--muted-foreground))", marginBottom: 4 }}
-                  formatter={(value: number, name: string) => [fmt(value), name === "close" ? "Price" : name]}
-                  labelFormatter={(label) => `Time: ${label}`}
-                />
-                {openPrice != null && (
-                  <ReferenceLine
-                    y={openPrice}
-                    stroke="rgba(255,255,255,0.18)"
-                    strokeDasharray="5 4"
-                    label={{ value: "Open", fill: "hsl(var(--muted-foreground))", fontSize: 9, position: "insideTopLeft" }}
-                  />
-                )}
-                <Area
-                  type="monotone"
-                  dataKey="close"
-                  stroke={priceColor}
-                  strokeWidth={1.8}
-                  fill={`url(#grad-${symbol})`}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0, fill: priceColor }}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+      <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-[340px] gap-2 text-muted-foreground">
+            <RefreshCw className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Loading chart data…</span>
+          </div>
+        ) : !hasData ? (
+          <div className="flex flex-col items-center justify-center h-[340px] gap-2">
+            <Activity className="w-6 h-6 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground text-center">
+              No intraday data available
+              <br />
+              <span className="text-xs">
+                Market may be closed or broker not connected
+              </span>
+            </p>
+          </div>
+        ) : null}
+        <div
+          ref={chartContainerRef}
+          className={cn("w-full", !hasData && "hidden")}
+          style={{ height: 340 }}
+        />
       </div>
 
-      {chartCandles.length > 0 && (
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-3">Volume</p>
-          <div className="h-[90px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartCandles} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-                <XAxis dataKey="displayTime" hide />
-                <YAxis
-                  tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
-                  tickFormatter={(v) =>
-                    v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)
-                  }
-                  tickLine={false}
-                  axisLine={false}
-                  width={42}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    borderColor: "hsl(var(--border))",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    padding: "8px 12px",
-                  }}
-                  formatter={(value: number) => [new Intl.NumberFormat("en-IN").format(value), "Volume"]}
-                  labelFormatter={(label) => `Time: ${label}`}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="volume"
-                  stroke="rgba(99,102,241,0.5)"
-                  fill="rgba(99,102,241,0.12)"
-                  strokeWidth={1}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      <div className="bg-card border border-border rounded-xl px-4 pt-3 pb-2 overflow-hidden">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">
+          Volume
+        </p>
+        <div
+          ref={volContainerRef}
+          className="w-full"
+          style={{ height: 90 }}
+        />
+      </div>
 
-      {chartCandles.length > 0 && (
+      {hasData && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <OhlcBox label="Open" value={openPrice} />
           <OhlcBox label="High" value={dayHigh} className="text-success" />
           <OhlcBox label="Low" value={dayLow} className="text-destructive" />
-          <OhlcBox label="LTP" value={currentPrice} className={isPositive ? "text-success" : "text-destructive"} />
+          <OhlcBox
+            label="LTP"
+            value={currentPrice}
+            className={isPositive ? "text-success" : "text-destructive"}
+          />
         </div>
       )}
     </div>
