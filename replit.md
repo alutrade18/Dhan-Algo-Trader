@@ -259,6 +259,7 @@ Professional algorithmic trading platform powered by Dhan broker API for Indian 
 - **api-server reliability**: Added graceful SIGTERM/SIGINT handler + `httpServer.on("error")` handler in `index.ts`; `prestart` runs `scripts/free-port.mjs` (parses `/proc/net/tcp` to find PID holding `$PORT` and SIGKILLs only that process — safe vs the previous `pkill -f` which killed the prestart shell itself)
 - **lib/db & lib/api-zod**: Rebuilt stale `dist/*.d.ts` after deleting `dist/` + `tsconfig.tsbuildinfo` — fixed missing `watchlistTable`, `marketHolidaysTable`, `equityCurveCacheTable`, `rateLimitLogTable` exports and `tradingSymbol` field on `PlaceOrderBody`
 - **Security audit**: 0 critical/high/moderate dep vulns; 0 HoundDog issues; 2 SAST findings reviewed and confirmed false positives (GCM auth tag length is 16 bytes; "SQL injection" was a template literal inside a log message — all DB access goes through Drizzle parameterized queries)
+- **Automated security alerts**: `scripts/security-audit.sh` runs `pnpm audit` at ≥moderate severity; registered as `security-audit` validation; `.github/workflows/security-audit.yml` runs on schedule (daily 08:00 UTC) and on PRs touching lock/package files; GitHub notifies committers on failure
 
 ### Phase 9 — Audit Fixes A–D + Mobile Friendliness
 
