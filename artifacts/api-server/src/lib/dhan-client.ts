@@ -401,17 +401,20 @@ export const dhanClient = {
     fromDate?: string;
     toDate?: string;
   }) {
-    const now = new Date();
-    const from = data.fromDate ?? (() => {
-      const d = new Date(now); d.setDate(d.getDate() - 60);
-      return `${d.toISOString().split("T")[0]} 09:15:00`;
-    })();
-    const to = data.toDate ?? `${now.toISOString().split("T")[0]} 15:30:00`;
+    // Compute today's date in IST (UTC+5:30) so the range always covers the current trading day
+    const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    const todayIST = [
+      nowIST.getUTCFullYear(),
+      String(nowIST.getUTCMonth() + 1).padStart(2, "0"),
+      String(nowIST.getUTCDate()).padStart(2, "0"),
+    ].join("-");
+    const from = data.fromDate ?? `${todayIST} 09:15:00`;
+    const to   = data.toDate   ?? `${todayIST} 15:30:00`;
     return dhanRequest("POST", "/charts/intraday", {
       securityId: data.securityId,
       exchangeSegment: data.exchangeSegment,
       instrument: data.instrumentType,
-      interval: data.interval ?? "15",
+      interval: data.interval ?? "1",   // 1-minute candles for live chart
       oi: false,
       fromDate: from,
       toDate: to,

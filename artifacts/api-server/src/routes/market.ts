@@ -112,17 +112,49 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
       exchangeSegment: parsed.data.exchangeSegment,
       instrumentType: parsed.data.instrumentType,
     });
+
+    // Dhan's /charts/intraday returns columnar arrays (NOT row arrays like /charts/historical):
+    // { open: [...], high: [...], low: [...], close: [...], volume: [...], start_Time: ["<epoch_secs>", ...] }
     const r = result as Record<string, unknown>;
-    const candles = Array.isArray(r.data) ? r.data : [];
+    const times   = Array.isArray(r.start_Time) ? (r.start_Time as unknown[]) : [];
+    const opens   = Array.isArray(r.open)       ? (r.open   as number[]) : [];
+    const highs   = Array.isArray(r.high)       ? (r.high   as number[]) : [];
+    const lows    = Array.isArray(r.low)        ? (r.low    as number[]) : [];
+    const closes  = Array.isArray(r.close)      ? (r.close  as number[]) : [];
+    const volumes = Array.isArray(r.volume)     ? (r.volume as number[]) : [];
+
+    // Convert epoch-seconds to IST datetime string ("YYYY-MM-DD HH:MM:SS")
+    function epochToIST(epochSec: unknown): string {
+      const ms = Number(epochSec) * 1000;
+      if (isNaN(ms) || ms <= 0) return "";
+      const d = new Date(ms + 5.5 * 60 * 60 * 1000); // shift UTC → IST
+      return [
+        d.getUTCFullYear(),
+        String(d.getUTCMonth() + 1).padStart(2, "0"),
+        String(d.getUTCDate()).padStart(2, "0"),
+      ].join("-") + " " + [
+        String(d.getUTCHours()).padStart(2, "0"),
+        String(d.getUTCMinutes()).padStart(2, "0"),
+        "00",
+      ].join(":");
+    }
+
+    req.log.info(
+      { timesCount: times.length, firstTime: times[0], lastTime: times[times.length - 1] },
+      "Intraday candles fetched"
+    );
+
     res.json({
-      data: candles.map((c: unknown[]) => ({
-        timestamp: String(c[0] || ""),
-        open: Number(c[1] || 0),
-        high: Number(c[2] || 0),
-        low: Number(c[3] || 0),
-        close: Number(c[4] || 0),
-        volume: Number(c[5] || 0),
-      })),
+      data: times
+        .map((ts, i) => ({
+          timestamp: epochToIST(ts),
+          open:   Number(opens[i]   ?? 0),
+          high:   Number(highs[i]   ?? 0),
+          low:    Number(lows[i]    ?? 0),
+          close:  Number(closes[i]  ?? 0),
+          volume: Number(volumes[i] ?? 0),
+        }))
+        .filter(c => c.timestamp !== ""),
     });
   } catch (e) {
     req.log.error({ err: e }, "Failed to fetch intraday data");
