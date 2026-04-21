@@ -111,6 +111,7 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
       securityId: parsed.data.securityId,
       exchangeSegment: parsed.data.exchangeSegment,
       instrumentType: parsed.data.instrumentType,
+      interval: parsed.data.interval,
     });
 
     // Dhan's /charts/intraday returns columnar arrays:

@@ -6,11 +6,13 @@ import {
   CrosshairMode,
   CandlestickSeries,
   HistogramSeries,
+  LineStyle,
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
   type HistogramData,
   type UTCTimestamp,
+  type IPriceLine,
 } from "lightweight-charts";
 import { TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,16 @@ const INDICES = [
 ] as const;
 
 type IndexSymbol = (typeof INDICES)[number]["symbol"];
+
+const TIMEFRAMES = [
+  { label: "1m",  value: "1"  },
+  { label: "5m",  value: "5"  },
+  { label: "15m", value: "15" },
+  { label: "25m", value: "25" },
+  { label: "60m", value: "60" },
+] as const;
+
+type Interval = (typeof TIMEFRAMES)[number]["value"];
 
 interface RawCandle {
   timestamp: string;
@@ -76,6 +88,7 @@ const CANDLE_UP = "#22c55e";
 const CANDLE_DOWN = "#ef4444";
 const CANDLE_BORDER_UP = "#16a34a";
 const CANDLE_BORDER_DOWN = "#dc2626";
+const PRICE_LINE_COLOR = "#f59e0b";
 
 export default function Charts() {
   const search = useSearch();
@@ -84,6 +97,7 @@ export default function Charts() {
   const [symbol, setSymbol] = useState<IndexSymbol>(
     INDICES.some((i) => i.symbol === initialSymbol) ? initialSymbol : "NIFTY"
   );
+  const [interval, setInterval] = useState<Interval>("1");
 
   const selectedIndex = INDICES.find((i) => i.symbol === symbol)!;
 
@@ -100,9 +114,12 @@ export default function Charts() {
   const candleSeriesRef = useRef<ISeriesApi<typeof CandlestickSeries> | null>(null);
   const volSeriesRef = useRef<ISeriesApi<typeof HistogramSeries> | null>(null);
   const liveRef = useRef<CandlestickData<UTCTimestamp> | null>(null);
+  const priceLineRef = useRef<IPriceLine | null>(null);
+
+  const staleMs = Number(interval) * 60_000;
 
   const { data: rawCandles, isLoading, isFetching, refetch } = useQuery<RawCandle[]>({
-    queryKey: ["intraday", symbol],
+    queryKey: ["intraday", symbol, interval],
     queryFn: async () => {
       const res = await fetch(`${BASE}api/market/intraday`, {
         method: "POST",
@@ -111,14 +128,15 @@ export default function Charts() {
           securityId: String(selectedIndex.securityId),
           exchangeSegment: selectedIndex.exchange,
           instrumentType: "INDEX",
+          interval,
         }),
       });
       if (!res.ok) throw new Error("Failed to fetch chart data");
       const json = (await res.json()) as { data: RawCandle[] };
       return json.data ?? [];
     },
-    staleTime: 55_000,
-    refetchInterval: 60_000,
+    staleTime: staleMs - 5_000,
+    refetchInterval: staleMs,
   });
 
   const createChartInstance = (
@@ -146,30 +164,34 @@ export default function Charts() {
       },
       rightPriceScale: {
         borderColor: "rgba(255,255,255,0.06)",
-        scaleMargins: { top: 0.05, bottom: 0.08 },
+        // Symmetric margins so current price stays centered in the visible range
+        scaleMargins: { top: 0.15, bottom: 0.15 },
         minimumWidth: 72,
+        autoScale: true,
       },
       timeScale: {
         borderColor: "rgba(255,255,255,0.06)",
         timeVisible: true,
         secondsVisible: false,
         visible: showTimeScale,
+        rightOffset: 5,
         tickMarkFormatter: (time: number) => {
           const ist = new Date((time + 5.5 * 3600) * 1000);
           return `${String(ist.getUTCHours()).padStart(2, "0")}:${String(ist.getUTCMinutes()).padStart(2, "0")}`;
         },
       },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true },
-      handleScale: { mouseWheel: true, pinch: true },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
+      handleScale: { mouseWheel: true, pinch: true, axisDoubleClickReset: true },
     });
   };
 
+  // Create chart instances once on mount
   useEffect(() => {
     const container = chartContainerRef.current;
     const volContainer = volContainerRef.current;
     if (!container || !volContainer) return;
 
-    const mainChart = createChartInstance(container, 340, true);
+    const mainChart = createChartInstance(container, 360, true);
     chartRef.current = mainChart;
 
     const candleSeries = mainChart.addSeries(CandlestickSeries, {
@@ -179,6 +201,8 @@ export default function Charts() {
       borderDownColor: CANDLE_BORDER_DOWN,
       wickUpColor: CANDLE_UP,
       wickDownColor: CANDLE_DOWN,
+      lastValueVisible: true,
+      priceLineVisible: false, // we manage our own price line
     });
     candleSeriesRef.current = candleSeries;
 
@@ -208,9 +232,11 @@ export default function Charts() {
       candleSeriesRef.current = null;
       volSeriesRef.current = null;
       liveRef.current = null;
+      priceLineRef.current = null;
     };
   }, []);
 
+  // Load candle data whenever it changes (symbol or interval switch)
   useEffect(() => {
     const series = candleSeriesRef.current;
     const volSeries = volSeriesRef.current;
@@ -220,7 +246,7 @@ export default function Charts() {
     const volContainer = volContainerRef.current;
     if (!series || !volSeries || !chart || !volChart || !rawCandles) return;
 
-    // Force correct dimensions — the container may have been zero-width at mount time
+    // Ensure correct dimensions in case container was zero-width at mount
     if (container) chart.applyOptions({ width: container.clientWidth });
     if (volContainer) volChart.applyOptions({ width: volContainer.clientWidth });
 
@@ -245,16 +271,44 @@ export default function Charts() {
 
     series.setData(candleData);
     volSeries.setData(volData);
+
+    // fitContent auto-scales price axis to fit all visible candles
     chart.timeScale().fitContent();
+    volChart.timeScale().fitContent();
+
+    // Re-enable autoScale after setting data (resets any manual pan drift)
+    chart.priceScale("right").applyOptions({ autoScale: true });
 
     liveRef.current = candleData[candleData.length - 1] ?? null;
+
+    // Restore / create the LTP price line if we have a live price
+    if (ltp != null) {
+      if (priceLineRef.current) {
+        priceLineRef.current.applyOptions({ price: ltp });
+      } else {
+        priceLineRef.current = series.createPriceLine({
+          price: ltp,
+          color: PRICE_LINE_COLOR,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "LTP",
+        });
+      }
+    }
   }, [rawCandles]);
 
+  // WebSocket live ticks
   useEffect(() => {
     setLtp(null);
     setWsOpen(null);
     prevLtpRef.current = null;
     liveRef.current = null;
+    // Remove stale price line when switching symbol
+    if (priceLineRef.current && candleSeriesRef.current) {
+      try { candleSeriesRef.current.removePriceLine(priceLineRef.current); } catch {}
+      priceLineRef.current = null;
+    }
 
     const unsub = marketSocket.subscribeQuote(
       selectedIndex.exchange,
@@ -272,6 +326,24 @@ export default function Charts() {
 
           const series = candleSeriesRef.current;
           const volSeries = volSeriesRef.current;
+
+          // Update or create the price line
+          if (series) {
+            if (priceLineRef.current) {
+              priceLineRef.current.applyOptions({ price: data.ltp });
+            } else {
+              priceLineRef.current = series.createPriceLine({
+                price: data.ltp,
+                color: PRICE_LINE_COLOR,
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: "LTP",
+              });
+            }
+          }
+
+          // Update the live (current) candle
           if (series && liveRef.current) {
             const updated: CandlestickData<UTCTimestamp> = {
               ...liveRef.current,
@@ -320,8 +392,11 @@ export default function Charts() {
 
   const hasData = (rawCandles?.length ?? 0) > 0;
 
+  const tfLabel = TIMEFRAMES.find((t) => t.value === interval)?.label ?? interval;
+
   return (
     <div className="space-y-4">
+      {/* Top bar: index selector + refresh */}
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-center gap-2">
           {INDICES.map((idx) => (
@@ -348,10 +423,11 @@ export default function Charts() {
         </Button>
       </div>
 
+      {/* Price header */}
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">
-            NSE · {selectedIndex.label} · 1-min Candles
+            NSE · {selectedIndex.label} · {tfLabel} Candles
           </p>
           <div
             className={cn(
@@ -390,17 +466,34 @@ export default function Charts() {
         </div>
         <div className="flex items-center gap-1.5 mb-2">
           <Activity className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">
-            Candlestick · live WS
-          </span>
+          <span className="text-xs text-muted-foreground">Candlestick · live WS</span>
           {ltp != null && (
             <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse inline-block" />
           )}
         </div>
       </div>
 
+      {/* Main candlestick chart */}
       <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
-        <div className="relative" style={{ height: 340 }}>
+        {/* Timeframe selector */}
+        <div className="flex items-center gap-1.5 mb-3">
+          {TIMEFRAMES.map((tf) => (
+            <button
+              key={tf.value}
+              onClick={() => setInterval(tf.value)}
+              className={cn(
+                "px-2.5 py-0.5 rounded text-xs font-semibold transition-colors",
+                interval === tf.value
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+              )}
+            >
+              {tf.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative" style={{ height: 360 }}>
           {(isLoading || !hasData) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-card/80">
               {isLoading ? (
@@ -424,6 +517,7 @@ export default function Charts() {
         </div>
       </div>
 
+      {/* Volume chart */}
       <div className="bg-card border border-border rounded-xl px-4 pt-3 pb-2 overflow-hidden">
         <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">
           Volume
@@ -436,6 +530,7 @@ export default function Charts() {
         </div>
       </div>
 
+      {/* OHLC summary boxes */}
       {hasData && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <OhlcBox label="Open" value={openPrice} />

@@ -363,6 +363,7 @@ export const GetIntradayDataBody = zod.object({
   securityId: zod.string(),
   exchangeSegment: zod.string(),
   instrumentType: zod.string(),
+  interval: zod.enum(["1", "5", "15", "25", "60"]).optional(),
 });
 
 export const GetIntradayDataResponse = zod.object({
