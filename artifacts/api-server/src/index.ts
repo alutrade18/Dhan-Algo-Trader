@@ -27,6 +27,17 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+// Require a valid ENCRYPTION_KEY at startup — without it broker tokens cannot be
+// stored securely and the server refuses to start rather than silently persisting
+// plaintext credentials.
+const encryptionKeyHex = process.env["ENCRYPTION_KEY"] ?? "";
+if (!encryptionKeyHex || Buffer.from(encryptionKeyHex, "hex").length !== 32) {
+  throw new Error(
+    "ENCRYPTION_KEY environment variable is required and must be a 64-character hex string (32 bytes). " +
+    "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+  );
+}
+
 const httpServer = http.createServer(app);
 
 const io = new SocketIO(httpServer, {

@@ -9,7 +9,12 @@ function getKey(): Buffer | null {
 
 export function encryptToken(text: string): string {
   const key = getKey();
-  if (!key) return text;
+  if (!key) {
+    throw new Error(
+      "ENCRYPTION_KEY is not configured or is invalid. " +
+      "Set ENCRYPTION_KEY to a 64-character hex string (32 bytes) before storing broker credentials.",
+    );
+  }
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
   const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
@@ -22,9 +27,12 @@ export function encryptToken(text: string): string {
  *
  * Returns the plaintext on success. Returns `null` if the input is a valid
  * AES-GCM envelope but decryption fails (wrong/rotated ENCRYPTION_KEY or
- * tampered ciphertext). Returns the input unchanged only when:
- *   - no ENCRYPTION_KEY is configured (no-op mode), or
- *   - the input is plainly not an encrypted envelope (too short)
+ * tampered ciphertext). Returns the input unchanged only when the input is
+ * plainly not an encrypted envelope (too short to be a valid GCM blob).
+ *
+ * Note: the server requires a valid ENCRYPTION_KEY at startup (see index.ts),
+ * so the `!key` branch below is only reachable in isolated unit-test contexts
+ * or if the env var is removed at runtime after boot.
  *
  * This distinction matters: if we return the still-encrypted base64 blob as
  * a "token", downstream Dhan calls fail with 401 and the user sees misleading

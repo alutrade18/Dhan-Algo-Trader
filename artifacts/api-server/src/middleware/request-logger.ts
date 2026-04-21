@@ -89,6 +89,14 @@ const ALWAYS_SKIP = [
   "/api/risk/killswitch",
 ];
 
+// Routes whose request bodies must never appear in logs — they handle credentials
+// and secrets. Rather than maintaining a growing denylist of field names, we
+// suppress the entire requestBody for these prefixes.
+const NO_BODY_LOG_PREFIXES = [
+  "/api/broker",
+  "/api/settings",
+];
+
 // For GET requests: only log if the response is an error (4xx/5xx).
 // For all mutating methods (POST/PUT/PATCH/DELETE): always log.
 const MUTE_SUCCESS_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -145,13 +153,24 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       if (b.httpStatus)  details.httpStatus  = b.httpStatus;
     }
 
-    // ── Request payload for mutating calls (strip sensitive fields) ──────────
-    if (!isReadOnly && req.body && typeof req.body === "object") {
+    // ── Request payload for mutating calls ───────────────────────────────────
+    // Routes that deal with credentials/secrets (broker, settings) have their
+    // entire request body suppressed — no field-level denylist can reliably
+    // cover every future secret added to those endpoints.
+    // For all other routes a denylist strips known-sensitive fields as a
+    // defence-in-depth layer.
+    const suppressBody = NO_BODY_LOG_PREFIXES.some(p => req.url.startsWith(p));
+    if (!isReadOnly && !suppressBody && req.body && typeof req.body === "object") {
       const safe = { ...req.body } as Record<string, unknown>;
       delete safe.accessToken;
       delete safe.password;
       delete safe.token;
       delete safe.killSwitchPin;
+      delete safe.pin;
+      delete safe.totp;
+      delete safe.clientId;
+      delete safe.telegramBotToken;
+      delete safe.telegramChatId;
       if (Object.keys(safe).length > 0) details.requestBody = safe;
     }
 
