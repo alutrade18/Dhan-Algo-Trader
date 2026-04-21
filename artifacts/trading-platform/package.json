@@ -59,7 +59,6 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "socket.io-client": "^4.8.3",
-    "xlsx": "^0.18.5"
+    "socket.io-client": "^4.8.3"
   }
 }

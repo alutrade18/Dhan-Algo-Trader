@@ -163,3 +163,6 @@ overrides:
   path-to-regexp: "8.4.0"
   "picomatch@2": "2.3.2"
   "picomatch@4": "4.0.4"
+  "brace-expansion@2": "2.0.3"
+  follow-redirects: "1.16.0"
+  yaml: "2.8.3"

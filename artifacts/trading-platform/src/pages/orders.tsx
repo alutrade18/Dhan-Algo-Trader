@@ -146,6 +146,29 @@ function todayISO(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+function downloadCsv(rows: Record<string, unknown>[], filename: string): void {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (v: unknown): string => {
+    let s = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  const csv = [
+    headers.map(escape).join(","),
+    ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
+  ].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   const map: Record<OrderStatus, { label: string; className: string }> = {
     TRADED: {
@@ -668,7 +691,7 @@ export default function OrdersPage() {
     }
   }
 
-  async function exportHistory() {
+  function exportHistory() {
     if (historyOrders.length === 0) {
       toast({ title: "No data to export", variant: "destructive" });
       return;
@@ -685,15 +708,12 @@ export default function OrdersPage() {
       Segment: t.exchangeSegment,
       "Create Time": t.createTime,
     }));
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "TradeHistory");
-    XLSX.writeFile(wb, `dhan-trade-history-${historyDate}.xlsx`);
-    toast({ title: `Exported ${rows.length} rows`, description: `dhan-trade-history-${historyDate}.xlsx` });
+    const filename = `dhan-trade-history-${historyDate}.csv`;
+    downloadCsv(rows, filename);
+    toast({ title: `Exported ${rows.length} rows`, description: filename });
   }
 
-  async function exportTodayOrders() {
+  function exportTodayOrders() {
     if (orders.length === 0) {
       toast({
         title: "No data to export",
@@ -717,14 +737,11 @@ export default function OrdersPage() {
       "Update Time": o.updateTime,
       "OMS Error": o.omsErrorDescription ?? "",
     }));
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Orders");
-    XLSX.writeFile(wb, `dhan-orders-today-${todayISO()}.xlsx`);
+    const filename = `dhan-orders-today-${todayISO()}.csv`;
+    downloadCsv(rows, filename);
     toast({
-      title: `Exported ${rows.length} rows to Excel`,
-      description: `dhan-orders-today-${todayISO()}.xlsx`,
+      title: `Exported ${rows.length} rows`,
+      description: filename,
     });
   }
 
