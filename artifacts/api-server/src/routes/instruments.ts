@@ -38,7 +38,6 @@ router.get("/instruments/option-underlyings", async (req, res): Promise<void> =>
 router.get("/instruments/search", async (req, res): Promise<void> => {
   const q = String(req.query.q ?? "").trim();
   const instrument = req.query.instrument as string | undefined;
-  // instruments (plural) — comma-separated list: "EQUITY,FUTSTK,OPTSTK"
   const instrumentsParam = req.query.instruments as string | undefined;
   const exch = req.query.exch as string | undefined;
   const limit = Math.min(Number(req.query.limit ?? 20), 100);
@@ -49,14 +48,28 @@ router.get("/instruments/search", async (req, res): Promise<void> => {
   }
 
   try {
-    const conditions = [
-      or(
+    // Split query into tokens (by spaces/dashes/underscores) so that
+    // "nifty 25500 ce" matches "FINNIFTY-Apr2026-25500-CE"
+    const tokens = q.toUpperCase().split(/[\s\-_]+/).filter(Boolean);
+
+    let symbolCondition: ReturnType<typeof and>;
+    if (tokens.length > 1) {
+      // Multi-token: every token must appear somewhere in symbolName (AND logic)
+      symbolCondition = and(
+        ...tokens.map(token => ilike(instrumentsTable.symbolName, `%${token}%`))
+      )!;
+    } else {
+      // Single token: starts-with OR contains OR securityId OR isin
+      symbolCondition = or(
         ilike(instrumentsTable.symbolName, `${q}%`),
+        ilike(instrumentsTable.symbolName, `%${q}%`),
         ilike(instrumentsTable.displayName, `%${q}%`),
         ilike(instrumentsTable.isin, q),
         sql`${instrumentsTable.securityId}::text = ${q}`,
-      ),
-    ];
+      )!;
+    }
+
+    const conditions = [symbolCondition];
 
     if (instrumentsParam) {
       const types = instrumentsParam.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
@@ -72,6 +85,8 @@ router.get("/instruments/search", async (req, res): Promise<void> => {
       conditions.push(eq(instrumentsTable.exchId, exch.toUpperCase()));
     }
 
+    // For ordering: prefer exact match, then starts-with, then rest
+    const firstToken = tokens[0] ?? q;
     const results = await db
       .select({
         securityId: instrumentsTable.securityId,
@@ -93,7 +108,7 @@ router.get("/instruments/search", async (req, res): Promise<void> => {
       .where(and(...conditions))
       .orderBy(
         sql`CASE WHEN upper(${instrumentsTable.symbolName}) = upper(${q}) THEN 0
-                 WHEN upper(${instrumentsTable.symbolName}) LIKE upper(${q + "%"}) THEN 1
+                 WHEN upper(${instrumentsTable.symbolName}) LIKE upper(${firstToken + "%"}) THEN 1
                  ELSE 2 END`,
         instrumentsTable.symbolName
       )
