@@ -605,7 +605,7 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
     setSearchQuery(val);
     setForm(f => ({ ...f, tradingSymbol: val, securityId: "", exchangeSegment: "NSE_FNO" }));
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!val.trim()) {
+    if (val.trim().length < 3) {
       setSearchResults([]);
       setShowDropdown(false);
       return;
@@ -773,7 +773,7 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
                 <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   className="h-8 text-sm pl-8 pr-8 font-mono uppercase"
-                  placeholder="Search — e.g. NIFTY, BANKNIFTY, RELIANCE"
+                  placeholder=""
                   value={searchQuery}
                   onChange={e => handleSearchInput(e.target.value)}
                   onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}

@@ -42,15 +42,17 @@ router.get("/instruments/search", async (req, res): Promise<void> => {
   const exch = req.query.exch as string | undefined;
   const limit = Math.min(Number(req.query.limit ?? 20), 100);
 
-  if (!q || q.length < 1) {
-    res.status(400).json({ error: "q param required (min 1 char)" });
+  if (!q || q.length < 3) {
+    res.status(400).json({ error: "q param required (min 3 chars)" });
     return;
   }
 
   try {
-    // Split query into tokens (by spaces/dashes/underscores) so that
-    // "nifty 25500 ce" matches "FINNIFTY-Apr2026-25500-CE"
-    const tokens = q.toUpperCase().split(/[\s\-_]+/).filter(Boolean);
+    // Strip all special characters from query — keep only letters, digits, spaces
+    // so "NIF-TY" → "NIF TY", "NIFTY@25500#CE" → "NIFTY 25500 CE"
+    const cleaned = q.replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+    // Split into tokens so "nifty 25500 ce" matches "FINNIFTY-Apr2026-25500-CE"
+    const tokens = cleaned.toUpperCase().split(/\s+/).filter(Boolean);
 
     let symbolCondition: ReturnType<typeof and>;
     if (tokens.length > 1) {
