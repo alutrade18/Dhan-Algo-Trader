@@ -35,6 +35,7 @@ import {
   Settings,
   Search,
   CalendarDays,
+  Plus,
 } from "lucide-react";
 import { isMarketOpen } from "@/lib/market-calendar";
 const BASE = import.meta.env.BASE_URL;
@@ -529,6 +530,334 @@ function CancelConfirm({ orderId, onConfirm, onDismiss, loading }: CancelConfirm
   );
 }
 
+// ── PlaceOrderModal ───────────────────────────────────────────────────────────
+
+type PlaceTransactionType = "BUY" | "SELL";
+type PlaceOrderType = "MARKET" | "LIMIT" | "SL" | "SLM";
+type PlaceProductType = "INTRA" | "CNC" | "MARGIN" | "MTF";
+type PlaceValidity = "DAY" | "IOC";
+
+const EXCHANGE_SEGMENTS = [
+  { value: "NSE_EQ",       label: "NSE EQ"  },
+  { value: "NSE_FNO",      label: "NSE F&O" },
+  { value: "BSE_EQ",       label: "BSE EQ"  },
+  { value: "BSE_FNO",      label: "BSE F&O" },
+  { value: "MCX_COMM",     label: "MCX"     },
+  { value: "NSE_CURRENCY", label: "NSE FX"  },
+  { value: "CDS_FX",       label: "CDS FX"  },
+];
+
+interface PlaceOrderForm {
+  transactionType: PlaceTransactionType;
+  exchangeSegment: string;
+  securityId: string;
+  tradingSymbol: string;
+  orderType: PlaceOrderType;
+  productType: PlaceProductType;
+  quantity: string;
+  price: string;
+  triggerPrice: string;
+  validity: PlaceValidity;
+  afterMarketOrder: boolean;
+}
+
+const DEFAULT_PLACE_FORM: PlaceOrderForm = {
+  transactionType: "BUY",
+  exchangeSegment: "NSE_FNO",
+  securityId: "",
+  tradingSymbol: "",
+  orderType: "MARKET",
+  productType: "INTRA",
+  quantity: "",
+  price: "",
+  triggerPrice: "",
+  validity: "DAY",
+  afterMarketOrder: false,
+};
+
+interface PlaceOrderModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [form, setForm] = useState<PlaceOrderForm>(DEFAULT_PLACE_FORM);
+
+  const priceRequired   = form.orderType === "LIMIT" || form.orderType === "SL";
+  const triggerRequired = form.orderType === "SL"    || form.orderType === "SLM";
+
+  function set<K extends keyof PlaceOrderForm>(k: K, v: PlaceOrderForm[K]) {
+    setForm(f => ({ ...f, [k]: v }));
+  }
+
+  function handleClose() {
+    onClose();
+    setShowConfirm(false);
+  }
+
+  function handleReview(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.securityId.trim()) return;
+    setShowConfirm(true);
+  }
+
+  async function handleConfirm() {
+    setLoading(true);
+    try {
+      const payload: Record<string, unknown> = {
+        transactionType: form.transactionType,
+        exchangeSegment: form.exchangeSegment,
+        securityId:      form.securityId.trim(),
+        tradingSymbol:   form.tradingSymbol.trim() || undefined,
+        orderType:       form.orderType,
+        productType:     form.productType,
+        quantity:        Number(form.quantity),
+        price:           priceRequired   ? Number(form.price)        : 0,
+        triggerPrice:    triggerRequired ? Number(form.triggerPrice)  : 0,
+        disclosedQuantity: 0,
+        validity:        form.validity,
+        afterMarketOrder: form.afterMarketOrder,
+      };
+      const res  = await fetch(`${BASE}api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) {
+        toast({
+          title: "Order failed",
+          description: (data.errorMessage as string) || (data.error as string) || "Could not place order",
+          variant: "destructive",
+        });
+        setShowConfirm(false);
+        return;
+      }
+      toast({
+        title: `${form.transactionType} order placed`,
+        description: `Order #${String(data.orderId ?? "")} — ${form.tradingSymbol || form.securityId}`,
+      });
+      setForm(DEFAULT_PLACE_FORM);
+      setShowConfirm(false);
+      onSuccess();
+      handleClose();
+    } catch {
+      toast({ title: "Network error", description: "Could not reach server", variant: "destructive" });
+      setShowConfirm(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="sm:max-w-lg bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            {showConfirm ? "Confirm Order" : "Place Order"}
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* ── Form ── */}
+        {!showConfirm && (
+          <form onSubmit={(e) => void handleReview(e)} className="space-y-4">
+
+            {/* BUY / SELL toggle */}
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/40 p-1">
+              {(["BUY", "SELL"] as PlaceTransactionType[]).map(side => (
+                <button key={side} type="button"
+                  onClick={() => set("transactionType", side)}
+                  className={`py-2 rounded-md text-sm font-bold transition-all ${
+                    form.transactionType === side
+                      ? side === "BUY"
+                        ? "bg-success text-white shadow-sm"
+                        : "bg-destructive text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {side}
+                </button>
+              ))}
+            </div>
+
+            {/* Exchange + Security ID */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Exchange Segment</Label>
+                <Select value={form.exchangeSegment} onValueChange={v => set("exchangeSegment", v)}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EXCHANGE_SEGMENTS.map(s => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Security ID</Label>
+                <Input className="h-8 text-sm font-mono" placeholder="e.g. 1333" value={form.securityId}
+                  onChange={e => set("securityId", e.target.value)} required />
+              </div>
+            </div>
+
+            {/* Symbol (optional) */}
+            <div className="space-y-1">
+              <Label className="text-xs">Symbol <span className="text-muted-foreground">(optional, for reference)</span></Label>
+              <Input className="h-8 text-sm font-mono uppercase" placeholder="e.g. NIFTY24500CE"
+                value={form.tradingSymbol}
+                onChange={e => set("tradingSymbol", e.target.value.toUpperCase())} />
+            </div>
+
+            {/* Order Type + Product Type */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Order Type</Label>
+                <Select value={form.orderType} onValueChange={v => set("orderType", v as PlaceOrderType)}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MARKET">MARKET</SelectItem>
+                    <SelectItem value="LIMIT">LIMIT</SelectItem>
+                    <SelectItem value="SL">STOP LOSS</SelectItem>
+                    <SelectItem value="SLM">SL MARKET</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Product</Label>
+                <Select value={form.productType} onValueChange={v => set("productType", v as PlaceProductType)}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="INTRA">INTRADAY</SelectItem>
+                    <SelectItem value="CNC">CNC</SelectItem>
+                    <SelectItem value="MARGIN">MARGIN</SelectItem>
+                    <SelectItem value="MTF">MTF</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Qty + Price + Trigger */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Quantity</Label>
+                <Input type="number" min={1} className="h-8 text-sm" placeholder="Qty"
+                  value={form.quantity} onChange={e => set("quantity", e.target.value)} required />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  Price {!priceRequired && <span className="text-muted-foreground">(N/A)</span>}
+                </Label>
+                <Input type="number" step="0.05" className="h-8 text-sm" placeholder="0.00"
+                  value={form.price} disabled={!priceRequired}
+                  onChange={e => set("price", e.target.value)} required={priceRequired} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  Trigger {!triggerRequired && <span className="text-muted-foreground">(N/A)</span>}
+                </Label>
+                <Input type="number" step="0.05" className="h-8 text-sm" placeholder="0.00"
+                  value={form.triggerPrice} disabled={!triggerRequired}
+                  onChange={e => set("triggerPrice", e.target.value)} required={triggerRequired} />
+              </div>
+            </div>
+
+            {/* Validity + AMO */}
+            <div className="flex items-center gap-4">
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">Validity</Label>
+                <div className="flex gap-1">
+                  {(["DAY", "IOC"] as PlaceValidity[]).map(v => (
+                    <button key={v} type="button"
+                      onClick={() => set("validity", v)}
+                      className={`flex-1 py-1.5 rounded text-xs font-medium border transition-colors ${
+                        form.validity === v
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">After Market</Label>
+                <div className="flex items-center h-8">
+                  <button type="button"
+                    onClick={() => set("afterMarketOrder", !form.afterMarketOrder)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      form.afterMarketOrder ? "bg-primary" : "bg-muted"
+                    }`}>
+                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                      form.afterMarketOrder ? "translate-x-4" : "translate-x-1"
+                    }`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-1">
+              <Button type="button" variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
+              <Button type="submit" size="sm"
+                className={form.transactionType === "BUY" ? "bg-success hover:bg-success/90 text-white" : "bg-destructive hover:bg-destructive/90 text-white"}>
+                Review Order
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+
+        {/* ── Confirm screen ── */}
+        {showConfirm && (
+          <div className="space-y-4">
+            <div className={`rounded-md border px-3 py-2.5 text-xs font-medium ${
+              form.transactionType === "BUY"
+                ? "border-success/30 bg-success/10 text-success"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }`}>
+              You are placing a <strong>{form.transactionType}</strong> order. This will be executed on Dhan immediately.
+            </div>
+
+            <div className="space-y-1.5 rounded-md bg-muted/40 px-3 py-3 text-xs">
+              {[
+                { label: "Side",      value: form.transactionType },
+                { label: "Symbol",    value: form.tradingSymbol || form.securityId },
+                { label: "Segment",   value: form.exchangeSegment },
+                { label: "Order Type",value: form.orderType },
+                { label: "Product",   value: form.productType },
+                { label: "Quantity",  value: form.quantity },
+                ...(priceRequired   ? [{ label: "Price",         value: `₹${form.price}` }]        : []),
+                ...(triggerRequired ? [{ label: "Trigger Price", value: `₹${form.triggerPrice}` }] : []),
+                { label: "Validity",  value: form.validity },
+                ...(form.afterMarketOrder ? [{ label: "After Market", value: "Yes" }] : []),
+              ].map(({ label, value }) => (
+                <div key={label} className="flex justify-between items-center py-0.5">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className={`font-mono font-semibold ${
+                    label === "Side"
+                      ? form.transactionType === "BUY" ? "text-success" : "text-destructive"
+                      : ""
+                  }`}>{value}</span>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter className="pt-1">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowConfirm(false)} disabled={loading}>Back</Button>
+              <Button type="button" size="sm" disabled={loading} onClick={() => void handleConfirm()}
+                className={form.transactionType === "BUY" ? "bg-success hover:bg-success/90 text-white" : "bg-destructive hover:bg-destructive/90 text-white"}>
+                {loading ? "Placing…" : `Confirm ${form.transactionType}`}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 
 const HISTORY_PRESETS: { id: Preset; label: string; days: number }[] = [
@@ -549,6 +878,7 @@ export default function OrdersPage() {
   const [modifyOrder, setModifyOrder] = useState<DhanOrder | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [showPlaceOrder, setShowPlaceOrder] = useState(false);
 
   const fetchOrders = useCallback(async (showRefreshSpin = false) => {
     if (showRefreshSpin) setOrdersRefreshing(true);
@@ -764,6 +1094,11 @@ export default function OrdersPage() {
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Export CSV</span>
+            </Button>
+            <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-white" onClick={() => setShowPlaceOrder(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Place Order</span>
+              <span className="sm:hidden">Order</span>
             </Button>
           </div>
         </div>
@@ -1207,6 +1542,12 @@ export default function OrdersPage() {
           order={modifyOrder}
           open={!!modifyOrder}
           onClose={() => setModifyOrder(null)}
+          onSuccess={() => void fetchOrders()}
+        />
+
+        <PlaceOrderModal
+          open={showPlaceOrder}
+          onClose={() => setShowPlaceOrder(false)}
           onSuccess={() => void fetchOrders()}
         />
       </div>
