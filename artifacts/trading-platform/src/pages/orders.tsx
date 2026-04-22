@@ -137,14 +137,10 @@ function downloadCsv(rows: Record<string, unknown>[], filename: string): void {
 
 function formatSegment(seg: string): { label: string; color: string } {
   const map: Record<string, { label: string; color: string }> = {
-    NSE_EQ:       { label: "NSE EQ",  color: "bg-blue-500/15 text-blue-400" },
-    NSE_FNO:      { label: "NSE F&O", color: "bg-purple-500/15 text-purple-400" },
-    BSE_EQ:       { label: "BSE EQ",  color: "bg-sky-500/15 text-sky-400" },
-    BSE_FNO:      { label: "BSE F&O", color: "bg-violet-500/15 text-violet-400" },
-    MCX_COMM:     { label: "MCX",     color: "bg-orange-500/15 text-orange-400" },
-    CDS_FX:       { label: "CDS FX",  color: "bg-teal-500/15 text-teal-400" },
-    NSE_CURRENCY: { label: "NSE FX",  color: "bg-teal-500/15 text-teal-400" },
-    IDX_I:        { label: "INDEX",   color: "bg-gray-500/15 text-gray-400" },
+    NSE_EQ:   { label: "NSE EQ",  color: "bg-blue-500/15 text-blue-400" },
+    NSE_FNO:  { label: "NSE F&O", color: "bg-purple-500/15 text-purple-400" },
+    MCX_COMM: { label: "MCX",     color: "bg-orange-500/15 text-orange-400" },
+    IDX_I:    { label: "INDEX",   color: "bg-gray-500/15 text-gray-400" },
   };
   return map[seg] ?? { label: seg, color: "bg-muted text-muted-foreground" };
 }
@@ -533,32 +529,32 @@ function CancelConfirm({ orderId, onConfirm, onDismiss, loading }: CancelConfirm
 // ── PlaceOrderModal ───────────────────────────────────────────────────────────
 
 type PlaceTransactionType = "BUY" | "SELL";
-type PlaceOrderType = "MARKET" | "LIMIT" | "SL" | "SLM";
-type PlaceProductType = "INTRA" | "CNC" | "MARGIN" | "MTF";
-type PlaceValidity = "DAY" | "IOC";
 
-const EXCHANGE_SEGMENTS = [
-  { value: "NSE_EQ",       label: "NSE EQ"  },
-  { value: "NSE_FNO",      label: "NSE F&O" },
-  { value: "BSE_EQ",       label: "BSE EQ"  },
-  { value: "BSE_FNO",      label: "BSE F&O" },
-  { value: "MCX_COMM",     label: "MCX"     },
-  { value: "NSE_CURRENCY", label: "NSE FX"  },
-  { value: "CDS_FX",       label: "CDS FX"  },
-];
+interface InstrumentResult {
+  securityId: number;
+  exchId: string;
+  instrument: string;
+  symbolName: string;
+  displayName: string | null;
+  lotSize: number | null;
+  expiryDate: string | null;
+  strikePrice: number | null;
+  optionType: string | null;
+}
+
+function deriveSegment(instrument: string): string {
+  if (instrument === "EQUITY" || instrument === "EQ") return "NSE_EQ";
+  return "NSE_FNO";
+}
 
 interface PlaceOrderForm {
   transactionType: PlaceTransactionType;
   exchangeSegment: string;
   securityId: string;
   tradingSymbol: string;
-  orderType: PlaceOrderType;
-  productType: PlaceProductType;
   quantity: string;
   price: string;
   triggerPrice: string;
-  validity: PlaceValidity;
-  afterMarketOrder: boolean;
 }
 
 const DEFAULT_PLACE_FORM: PlaceOrderForm = {
@@ -566,13 +562,9 @@ const DEFAULT_PLACE_FORM: PlaceOrderForm = {
   exchangeSegment: "NSE_FNO",
   securityId: "",
   tradingSymbol: "",
-  orderType: "MARKET",
-  productType: "INTRA",
   quantity: "",
   price: "",
   triggerPrice: "",
-  validity: "DAY",
-  afterMarketOrder: false,
 };
 
 interface PlaceOrderModalProps {
@@ -587,21 +579,101 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState<PlaceOrderForm>(DEFAULT_PLACE_FORM);
 
-  const priceRequired   = form.orderType === "LIMIT" || form.orderType === "SL";
-  const triggerRequired = form.orderType === "SL"    || form.orderType === "SLM";
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<InstrumentResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [ltpLoading, setLtpLoading] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function set<K extends keyof PlaceOrderForm>(k: K, v: PlaceOrderForm[K]) {
     setForm(f => ({ ...f, [k]: v }));
   }
 
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function handleSearchInput(val: string) {
+    setSearchQuery(val);
+    setForm(f => ({ ...f, tradingSymbol: val, securityId: "", exchangeSegment: "NSE_FNO" }));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!val.trim()) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      void (async () => {
+        setSearchLoading(true);
+        try {
+          const url = `${BASE}api/instruments/search?q=${encodeURIComponent(val)}&exch=NSE&instruments=EQUITY,FUTSTK,FUTIDX,OPTSTK,OPTIDX&limit=10`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const data = (await res.json()) as InstrumentResult[];
+            setSearchResults(data);
+            setShowDropdown(data.length > 0);
+          }
+        } catch {
+          // ignore
+        } finally {
+          setSearchLoading(false);
+        }
+      })();
+    }, 300);
+  }
+
+  async function handleSelectInstrument(instr: InstrumentResult) {
+    const seg = deriveSegment(instr.instrument);
+    const qty = String(instr.lotSize && instr.lotSize > 1 ? instr.lotSize : 1);
+    setSearchQuery(instr.symbolName);
+    setForm(f => ({
+      ...f,
+      tradingSymbol: instr.symbolName,
+      securityId: String(instr.securityId),
+      exchangeSegment: seg,
+      quantity: qty,
+      price: "",
+    }));
+    setShowDropdown(false);
+    setLtpLoading(true);
+    try {
+      const r = await fetch(`${BASE}api/market/ltp?exchSeg=${seg}&secId=${instr.securityId}`);
+      if (r.ok) {
+        const d = (await r.json()) as { ltp?: number };
+        if (d.ltp !== undefined) {
+          setForm(f => ({ ...f, price: String(d.ltp) }));
+        }
+      }
+    } catch {
+      // LTP optional
+    } finally {
+      setLtpLoading(false);
+    }
+  }
+
   function handleClose() {
     onClose();
     setShowConfirm(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setForm(DEFAULT_PLACE_FORM);
   }
 
   function handleReview(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.securityId.trim()) return;
+    if (!form.securityId.trim()) {
+      toast({ title: "Symbol required", description: "Search and select a symbol from the list", variant: "destructive" });
+      return;
+    }
+    if (!form.quantity || Number(form.quantity) < 1) return;
     setShowConfirm(true);
   }
 
@@ -611,18 +683,18 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
       const payload: Record<string, unknown> = {
         transactionType: form.transactionType,
         exchangeSegment: form.exchangeSegment,
-        securityId:      form.securityId.trim(),
-        tradingSymbol:   form.tradingSymbol.trim() || undefined,
-        orderType:       form.orderType,
-        productType:     form.productType,
-        quantity:        Number(form.quantity),
-        price:           priceRequired   ? Number(form.price)        : 0,
-        triggerPrice:    triggerRequired ? Number(form.triggerPrice)  : 0,
+        securityId: form.securityId.trim(),
+        tradingSymbol: form.tradingSymbol.trim() || undefined,
+        orderType: "MARKET",
+        productType: "INTRA",
+        quantity: Number(form.quantity),
+        price: 0,
+        triggerPrice: form.triggerPrice ? Number(form.triggerPrice) : 0,
         disclosedQuantity: 0,
-        validity:        form.validity,
-        afterMarketOrder: form.afterMarketOrder,
+        validity: "DAY",
+        afterMarketOrder: false,
       };
-      const res  = await fetch(`${BASE}api/orders`, {
+      const res = await fetch(`${BASE}api/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -639,9 +711,11 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
       }
       toast({
         title: `${form.transactionType} order placed`,
-        description: `Order #${String(data.orderId ?? "")} — ${form.tradingSymbol || form.securityId}`,
+        description: `Order #${String(data.orderId ?? "")} — ${form.tradingSymbol}`,
       });
       setForm(DEFAULT_PLACE_FORM);
+      setSearchQuery("");
+      setSearchResults([]);
       setShowConfirm(false);
       onSuccess();
       handleClose();
@@ -651,6 +725,14 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function formatInstrLabel(instr: InstrumentResult): string {
+    const parts: string[] = [];
+    if (instr.expiryDate) parts.push(instr.expiryDate.slice(0, 7));
+    if (instr.strikePrice) parts.push(String(instr.strikePrice));
+    if (instr.optionType) parts.push(instr.optionType);
+    return parts.join(" · ");
   }
 
   return (
@@ -684,59 +766,65 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
               ))}
             </div>
 
-            {/* Exchange + Security ID */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Exchange Segment</Label>
-                <Select value={form.exchangeSegment} onValueChange={v => set("exchangeSegment", v)}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {EXCHANGE_SEGMENTS.map(s => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+            {/* Symbol auto-search */}
+            <div className="space-y-1" ref={searchRef}>
+              <Label className="text-xs font-semibold">Symbol</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  className="h-8 text-sm pl-8 pr-8 font-mono uppercase"
+                  placeholder="Search — e.g. NIFTY, BANKNIFTY, RELIANCE"
+                  value={searchQuery}
+                  onChange={e => handleSearchInput(e.target.value)}
+                  onFocus={() => { if (searchResults.length > 0) setShowDropdown(true); }}
+                  autoComplete="off"
+                />
+                {searchLoading && (
+                  <div className="absolute right-2.5 top-2 h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+                )}
+                {showDropdown && searchResults.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-52 overflow-y-auto">
+                    {searchResults.map(instr => (
+                      <button
+                        key={`${instr.securityId}-${instr.symbolName}`}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-muted/60 text-xs font-mono border-b border-border/40 last:border-0"
+                        onMouseDown={() => void handleSelectInstrument(instr)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-foreground truncate">{instr.symbolName}</span>
+                          <span className="text-muted-foreground shrink-0 text-[10px]">{instr.exchId} · {instr.instrument}</span>
+                        </div>
+                        {(instr.expiryDate || instr.strikePrice) && (
+                          <div className="text-muted-foreground mt-0.5 text-[10px]">{formatInstrLabel(instr)}</div>
+                        )}
+                      </button>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Security ID</Label>
-                <Input className="h-8 text-sm font-mono" placeholder="e.g. 1333" value={form.securityId}
-                  onChange={e => set("securityId", e.target.value)} required />
-              </div>
+              {form.securityId && (
+                <div className="flex gap-2 text-[10px] text-muted-foreground">
+                  <span>Security ID: {form.securityId}</span>
+                  <span>·</span>
+                  <span>{form.exchangeSegment}</span>
+                </div>
+              )}
             </div>
 
-            {/* Symbol (optional) */}
-            <div className="space-y-1">
-              <Label className="text-xs">Symbol <span className="text-muted-foreground">(optional, for reference)</span></Label>
-              <Input className="h-8 text-sm font-mono uppercase" placeholder="e.g. NIFTY24500CE"
-                value={form.tradingSymbol}
-                onChange={e => set("tradingSymbol", e.target.value.toUpperCase())} />
-            </div>
-
-            {/* Order Type + Product Type */}
+            {/* Fixed: MARKET + INTRADAY */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Order Type</Label>
-                <Select value={form.orderType} onValueChange={v => set("orderType", v as PlaceOrderType)}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MARKET">MARKET</SelectItem>
-                    <SelectItem value="LIMIT">LIMIT</SelectItem>
-                    <SelectItem value="SL">STOP LOSS</SelectItem>
-                    <SelectItem value="SLM">SL MARKET</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="h-8 flex items-center px-3 rounded-md border border-border bg-muted/30 text-sm font-semibold text-muted-foreground">
+                  MARKET
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Product</Label>
-                <Select value={form.productType} onValueChange={v => set("productType", v as PlaceProductType)}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="INTRA">INTRADAY</SelectItem>
-                    <SelectItem value="CNC">CNC</SelectItem>
-                    <SelectItem value="MARGIN">MARGIN</SelectItem>
-                    <SelectItem value="MTF">MTF</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="h-8 flex items-center px-3 rounded-md border border-border bg-muted/30 text-sm font-semibold text-muted-foreground">
+                  INTRADAY
+                </div>
               </div>
             </div>
 
@@ -748,54 +836,19 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
                   value={form.quantity} onChange={e => set("quantity", e.target.value)} required />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">
-                  Price {!priceRequired && <span className="text-muted-foreground">(N/A)</span>}
+                <Label className="text-xs flex items-center gap-1">
+                  Price (Live)
+                  {ltpLoading && (
+                    <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-muted-foreground border-t-transparent" />
+                  )}
                 </Label>
-                <Input type="number" step="0.05" className="h-8 text-sm" placeholder="0.00"
-                  value={form.price} disabled={!priceRequired}
-                  onChange={e => set("price", e.target.value)} required={priceRequired} />
+                <Input type="number" step="0.05" className="h-8 text-sm" placeholder="LTP"
+                  value={form.price} onChange={e => set("price", e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">
-                  Trigger {!triggerRequired && <span className="text-muted-foreground">(N/A)</span>}
-                </Label>
+                <Label className="text-xs">Trigger <span className="text-muted-foreground">(opt)</span></Label>
                 <Input type="number" step="0.05" className="h-8 text-sm" placeholder="0.00"
-                  value={form.triggerPrice} disabled={!triggerRequired}
-                  onChange={e => set("triggerPrice", e.target.value)} required={triggerRequired} />
-              </div>
-            </div>
-
-            {/* Validity + AMO */}
-            <div className="flex items-center gap-4">
-              <div className="space-y-1 flex-1">
-                <Label className="text-xs">Validity</Label>
-                <div className="flex gap-1">
-                  {(["DAY", "IOC"] as PlaceValidity[]).map(v => (
-                    <button key={v} type="button"
-                      onClick={() => set("validity", v)}
-                      className={`flex-1 py-1.5 rounded text-xs font-medium border transition-colors ${
-                        form.validity === v
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border text-muted-foreground hover:text-foreground"
-                      }`}>
-                      {v}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">After Market</Label>
-                <div className="flex items-center h-8">
-                  <button type="button"
-                    onClick={() => set("afterMarketOrder", !form.afterMarketOrder)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      form.afterMarketOrder ? "bg-primary" : "bg-muted"
-                    }`}>
-                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-                      form.afterMarketOrder ? "translate-x-4" : "translate-x-1"
-                    }`} />
-                  </button>
-                </div>
+                  value={form.triggerPrice} onChange={e => set("triggerPrice", e.target.value)} />
               </div>
             </div>
 
@@ -817,21 +870,19 @@ function PlaceOrderModal({ open, onClose, onSuccess }: PlaceOrderModalProps) {
                 ? "border-success/30 bg-success/10 text-success"
                 : "border-destructive/30 bg-destructive/10 text-destructive"
             }`}>
-              You are placing a <strong>{form.transactionType}</strong> order. This will be executed on Dhan immediately.
+              You are placing a <strong>{form.transactionType}</strong> order. This will be executed on Broker immediately.
             </div>
 
             <div className="space-y-1.5 rounded-md bg-muted/40 px-3 py-3 text-xs">
               {[
-                { label: "Side",      value: form.transactionType },
-                { label: "Symbol",    value: form.tradingSymbol || form.securityId },
-                { label: "Segment",   value: form.exchangeSegment },
-                { label: "Order Type",value: form.orderType },
-                { label: "Product",   value: form.productType },
-                { label: "Quantity",  value: form.quantity },
-                ...(priceRequired   ? [{ label: "Price",         value: `₹${form.price}` }]        : []),
-                ...(triggerRequired ? [{ label: "Trigger Price", value: `₹${form.triggerPrice}` }] : []),
-                { label: "Validity",  value: form.validity },
-                ...(form.afterMarketOrder ? [{ label: "After Market", value: "Yes" }] : []),
+                { label: "Side",       value: form.transactionType },
+                { label: "Symbol",     value: form.tradingSymbol },
+                { label: "Segment",    value: form.exchangeSegment },
+                { label: "Order Type", value: "MARKET" },
+                { label: "Product",    value: "INTRADAY" },
+                { label: "Quantity",   value: form.quantity },
+                ...(form.price       ? [{ label: "Ref. Price",    value: `₹${form.price}` }]        : []),
+                ...(form.triggerPrice ? [{ label: "Trigger Price", value: `₹${form.triggerPrice}` }] : []),
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center py-0.5">
                   <span className="text-muted-foreground">{label}</span>

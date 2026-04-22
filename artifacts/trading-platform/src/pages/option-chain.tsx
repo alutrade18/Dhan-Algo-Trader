@@ -33,7 +33,7 @@ interface IndexUnderlying {
   dhanSecId: number;   // security_id from DB — used for Dhan API calls
   dbSecId: number;     // underlying_security_id from DB
   segment: string;     // always "IDX_I" for INDEX instruments
-  exchange: "NSE" | "BSE" | "MCX";
+  exchange: "NSE" | "MCX";
 }
 
 type Mode = "index" | "stock";
@@ -295,7 +295,7 @@ interface DbInstrument {
 }
 
 function mapDbToUnderlying(r: DbInstrument): IndexUnderlying {
-  const exch = (r.exchId === "BSE" ? "BSE" : r.exchId === "MCX" ? "MCX" : "NSE") as "NSE" | "BSE" | "MCX";
+  const exch = (r.exchId === "MCX" ? "MCX" : "NSE") as "NSE" | "MCX";
   return {
     label: r.displayName ?? r.symbolName,
     symbol: r.symbolName,
@@ -350,16 +350,14 @@ export default function OptionChain() {
     : (stockUnderlying?.underlyingSecurityId ?? null);
   const activeSegment = mode === "index"
     ? (activeIndex?.segment ?? "IDX_I")
-    : stockUnderlying?.exchId === "BSE"
-      ? "BSE_EQ"
-      : "NSE_EQ";
+    : "NSE_EQ";
   const activeLabel = mode === "index"
     ? (activeIndex?.label ?? "")
     : (stockUnderlying?.underlyingSymbol ?? "");
   const activeExchange: Exchange = "NSE";
 
   // Option contract segment
-  const optionSegment = activeSegment?.startsWith("BSE") ? "BSE_FNO" : "NSE_FNO";
+  const optionSegment = "NSE_FNO";
 
   // Market hours gate
   const marketStatus = useMarketStatus(activeExchange);
