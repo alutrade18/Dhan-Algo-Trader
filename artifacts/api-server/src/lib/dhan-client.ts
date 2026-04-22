@@ -247,36 +247,47 @@ export const dhanClient = {
   },
 
   async placeOrder(orderData: Record<string, unknown>) {
-    // Generate a correlation ID for idempotency (max 48 chars per Dhan API spec).
-    // Dhan v2 API uses camelCase: send as correlationId (camelCase).
+    // Dhan API docs: correlationId max 30 chars, alphanumeric + space + _ + -
+    // UUID without dashes = 32 chars — MUST slice to 30 to avoid DH-905.
     const correlationId =
       (orderData.correlationId as string | undefined) ??
       (orderData.correlation_id as string | undefined) ??
-      crypto.randomUUID().replace(/-/g, "").slice(0, 48);
-    return dhanRequest("POST", "/orders", {
+      crypto.randomUUID().replace(/-/g, "").slice(0, 30);
+    const body = {
       dhanClientId: credentials.clientId,
       correlationId,
       ...orderData,
-    });
+    };
+    logger.info({ body }, "[placeOrder] sending to Dhan POST /orders");
+    return dhanRequest("POST", "/orders", body);
   },
 
   async modifyOrder(
     orderId: string,
     data: {
-      order_type?: string;
+      orderType?: string;
       quantity?: number;
       price?: number;
-      trigger_price?: number;
-      disclosed_quantity?: number;
+      triggerPrice?: number;
+      disclosedQuantity?: number;
       validity?: string;
-      leg_name?: string;
+      legName?: string;
     },
   ) {
-    return dhanRequest("PUT", `/orders/${orderId}`, {
+    // Dhan v2 API uses camelCase for all modify-order fields
+    const body: Record<string, unknown> = {
       dhanClientId: credentials.clientId,
-      order_id: orderId,
-      ...data,
-    });
+      orderId,
+    };
+    if (data.orderType      !== undefined) body.orderType       = data.orderType;
+    if (data.quantity       !== undefined) body.quantity        = data.quantity;
+    if (data.price          !== undefined) body.price           = data.price;
+    if (data.triggerPrice   !== undefined) body.triggerPrice    = data.triggerPrice;
+    if (data.disclosedQuantity !== undefined) body.disclosedQuantity = data.disclosedQuantity;
+    if (data.validity       !== undefined) body.validity        = data.validity;
+    if (data.legName        !== undefined) body.legName         = data.legName;
+    logger.info({ body, orderId }, "[modifyOrder] sending to Dhan PUT /orders");
+    return dhanRequest("PUT", `/orders/${orderId}`, body);
   },
 
   async cancelOrder(orderId: string) {

@@ -103,6 +103,17 @@ router.post("/orders", async (req, res): Promise<void> => {
       return;
     }
 
+    // Translate our internal shorthand values to the real Dhan API values.
+    // Dhan Python SDK source confirms: INTRA="INTRADAY", SL="STOP_LOSS", SLM="STOP_LOSS_MARKET"
+    const PRODUCT_TYPE_MAP: Record<string, string> = {
+      INTRA: "INTRADAY", CNC: "CNC", MARGIN: "MARGIN", MTF: "MTF", CO: "CO", BO: "BO",
+    };
+    const ORDER_TYPE_MAP: Record<string, string> = {
+      MARKET: "MARKET", LIMIT: "LIMIT", SL: "STOP_LOSS", SLM: "STOP_LOSS_MARKET",
+    };
+    const dhanProductType = PRODUCT_TYPE_MAP[parsed.data.productType] ?? parsed.data.productType;
+    const dhanOrderType   = ORDER_TYPE_MAP[parsed.data.orderType]    ?? parsed.data.orderType;
+
     // ── H4: Pre-trade margin check via Dhan's margin calculator ──────────────
     // Only checked for priced order types (LIMIT / STOP_LOSS) to avoid false
     // positives on MARKET orders where price is unknown. Fail-open: if the
@@ -117,7 +128,7 @@ router.post("/orders", async (req, res): Promise<void> => {
           exchangeSegment: parsed.data.exchangeSegment,
           transactionType: parsed.data.transactionType,
           quantity: parsed.data.quantity,
-          productType: parsed.data.productType,
+          productType: dhanProductType,   // use mapped value (INTRADAY not INTRA)
           securityId: parsed.data.securityId,
           price: parsed.data.price ?? 0,
           triggerPrice: parsed.data.triggerPrice ?? 0,
@@ -141,17 +152,6 @@ router.post("/orders", async (req, res): Promise<void> => {
         logger.warn({ err: marginErr, securityId: parsed.data.securityId }, "[H4] Pre-trade margin check skipped — margin API error (fail open)");
       }
     }
-
-    // Translate our internal shorthand values to the real Dhan API values.
-    // Dhan Python SDK source confirms: INTRA="INTRADAY", SL="STOP_LOSS", SLM="STOP_LOSS_MARKET"
-    const PRODUCT_TYPE_MAP: Record<string, string> = {
-      INTRA: "INTRADAY", CNC: "CNC", MARGIN: "MARGIN", MTF: "MTF", CO: "CO", BO: "BO",
-    };
-    const ORDER_TYPE_MAP: Record<string, string> = {
-      MARKET: "MARKET", LIMIT: "LIMIT", SL: "STOP_LOSS", SLM: "STOP_LOSS_MARKET",
-    };
-    const dhanProductType = PRODUCT_TYPE_MAP[parsed.data.productType] ?? parsed.data.productType;
-    const dhanOrderType   = ORDER_TYPE_MAP[parsed.data.orderType]    ?? parsed.data.orderType;
 
     // Payload matches Dhan's official Python SDK structure exactly (src/dhanhq/_order.py).
     // dhanClientId is injected by placeOrder(); boProfitValue/boStopLossValue must be present.
@@ -208,13 +208,13 @@ router.patch("/orders/:orderId", async (req, res): Promise<void> => {
 
   try {
     const result = await dhanClient.modifyOrder(orderId, {
-      order_type: parsed.data.orderType,
+      orderType: parsed.data.orderType,
       quantity: parsed.data.quantity,
       price: parsed.data.price,
-      trigger_price: parsed.data.triggerPrice,
-      disclosed_quantity: parsed.data.disclosedQuantity,
+      triggerPrice: parsed.data.triggerPrice,
+      disclosedQuantity: parsed.data.disclosedQuantity,
       validity: parsed.data.validity,
-      leg_name: parsed.data.legName,
+      legName: parsed.data.legName,
     });
 
     const r = result as Record<string, unknown>;
