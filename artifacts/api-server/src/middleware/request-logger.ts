@@ -1,5 +1,6 @@
 import { type Request, type Response, type NextFunction } from "express";
 import { logEvent, type LogCategory } from "../lib/app-logger";
+import { dhanClient } from "../lib/dhan-client";
 
 const CATEGORY_MAP: Record<string, LogCategory> = {
   broker: "broker",
@@ -120,6 +121,20 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
     // For GET requests: only write a log entry when it fails
     if (isReadOnly && !isError) {
+      return originalJson(body);
+    }
+
+    // Suppress repeated DH-901 token-expired noise.
+    // Once the token is known expired, every polling endpoint returns 401 with
+    // DH-901. Writing each one to the DB is pure noise — one entry is enough
+    // (the first real API call that discovered the expiry already logged it).
+    if (
+      statusCode === 401 &&
+      dhanClient.isTokenExpired() &&
+      body &&
+      typeof body === "object" &&
+      (body as Record<string, unknown>).errorCode === "DH-901"
+    ) {
       return originalJson(body);
     }
 

@@ -62,6 +62,22 @@ async function dhanRequest(
   overrideCredentials?: { clientId: string; accessToken: string },
 ): Promise<unknown> {
   const creds = overrideCredentials || credentials;
+
+  // ── Token gate: if token is already known expired, short-circuit immediately.
+  // Avoids redundant Dhan API calls and prevents the error-log table from
+  // filling up with repeated DH-901 entries between token refreshes.
+  if (!overrideCredentials && credentials.tokenExpired) {
+    throw new DhanApiError(401, {
+      errorCode: "DH-901",
+      errorMessage: "Client ID or access token is invalid or expired. Please reconnect your broker account.",
+    }, {
+      code: "DH-901",
+      message: "Client ID or access token is invalid or expired. Please reconnect your broker account.",
+      httpStatus: 401,
+      retryable: false,
+    });
+  }
+
   const url = `${DHAN_BASE_URL}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
