@@ -148,7 +148,7 @@ export default function Positions() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           securityId: pos.securityId, exchangeSegment: pos.exchangeSegment,
-          productType: pos.productType === "CNC" ? "CNC" : "INTRADAY",
+          productType: pos.productType ?? "INTRADAY",
           quantity: Math.abs(pos.netQty ?? 0),
           transactionType: (pos.netQty ?? 0) > 0 ? "SELL" : "BUY",
         }),

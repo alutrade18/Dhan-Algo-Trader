@@ -49,14 +49,26 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
     quantity: number;
     transactionType: "BUY" | "SELL";
   };
+
+  // Dhan's positions API returns "INTRADAY" but the orders API requires "INTRA".
+  // Map all position product type names to the order API equivalents.
+  const PRODUCT_TYPE_MAP: Record<string, string> = {
+    INTRADAY: "INTRA",
+    CNC: "CNC",
+    MARGIN: "MARGIN",
+    CO: "CO",
+    BO: "BO",
+    MTF: "MTF",
+  };
+  const orderProductType = PRODUCT_TYPE_MAP[productType] ?? productType;
+
   try {
-    // BUG FIX #1: Dhan API v2 requires snake_case field names.
-    // Using camelCase (transactionType, exchangeSegment, etc.) caused silent order failures.
+    // Dhan API v2 requires snake_case field names.
     const result = await dhanClient.placeOrder({
       security_id: securityId,
       exchange_segment: exchangeSegment,
       transaction_type: transactionType,
-      product_type: productType,
+      product_type: orderProductType,
       order_type: "MARKET",
       validity: "DAY",
       quantity,
