@@ -153,19 +153,23 @@ router.post("/orders", async (req, res): Promise<void> => {
     const dhanProductType = PRODUCT_TYPE_MAP[parsed.data.productType] ?? parsed.data.productType;
     const dhanOrderType   = ORDER_TYPE_MAP[parsed.data.orderType]    ?? parsed.data.orderType;
 
+    // Payload matches Dhan's official Python SDK structure exactly (src/dhanhq/_order.py).
+    // dhanClientId is injected by placeOrder(); boProfitValue/boStopLossValue must be present.
     const result = await dhanClient.placeOrder({
-      securityId: parsed.data.securityId,
-      exchangeSegment: parsed.data.exchangeSegment,
       transactionType: parsed.data.transactionType,
-      quantity: parsed.data.quantity,
-      orderType: dhanOrderType,
+      exchangeSegment: parsed.data.exchangeSegment,
       productType: dhanProductType,
-      price: parsed.data.price ?? 0,
-      triggerPrice: parsed.data.triggerPrice ?? 0,
-      disclosedQuantity: parsed.data.disclosedQuantity ?? 0,
-      afterMarketOrder: parsed.data.afterMarketOrder ?? false,
+      orderType: dhanOrderType,
       validity: parsed.data.validity || "DAY",
-      tag: parsed.data.tag,
+      securityId: parsed.data.securityId,
+      quantity: parsed.data.quantity,
+      disclosedQuantity: parsed.data.disclosedQuantity ?? 0,
+      price: parsed.data.price ?? 0,
+      afterMarketOrder: parsed.data.afterMarketOrder ?? false,
+      boProfitValue: null,
+      boStopLossValue: null,
+      triggerPrice: parsed.data.triggerPrice ?? 0,
+      ...(parsed.data.tag ? { correlationId: parsed.data.tag } : {}),
     });
 
     const r = result as Record<string, unknown>;

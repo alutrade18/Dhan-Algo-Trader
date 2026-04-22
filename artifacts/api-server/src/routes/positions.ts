@@ -59,19 +59,22 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
   };
   const orderProductType = PRODUCT_TYPE_MAP[productType] ?? productType;
 
-  // Dhan v2 order API uses camelCase field names.
+  // Match the exact payload structure from Dhan's official Python SDK (_order.py).
+  // All fields must be present, including boProfitValue/boStopLossValue as null.
   const orderBody = {
-    securityId,
-    exchangeSegment,
     transactionType,
+    exchangeSegment,
     productType: orderProductType,
     orderType: "MARKET",
     validity: "DAY",
-    quantity,
+    securityId,
+    quantity: Number(quantity),
     disclosedQuantity: 0,
     price: 0,
-    triggerPrice: 0,
     afterMarketOrder: false,
+    boProfitValue: null,
+    boStopLossValue: null,
+    triggerPrice: 0,
   };
 
   logger.info(
