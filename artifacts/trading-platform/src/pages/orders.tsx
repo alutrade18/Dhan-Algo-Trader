@@ -761,9 +761,9 @@ export default function OrdersPage() {
       <div className="space-y-3">
 
         {/* ── Top header ────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2">
           <p className="text-sm font-bold text-foreground hidden sm:block">Order Book</p>
-          <div className="flex items-center gap-2 sm:ml-auto">
+          <div className="flex items-center gap-2 sm:ml-auto ml-auto">
             <Button
               variant="outline" size="sm"
               onClick={handleRefresh}
@@ -771,22 +771,20 @@ export default function OrdersPage() {
               className="gap-1.5"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${(isLive ? ordersRefreshing : historyLoading) ? "animate-spin" : ""}`} />
-              {(isLive ? ordersRefreshing : historyLoading) ? "Refreshing…" : "Refresh"}
+              <span className="hidden sm:inline">{(isLive ? ordersRefreshing : historyLoading) ? "Refreshing…" : "Refresh"}</span>
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport}>
               <Download className="h-3.5 w-3.5" />
-              Export CSV
+              <span className="hidden sm:inline">Export CSV</span>
             </Button>
           </div>
         </div>
 
         {/* ── Filter bar ────────────────────────────────────────── */}
-        <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+        <div className="rounded-xl border border-border bg-card px-3 py-3 flex flex-col gap-2.5">
 
-          {/* Left: Live chip + history preset tabs + Custom tab */}
-          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-
-            {/* Live indicator — click to go back to live auto-refresh view */}
+          {/* Preset tabs row — always visible */}
+          <div className="flex items-center gap-1 flex-wrap">
             <button
               onClick={() => setActivePreset("live")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
@@ -801,7 +799,6 @@ export default function OrdersPage() {
 
             <div className="w-px h-4 bg-border shrink-0" />
 
-            {/* 7d and 30d history presets */}
             {HISTORY_PRESETS.map((p) => (
               <button
                 key={p.id}
@@ -816,7 +813,6 @@ export default function OrdersPage() {
               </button>
             ))}
 
-            {/* Custom preset tab */}
             <button
               onClick={() => setActivePreset("custom")}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -829,11 +825,10 @@ export default function OrdersPage() {
             </button>
           </div>
 
-          {/* Right: date pickers + Fetch — only when NOT in live view */}
+          {/* Date pickers row — only when NOT in live view */}
           {!isLive && (
-            <>
-              <div className="hidden sm:block w-px h-5 bg-border shrink-0" />
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="grid grid-cols-2 gap-2 flex-1">
                 <DateInput
                   label="From"
                   value={fromDate}
@@ -847,23 +842,22 @@ export default function OrdersPage() {
                   max={todayISO()}
                   onChange={(v) => { setToDate(v); setActivePreset("custom"); }}
                 />
-                {/* Fetch button: only for custom — 7d/30d auto-fetch on click */}
-                {activePreset === "custom" && (
-                  <Button
-                    size="sm" className="h-8 px-4 gap-1.5 shrink-0"
-                    onClick={handleCustomFetch}
-                    disabled={historyLoading || !fromDate || !toDate}
-                  >
-                    {historyLoading ? (
-                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Search className="h-3.5 w-3.5" />
-                    )}
-                    Fetch
-                  </Button>
-                )}
               </div>
-            </>
+              {activePreset === "custom" && (
+                <Button
+                  size="sm" className="h-8 px-4 gap-1.5 w-full sm:w-auto"
+                  onClick={handleCustomFetch}
+                  disabled={historyLoading || !fromDate || !toDate}
+                >
+                  {historyLoading ? (
+                    <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Search className="h-3.5 w-3.5" />
+                  )}
+                  Fetch
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -876,7 +870,7 @@ export default function OrdersPage() {
         </div>
 
         {/* ── Main table ─────────────────────────────────────────── */}
-        <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col" style={{ minHeight: "calc(100vh - 22rem)" }}>
+        <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col" style={{ minHeight: "clamp(280px, calc(100vh - 22rem), 100vh)" }}>
 
           {/* ── LIVE view (today's orders, auto-refreshes every 5s) ── */}
           {isLive && (
@@ -893,95 +887,187 @@ export default function OrdersPage() {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full table-auto text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      {["Time", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Trigger", "Status", "Action"].map((h) => (
-                        <th key={h} className="px-3 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-left">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ordersLoading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
-                        <tr key={i} className="border-b border-border/50 last:border-0">
-                          {Array.from({ length: 10 }).map((_, j) => (
-                            <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : orders.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="py-16 text-center">
-                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                            <ClipboardList className="h-8 w-8 opacity-40" />
-                            <p className="text-sm">No orders placed today</p>
+              <>
+                {/* ── Mobile card list (hidden on sm+) ── */}
+                <div className="flex flex-col sm:hidden">
+                  {ordersLoading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="border-b border-border/40 last:border-0 px-4 py-3 space-y-2">
+                        <div className="flex justify-between"><Skeleton className="h-4 w-32" /><Skeleton className="h-5 w-12 rounded-full" /></div>
+                        <Skeleton className="h-3 w-24" />
+                        <div className="flex gap-2"><Skeleton className="h-5 w-16 rounded-full" /><Skeleton className="h-5 w-10 rounded-full" /></div>
+                        <div className="grid grid-cols-3 gap-2"><Skeleton className="h-8" /><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+                      </div>
+                    ))
+                  ) : orders.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                      <ClipboardList className="h-8 w-8 opacity-40" />
+                      <p className="text-sm">No orders placed today</p>
+                    </div>
+                  ) : (
+                    orders.map((order) => {
+                      const seg = formatSegment(order.exchangeSegment);
+                      return (
+                        <div key={order.orderId} className="border-b border-border/40 last:border-0 px-4 py-3 space-y-2">
+                          {/* Row 1: time + BUY/SELL */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] text-muted-foreground font-mono">{formatTime(order.createTime)}</span>
+                            <SideBadge side={order.transactionType} />
                           </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      orders.map((order) => {
-                        const seg = formatSegment(order.exchangeSegment);
-                        return (
-                        <tr key={order.orderId} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
-                          <td className="px-3 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(order.createTime)}</td>
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <span className="font-mono font-semibold text-sm">{order.tradingSymbol}</span>
+                          {/* Row 2: symbol + error icon */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-semibold text-sm leading-tight">{order.tradingSymbol}</span>
                             {order.omsErrorDescription && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <AlertCircle className="inline-block ml-1.5 h-3 w-3 text-destructive align-middle cursor-help" />
+                                  <AlertCircle className="h-3.5 w-3.5 text-destructive cursor-help shrink-0" />
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-xs text-xs">{order.omsErrorDescription}</TooltipContent>
                               </Tooltip>
                             )}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap">
+                          </div>
+                          {/* Row 3: segment + product + status badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
-                          </td>
-                          <td className="px-3 py-3"><SideBadge side={order.transactionType} /></td>
-                          <td className="px-3 py-3"><ProductBadge product={order.productType} /></td>
-                          <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
-                            {order.filledQty > 0 ? (
-                              <span>{order.quantity} <span className="text-muted-foreground">/ {order.filledQty} filled</span></span>
-                            ) : order.quantity}
-                          </td>
-                          <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
-                            {order.orderType === "MARKET" ? <span className="text-muted-foreground">MKT</span> : formatCurrency(order.price)}
-                          </td>
-                          <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
-                            {(order.triggerPrice ?? 0) > 0 ? formatCurrency(order.triggerPrice!) : <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="px-3 py-3"><StatusBadge status={order.orderStatus} /></td>
-                          <td className="px-3 py-3">
-                            {cancelConfirmId === order.orderId ? (
-                              <CancelConfirm orderId={order.orderId}
-                                onConfirm={() => void handleCancel(order.orderId)}
-                                onDismiss={() => setCancelConfirmId(null)}
-                                loading={cancelLoading} />
-                            ) : canModifyOrCancel(order.orderStatus) ? (
-                              <div className="flex items-center gap-1.5">
-                                <Button size="sm" variant="outline"
-                                  className="h-6 px-2 text-[11px] border-primary/50 text-primary hover:bg-primary/10"
-                                  onClick={() => setModifyOrder(order)}>Modify</Button>
-                                <Button size="sm" variant="outline"
-                                  className="h-6 px-2 text-[11px] border-destructive/50 text-destructive hover:bg-destructive/10"
-                                  onClick={() => setCancelConfirmId(order.orderId)}>Cancel</Button>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
+                            <ProductBadge product={order.productType} />
+                            <StatusBadge status={order.orderStatus} />
+                          </div>
+                          {/* Row 4: qty / price / trigger grid */}
+                          <div className="grid grid-cols-3 gap-1 text-[11px]">
+                            <div>
+                              <span className="text-muted-foreground">Qty</span>
+                              <p className="font-mono font-medium">
+                                {order.filledQty > 0
+                                  ? <>{order.quantity}<span className="text-muted-foreground text-[10px]"> / {order.filledQty}</span></>
+                                  : order.quantity}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Price</span>
+                              <p className="font-mono font-medium">
+                                {order.orderType === "MARKET" ? <span className="text-muted-foreground">MKT</span> : formatCurrency(order.price)}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Trigger</span>
+                              <p className="font-mono font-medium">
+                                {(order.triggerPrice ?? 0) > 0 ? formatCurrency(order.triggerPrice!) : <span className="text-muted-foreground">—</span>}
+                              </p>
+                            </div>
+                          </div>
+                          {/* Row 5: actions */}
+                          {cancelConfirmId === order.orderId ? (
+                            <CancelConfirm orderId={order.orderId}
+                              onConfirm={() => void handleCancel(order.orderId)}
+                              onDismiss={() => setCancelConfirmId(null)}
+                              loading={cancelLoading} />
+                          ) : canModifyOrCancel(order.orderStatus) ? (
+                            <div className="flex gap-2 pt-0.5">
+                              <Button size="sm" variant="outline"
+                                className="flex-1 h-7 text-xs border-primary/50 text-primary hover:bg-primary/10"
+                                onClick={() => setModifyOrder(order)}>Modify</Button>
+                              <Button size="sm" variant="outline"
+                                className="flex-1 h-7 text-xs border-destructive/50 text-destructive hover:bg-destructive/10"
+                                onClick={() => setCancelConfirmId(order.orderId)}>Cancel</Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* ── Desktop table (hidden on mobile) ── */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full table-auto text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        {["Time", "Symbol", "Segment", "Type", "Product", "Qty", "Price", "Trigger", "Status", "Action"].map((h) => (
+                          <th key={h} className="px-3 py-2.5 text-xs font-medium text-muted-foreground whitespace-nowrap text-left">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordersLoading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                          <tr key={i} className="border-b border-border/50 last:border-0">
+                            {Array.from({ length: 10 }).map((_, j) => (
+                              <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
+                            ))}
+                          </tr>
+                        ))
+                      ) : orders.length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="py-16 text-center">
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                              <ClipboardList className="h-8 w-8 opacity-40" />
+                              <p className="text-sm">No orders placed today</p>
+                            </div>
                           </td>
                         </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        orders.map((order) => {
+                          const seg = formatSegment(order.exchangeSegment);
+                          return (
+                            <tr key={order.orderId} className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors">
+                              <td className="px-3 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">{formatTime(order.createTime)}</td>
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                <span className="font-mono font-semibold text-sm">{order.tradingSymbol}</span>
+                                {order.omsErrorDescription && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <AlertCircle className="inline-block ml-1.5 h-3 w-3 text-destructive align-middle cursor-help" />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs text-xs">{order.omsErrorDescription}</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
+                              </td>
+                              <td className="px-3 py-3"><SideBadge side={order.transactionType} /></td>
+                              <td className="px-3 py-3"><ProductBadge product={order.productType} /></td>
+                              <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
+                                {order.filledQty > 0 ? (
+                                  <span>{order.quantity} <span className="text-muted-foreground">/ {order.filledQty} filled</span></span>
+                                ) : order.quantity}
+                              </td>
+                              <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
+                                {order.orderType === "MARKET" ? <span className="text-muted-foreground">MKT</span> : formatCurrency(order.price)}
+                              </td>
+                              <td className="px-3 py-3 text-xs font-mono whitespace-nowrap">
+                                {(order.triggerPrice ?? 0) > 0 ? formatCurrency(order.triggerPrice!) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                              <td className="px-3 py-3"><StatusBadge status={order.orderStatus} /></td>
+                              <td className="px-3 py-3">
+                                {cancelConfirmId === order.orderId ? (
+                                  <CancelConfirm orderId={order.orderId}
+                                    onConfirm={() => void handleCancel(order.orderId)}
+                                    onDismiss={() => setCancelConfirmId(null)}
+                                    loading={cancelLoading} />
+                                ) : canModifyOrCancel(order.orderStatus) ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Button size="sm" variant="outline"
+                                      className="h-6 px-2 text-[11px] border-primary/50 text-primary hover:bg-primary/10"
+                                      onClick={() => setModifyOrder(order)}>Modify</Button>
+                                    <Button size="sm" variant="outline"
+                                      className="h-6 px-2 text-[11px] border-destructive/50 text-destructive hover:bg-destructive/10"
+                                      onClick={() => setCancelConfirmId(order.orderId)}>Cancel</Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )
           )}
 
@@ -1030,32 +1116,46 @@ export default function OrdersPage() {
                 ) : (
                   <>
                     {/* Mobile card view */}
-                    <div className="flex flex-col gap-0 sm:hidden">
+                    <div className="flex flex-col sm:hidden">
                       {historyOrders.map((t, idx) => {
                         const seg = formatSegment(t.exchangeSegment);
                         const value = t.tradeValue ?? t.tradedQuantity * t.tradedPrice;
                         return (
-                          <div key={t.exchangeTradeId ?? idx} className="border-b border-border/40 last:border-0 px-4 py-3 space-y-1.5">
+                          <div key={t.exchangeTradeId ?? idx} className="border-b border-border/40 last:border-0 px-4 py-3 space-y-2">
+                            {/* time + side */}
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono font-semibold text-sm">{t.tradingSymbol}</span>
+                              <span className="text-[11px] text-muted-foreground font-mono">
+                                {bestDateTime(t.createTime, t.exchangeTime, t.updateTime)}
+                              </span>
                               <SideBadge side={t.transactionType} />
                             </div>
+                            {/* symbol */}
+                            <span className="font-mono font-semibold text-sm block">{t.tradingSymbol}</span>
+                            {/* Order ID */}
                             {t.orderId && (
-                              <p className="text-[10px] text-muted-foreground font-mono">Order ID: {t.orderId}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono leading-none">ID: {t.orderId}</p>
                             )}
-                            <div className="flex items-center gap-2 flex-wrap">
+                            {/* badges */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${seg.color}`}>{seg.label}</span>
                               <ProductBadge product={t.productType} />
                             </div>
+                            {/* stats */}
                             <div className="grid grid-cols-3 gap-1 text-[11px]">
                               <div><span className="text-muted-foreground">Qty</span><p className="font-mono font-medium">{t.tradedQuantity}</p></div>
                               <div><span className="text-muted-foreground">Price</span><p className="font-mono font-medium">{formatCurrency(t.tradedPrice)}</p></div>
                               <div><span className="text-muted-foreground">Value</span><p className="font-mono font-medium">{formatCurrency(value)}</p></div>
                             </div>
-                            <p className="text-[10px] text-muted-foreground font-mono">{formatDateTime(t.createTime)}</p>
                           </div>
                         );
                       })}
+                      {/* Total row */}
+                      <div className="border-t border-border bg-muted/10 px-4 py-2.5 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-medium">Total Trade Value</span>
+                        <span className="text-xs font-mono font-bold">
+                          {formatCurrency(historyOrders.reduce((s, t) => s + (t.tradeValue ?? t.tradedQuantity * t.tradedPrice), 0))}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Desktop table view */}
