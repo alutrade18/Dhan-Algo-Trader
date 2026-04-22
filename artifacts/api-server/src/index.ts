@@ -225,6 +225,64 @@ async function loadSavedCredentials() {
   }
 }
 
+/**
+ * Fetch this server's outbound public IP and register it with Dhan's API whitelist.
+ * Replit production servers have dynamic IPs that change on each redeploy, so this
+ * must run on every startup to keep the whitelist current.
+ *
+ * Tries SECONDARY slot first (least disruptive). Falls back to PRIMARY if SECONDARY
+ * is not supported. Dhan may enforce a 7-day change lock — if so, logs the error
+ * clearly so the user knows they must wait before the new IP takes effect.
+ */
+async function autoRegisterServerIp() {
+  if (!dhanClient.isConfigured()) {
+    logger.info("[AutoIP] Broker not configured — skipping IP registration");
+    return;
+  }
+  let ip: string;
+  try {
+    const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(5_000) });
+    ({ ip } = await r.json() as { ip: string });
+    logger.info({ serverOutboundIp: ip }, "SERVER OUTBOUND IP — this must be whitelisted in Dhan API Access for order placement");
+  } catch {
+    logger.warn("[AutoIP] Could not determine server outbound IP");
+    return;
+  }
+
+  const creds = dhanClient.getCredentials();
+  // Try SECONDARY first (preserves any existing PRIMARY whitelist)
+  for (const ipFlag of ["SECONDARY", "PRIMARY"] as const) {
+    try {
+      const resp = await fetch("https://api.dhan.co/v2/ip/setIP", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "access-token": creds.accessToken,
+        },
+        body: JSON.stringify({ dhanClientId: creds.clientId, ip, ipFlag }),
+        signal: AbortSignal.timeout(8_000),
+      });
+      const data = await resp.json().catch(() => ({})) as Record<string, unknown>;
+      const statusStr = String(data.status ?? data.Status ?? "").toUpperCase();
+      if (resp.ok && (statusStr === "SUCCESS" || statusStr === "OK")) {
+        logger.info({ ip, ipFlag }, `[AutoIP] Server IP auto-registered with Dhan as ${ipFlag} — order placement should now work`);
+        return; // success, done
+      }
+      const errMsg = String(data.message ?? data.errorMessage ?? data.description ?? resp.status);
+      logger.warn({ ip, ipFlag, status: resp.status, response: data },
+        `[AutoIP] Could not register as ${ipFlag}: ${errMsg}`);
+      // If it looks like a "too recent" lock error, note it clearly
+      if (errMsg.toLowerCase().includes("7") || errMsg.toLowerCase().includes("day") || errMsg.toLowerCase().includes("lock") || errMsg.toLowerCase().includes("change")) {
+        logger.warn({ ip }, `[AutoIP] Dhan 7-day IP change lock active — go to Dhan portal and add ${ip} manually`);
+        return;
+      }
+    } catch (e) {
+      logger.warn({ err: e, ip, ipFlag }, `[AutoIP] Network error registering ${ipFlag} IP`);
+    }
+  }
+}
+
 loadSavedCredentials().then(async () => {
   await loadDailyCountersFromDb();
   await loadHolidayCache();
@@ -235,16 +293,9 @@ loadSavedCredentials().then(async () => {
     startKillSwitchScheduler();
     startEquityScheduler();
 
-    // Log the server's outbound public IP so it can be whitelisted in Dhan.
-    // Dhan POST /orders requires the SERVER IP (not user's browser IP) to be whitelisted.
-    fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(5_000) })
-      .then(r => r.json() as Promise<{ ip: string }>)
-      .then(({ ip }) => {
-        logger.info({ serverOutboundIp: ip }, "SERVER OUTBOUND IP — add this to Dhan API whitelist for order placement");
-      })
-      .catch(() => {
-        logger.warn("Could not determine server outbound IP at startup");
-      });
+    // Auto-register server's outbound IP with Dhan so order placement works
+    // even when Replit assigns a new IP after each redeploy.
+    void autoRegisterServerIp();
   });
 });
 
