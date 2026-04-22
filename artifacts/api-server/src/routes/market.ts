@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { dhanClient } from "../lib/dhan-client";
+import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { db, instrumentsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import {
@@ -164,6 +164,11 @@ router.post("/market/intraday", async (req, res): Promise<void> => {
         .filter(c => c.timestamp !== ""),
     });
   } catch (e) {
+    if (e instanceof DhanApiError) {
+      req.log.warn({ err: e, status: e.status }, "Intraday data fetch — Dhan API error");
+      res.status(e.status).json(e.toClientResponse());
+      return;
+    }
     req.log.error({ err: e }, "Failed to fetch intraday data");
     res.status(500).json({ error: "Failed to fetch intraday data" });
   }
