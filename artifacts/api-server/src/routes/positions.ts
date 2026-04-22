@@ -63,40 +63,28 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
   };
   const orderProductType = PRODUCT_TYPE_MAP[productType] ?? productType;
 
-  // Log exactly what we received and what we're sending so mismatches are visible in prod logs
+  // Dhan v2 order API uses camelCase field names.
+  const orderBody = {
+    securityId,
+    exchangeSegment,
+    transactionType,
+    productType: orderProductType,
+    orderType: "MARKET",
+    validity: "DAY",
+    quantity,
+    disclosedQuantity: 0,
+    price: 0,
+    triggerPrice: 0,
+    afterMarketOrder: false,
+  };
+
   logger.info(
-    {
-      received: { securityId, exchangeSegment, productType, quantity, transactionType },
-      sending: {
-        security_id: securityId,
-        exchange_segment: exchangeSegment,
-        transaction_type: transactionType,
-        product_type: orderProductType,
-        order_type: "MARKET",
-        validity: "DAY",
-        quantity,
-        price: 0,
-        after_market_order: false,
-      },
-    },
+    { received: { securityId, exchangeSegment, productType, quantity, transactionType }, sending: orderBody },
     "[exit-single] placing exit order",
   );
 
   try {
-    // Dhan API v2 requires snake_case field names.
-    const result = await dhanClient.placeOrder({
-      security_id: securityId,
-      exchange_segment: exchangeSegment,
-      transaction_type: transactionType,
-      product_type: orderProductType,
-      order_type: "MARKET",
-      validity: "DAY",
-      quantity,
-      disclosed_quantity: 0,
-      price: 0,
-      trigger_price: 0,
-      after_market_order: false,
-    });
+    const result = await dhanClient.placeOrder(orderBody);
     res.json(result);
   } catch (e) {
     if (e instanceof DhanApiError) res.status(e.status).json(e.toClientResponse());

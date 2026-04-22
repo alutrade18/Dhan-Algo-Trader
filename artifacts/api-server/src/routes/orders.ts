@@ -143,16 +143,16 @@ router.post("/orders", async (req, res): Promise<void> => {
     }
 
     const result = await dhanClient.placeOrder({
-      security_id: parsed.data.securityId,
-      exchange_segment: parsed.data.exchangeSegment,
-      transaction_type: parsed.data.transactionType,
+      securityId: parsed.data.securityId,
+      exchangeSegment: parsed.data.exchangeSegment,
+      transactionType: parsed.data.transactionType,
       quantity: parsed.data.quantity,
-      order_type: parsed.data.orderType,
-      product_type: parsed.data.productType,
-      price: parsed.data.price,
-      trigger_price: parsed.data.triggerPrice,
-      disclosed_quantity: parsed.data.disclosedQuantity,
-      after_market_order: parsed.data.afterMarketOrder,
+      orderType: parsed.data.orderType,
+      productType: parsed.data.productType,
+      price: parsed.data.price ?? 0,
+      triggerPrice: parsed.data.triggerPrice ?? 0,
+      disclosedQuantity: parsed.data.disclosedQuantity ?? 0,
+      afterMarketOrder: parsed.data.afterMarketOrder ?? false,
       validity: parsed.data.validity || "DAY",
       tag: parsed.data.tag,
     });

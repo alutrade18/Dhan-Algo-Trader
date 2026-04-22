@@ -248,12 +248,14 @@ export const dhanClient = {
 
   async placeOrder(orderData: Record<string, unknown>) {
     // Generate a correlation ID for idempotency (max 48 chars per Dhan API spec).
-    // This lets us detect duplicate orders if the same correlationId is seen twice.
-    const correlationId = (orderData.correlation_id as string | undefined) ??
+    // Dhan v2 API uses camelCase: send as correlationId (camelCase).
+    const correlationId =
+      (orderData.correlationId as string | undefined) ??
+      (orderData.correlation_id as string | undefined) ??
       crypto.randomUUID().replace(/-/g, "").slice(0, 48);
     return dhanRequest("POST", "/orders", {
       dhanClientId: credentials.clientId,
-      correlation_id: correlationId,
+      correlationId,
       ...orderData,
     });
   },
