@@ -35,8 +35,12 @@ router.post("/market/quote", async (req, res): Promise<void> => {
     );
     res.json({ data });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch market quote");
-    res.status(500).json({ error: "Failed to fetch market quote" });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch market quote");
+      res.status(500).json({ error: "Failed to fetch market quote" });
+    }
   }
 });
 
@@ -60,8 +64,12 @@ router.get("/market/ltp", async (req, res): Promise<void> => {
     const ltp = await dhanClient.getLtp(exchSeg, secId);
     res.json({ ltp, exchSeg, secId });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch LTP");
-    res.status(500).json({ error: "Failed to fetch LTP" });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch LTP");
+      res.status(500).json({ error: "Failed to fetch LTP" });
+    }
   }
 });
 
@@ -94,8 +102,12 @@ router.post("/market/historical", async (req, res): Promise<void> => {
       })),
     });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch historical data");
-    res.status(500).json({ error: "Failed to fetch historical data" });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch historical data");
+      res.status(500).json({ error: "Failed to fetch historical data" });
+    }
   }
 });
 
@@ -251,8 +263,12 @@ router.post("/market/ltp-batch", async (req, res): Promise<void> => {
 
     res.json({ ltps });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch batch LTP");
-    res.status(500).json({ error: "Failed to fetch batch LTP" });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch batch LTP");
+      res.status(500).json({ error: "Failed to fetch batch LTP" });
+    }
   }
 });
 
@@ -287,14 +303,12 @@ router.post("/market/option-chain", async (req, res): Promise<void> => {
     const oc = (inner.oc ?? inner) as Record<string, unknown>;
     res.json({ data: oc, ltp });
   } catch (e: unknown) {
-    req.log.error({ err: e }, "Failed to fetch option chain");
-    const dhanErr = e as { data?: { data?: Record<string, string> } };
-    const errData = dhanErr?.data?.data ?? {};
-    const dhanMsg = Object.values(errData)[0];
-    const message = dhanMsg
-      ? `Dhan: ${dhanMsg}`
-      : "Failed to fetch option chain";
-    res.status(500).json({ error: message });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch option chain");
+      res.status(500).json({ error: "Failed to fetch option chain" });
+    }
   }
 });
 
@@ -351,8 +365,12 @@ router.post("/market/expiry-list", async (req, res): Promise<void> => {
     const r = result as Record<string, unknown>;
     res.json({ data: Array.isArray(r.data) ? r.data : [] });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch expiry list");
-    res.status(500).json({ error: "Failed to fetch expiry list" });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch expiry list");
+      res.status(500).json({ error: "Failed to fetch expiry list" });
+    }
   }
 });
 
@@ -403,8 +421,12 @@ router.get("/market/securities", async (req, res): Promise<void> => {
     const r = result as Record<string, unknown>;
     res.json({ data: Array.isArray(r.data) ? r.data : [] });
   } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch security list");
-    res.status(500).json({ error: "Failed to fetch security list" });
+    if (e instanceof DhanApiError) {
+      res.status(e.status).json(e.toClientResponse());
+    } else {
+      req.log.error({ err: e }, "Failed to fetch security list");
+      res.status(500).json({ error: "Failed to fetch security list" });
+    }
   }
 });
 
