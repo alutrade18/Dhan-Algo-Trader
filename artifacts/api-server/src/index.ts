@@ -12,6 +12,7 @@ import { startEquityScheduler } from "./lib/equity-scheduler";
 import { decryptToken } from "./lib/crypto-utils";
 import { loadDailyCountersFromDb } from "./lib/rate-limiter";
 import { loadHolidayCache } from "./lib/market-calendar";
+import { sendTelegramAlertIfEnabled, alertHeader, alertFooter } from "./lib/telegram";
 
 const rawPort = process.env["PORT"];
 
@@ -145,12 +146,53 @@ orderUpdateWS.on("orderUpdate", (data) => {
   // complete. Emit the standard event AND a dedicated partial-fill event so
   // the frontend can highlight the row without treating it as done.
   io.emit("order:update", data);
-  const status = String((data as Record<string, unknown>).Status ?? "");
-  if (status === "PARTIALLY_FILLED") {
-    const tradedQty = (data as Record<string, unknown>).TradedQty;
-    const totalQty  = (data as Record<string, unknown>).Quantity;
+
+  const d = data as Record<string, unknown>;
+  const status   = String(d["Status"]   ?? "");
+  const symbol   = String(d["TradingSymbol"] ?? d["Symbol"] ?? "N/A");
+  const side     = String(d["TransactionType"] ?? d["TxnType"] ?? "");
+  const qty      = String(d["FilledQty"] ?? d["TradedQty"] ?? d["Quantity"] ?? "");
+  const price    = String(d["AverageTradedPrice"] ?? d["TradedPrice"] ?? "");
+  const orderId  = String(d["OrderId"] ?? d["OrderNo"] ?? "");
+  const reason   = String(d["OmsErrorDescription"] ?? d["RejectionReason"] ?? "Unknown");
+
+  if (status === "TRADED") {
+    void sendTelegramAlertIfEnabled(
+      "orderFills",
+      [
+        alertHeader("ALGO TRADER", "ORDER EXECUTED"),
+        "",
+        "✅ Trade filled successfully",
+        "",
+        `┃ 📊 Symbol: ${symbol}`,
+        `┃ 📈 Side: *${side}* | Qty: ${qty}`,
+        price !== "" && price !== "0" ? `┃ 💰 Avg Price: ₹${price}` : null,
+        orderId ? `┃ 🔢 Order ID: ${orderId}` : null,
+        "",
+        alertFooter(),
+      ].filter(Boolean).join("\n"),
+    );
+  } else if (status === "REJECTED") {
+    void sendTelegramAlertIfEnabled(
+      "orderFills",
+      [
+        alertHeader("ALGO TRADER", "ORDER REJECTED"),
+        "",
+        "❌ Order was rejected",
+        "",
+        `┃ 📊 Symbol: ${symbol}`,
+        side ? `┃ 📈 Side: *${side}*` : null,
+        `┃ ⚠️ Reason: ${reason}`,
+        orderId ? `┃ 🔢 Order ID: ${orderId}` : null,
+        "",
+        alertFooter(),
+      ].filter(Boolean).join("\n"),
+    );
+  } else if (status === "PARTIALLY_FILLED") {
+    const tradedQty = d["FilledQty"] ?? d["TradedQty"];
+    const totalQty  = d["Quantity"];
     logger.info(
-      { orderId: (data as Record<string, unknown>).OrderNo, tradedQty, totalQty },
+      { orderId, tradedQty, totalQty },
       "[C4] Partially-filled order — still open on exchange",
     );
     io.emit("order:partial-fill", data);
