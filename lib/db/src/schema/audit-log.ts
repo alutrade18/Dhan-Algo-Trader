@@ -8,6 +8,7 @@ export const auditLogTable = pgTable("audit_log", {
   newValue: text("new_value"),
   description: text("description"),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export type AuditLog = typeof auditLogTable.$inferSelect;

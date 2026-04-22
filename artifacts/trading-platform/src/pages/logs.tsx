@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   AlertTriangle, ChevronLeft, ChevronRight,
-  CheckCircle2, XCircle, ClipboardList,
+  CheckCircle2, XCircle, ClipboardList, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL;
 const PER_PAGE = 50;
@@ -68,6 +74,8 @@ function prettyDetails(raw: string | null): string {
     return raw;
   }
 }
+
+// ── Detail Modals ─────────────────────────────────────────────────────────────
 
 function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -147,7 +155,6 @@ function AppLogDetailModal({ log, onClose }: { log: AppLog | null; onClose: () =
                 </span>
               )}
             </div>
-
             <div>
               <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide mb-1.5">Details</p>
               <pre className="text-[11px] font-mono bg-muted/50 border border-border rounded-md p-3 overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words max-h-72 leading-relaxed">
@@ -161,12 +168,54 @@ function AppLogDetailModal({ log, onClose }: { log: AppLog | null; onClose: () =
   );
 }
 
+// ── Delete Confirmation Dialog ────────────────────────────────────────────────
+
+function DeleteConfirmDialog({
+  open, tabLabel, onCancel, onConfirm, loading,
+}: {
+  open: boolean; tabLabel: string; onCancel: () => void; onConfirm: () => void; loading: boolean;
+}) {
+  return (
+    <AlertDialog open={open}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-destructive" />
+            Delete {tabLabel}?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2">
+            <span className="block">
+              Are you sure you want to clear all <strong>{tabLabel}</strong> from the UI?
+            </span>
+            <span className="block text-xs bg-muted/60 border border-border rounded p-2 text-foreground">
+              🔒 <strong>Data is never deleted from the database.</strong> Records will be hidden from the UI
+              but permanently retained for audit and compliance. A log entry will be created recording this action.
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel} disabled={loading}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            disabled={loading}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {loading ? "Clearing…" : "Yes, Clear Logs"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ── Table Shell ───────────────────────────────────────────────────────────────
+
 function TableShell({ headers, isLoading, isEmpty, emptyText, colSpan, children }: {
   headers: string[]; isLoading: boolean; isEmpty: boolean;
   emptyText: string; colSpan: number; children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border" style={{ maxHeight: "calc(100vh - 280px)", minHeight: 220, overflowY: "auto" }}>
+    <div className="overflow-x-auto rounded-md border border-border" style={{ maxHeight: "calc(100vh - 320px)", minHeight: 220, overflowY: "auto" }}>
       <table className="w-full table-auto text-sm" style={{ minWidth: 520 }}>
         <thead className="sticky top-0 z-10">
           <tr className="border-b border-border bg-muted/90 backdrop-blur text-left">
@@ -223,9 +272,16 @@ function Pagination({ page, total, onPrev, onNext }: {
   );
 }
 
+// ── View Components ───────────────────────────────────────────────────────────
+
 function AuditLogsView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AuditEntry | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const { data, isLoading, isError } = useQuery<PagedResponse<AuditEntry>>({
     queryKey: ["audit-log", page],
     queryFn: async () => {
@@ -237,10 +293,48 @@ function AuditLogsView() {
   });
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`${BASE}api/settings/audit-log`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      const result = await res.json() as { deleted: number };
+      toast({ title: "Audit logs cleared", description: `${result.deleted} entries removed from view. Data retained in database.` });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
+      setPage(0);
+    } catch {
+      toast({ title: "Delete failed", description: "Could not clear audit logs. Try again.", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   return (
     <>
       {isError && <ErrorBanner />}
       <AuditDetailModal entry={selected} onClose={() => setSelected(null)} />
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        tabLabel="Audit Logs"
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => void handleDelete()}
+        loading={deleteLoading}
+      />
+      <div className="flex items-center justify-end mb-2.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={logs.length === 0 || isLoading}
+        >
+          <Trash2 className="w-3 h-3" />
+          Delete All
+        </Button>
+      </div>
       <TableShell
         headers={["Time (IST)", "Action", "Field", "Old Value", "New Value", "Description"]}
         isLoading={isLoading} isEmpty={!isError && logs.length === 0}
@@ -273,8 +367,13 @@ function AuditLogsView() {
 }
 
 function SuccessLogsView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AppLog | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const { data, isLoading, isError } = useQuery<PagedResponse<AppLog>>({
     queryKey: ["logs-success", page],
     queryFn: async () => {
@@ -286,10 +385,50 @@ function SuccessLogsView() {
   });
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`${BASE}api/logs?tab=success`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      const result = await res.json() as { deleted: number };
+      toast({ title: "Success logs cleared", description: `${result.deleted} entries removed from view. Data retained in database.` });
+      void queryClient.invalidateQueries({ queryKey: ["logs-success"] });
+      void queryClient.invalidateQueries({ queryKey: ["logs-success-count"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
+      setPage(0);
+    } catch {
+      toast({ title: "Delete failed", description: "Could not clear success logs. Try again.", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   return (
     <>
       {isError && <ErrorBanner />}
       <AppLogDetailModal log={selected} onClose={() => setSelected(null)} />
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        tabLabel="Success Logs"
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => void handleDelete()}
+        loading={deleteLoading}
+      />
+      <div className="flex items-center justify-end mb-2.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={logs.length === 0 || isLoading}
+        >
+          <Trash2 className="w-3 h-3" />
+          Delete All
+        </Button>
+      </div>
       <TableShell
         headers={["Time (IST)", "Category", "Action", "Code", "Details"]}
         isLoading={isLoading} isEmpty={!isError && logs.length === 0}
@@ -325,8 +464,13 @@ function SuccessLogsView() {
 }
 
 function FailedLogsView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AppLog | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const { data, isLoading, isError } = useQuery<PagedResponse<AppLog>>({
     queryKey: ["logs-failed", page],
     queryFn: async () => {
@@ -338,10 +482,50 @@ function FailedLogsView() {
   });
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`${BASE}api/logs?tab=failed`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      const result = await res.json() as { deleted: number };
+      toast({ title: "Failed logs cleared", description: `${result.deleted} entries removed from view. Data retained in database.` });
+      void queryClient.invalidateQueries({ queryKey: ["logs-failed"] });
+      void queryClient.invalidateQueries({ queryKey: ["logs-failed-count"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
+      setPage(0);
+    } catch {
+      toast({ title: "Delete failed", description: "Could not clear failed logs. Try again.", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   return (
     <>
       {isError && <ErrorBanner />}
       <AppLogDetailModal log={selected} onClose={() => setSelected(null)} />
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        tabLabel="Failed Logs"
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => void handleDelete()}
+        loading={deleteLoading}
+      />
+      <div className="flex items-center justify-end mb-2.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={logs.length === 0 || isLoading}
+        >
+          <Trash2 className="w-3 h-3" />
+          Delete All
+        </Button>
+      </div>
       <TableShell
         headers={["Time (IST)", "Category", "Level", "Action", "Code", "Details"]}
         isLoading={isLoading} isEmpty={!isError && logs.length === 0}
@@ -377,6 +561,8 @@ function FailedLogsView() {
   );
 }
 
+// ── Shared Helpers ────────────────────────────────────────────────────────────
+
 function ErrorBanner() {
   return (
     <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive mb-3">
@@ -394,6 +580,8 @@ function CountBadge({ count }: { count: number | undefined }) {
     </span>
   );
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Logs() {
   const [activeTab, setActiveTab] = useState<TabKey>("audit");

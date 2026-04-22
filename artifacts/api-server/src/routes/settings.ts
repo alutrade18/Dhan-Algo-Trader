@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
@@ -293,15 +293,46 @@ router.get("/settings/audit-log", async (req, res): Promise<void> => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
     const offset = pageNum * limitNum;
 
+    // Only show non-deleted entries in UI
+    const where = isNull(auditLogTable.deletedAt);
+
     const [logs, countResult] = await Promise.all([
-      db.select().from(auditLogTable).orderBy(desc(auditLogTable.changedAt)).limit(limitNum).offset(offset),
-      db.select({ count: sql<number>`count(*)::int` }).from(auditLogTable),
+      db.select().from(auditLogTable).where(where).orderBy(desc(auditLogTable.changedAt)).limit(limitNum).offset(offset),
+      db.select({ count: sql<number>`count(*)::int` }).from(auditLogTable).where(where),
     ]);
 
     res.json({ logs, total: countResult[0]?.count ?? 0, page: pageNum, limit: limitNum });
   } catch (e) {
     req.log.error({ err: e }, "Failed to fetch audit log");
     res.status(500).json({ error: "Failed to fetch audit log" });
+  }
+});
+
+// Soft-delete all visible audit log entries.
+// Records are NEVER physically removed — deletedAt is set so data stays in DB for safety.
+// After soft-deleting, a permanent new audit entry is inserted to record this action.
+router.delete("/settings/audit-log", async (req, res): Promise<void> => {
+  try {
+    const now = new Date();
+
+    const deleted = await db
+      .update(auditLogTable)
+      .set({ deletedAt: now })
+      .where(isNull(auditLogTable.deletedAt))
+      .returning({ id: auditLogTable.id });
+
+    // Permanently record this action (this new entry is NOT soft-deleted by this operation)
+    await db.insert(auditLogTable).values({
+      action: "AUDIT_LOGS_DELETED",
+      field: "audit",
+      description: `User cleared ${deleted.length} audit log entry(ies) from the UI. Records are soft-deleted and permanently retained in the database for audit.`,
+    });
+
+    req.log.info({ count: deleted.length }, "Audit logs soft-deleted by user");
+    res.json({ ok: true, deleted: deleted.length });
+  } catch (e) {
+    req.log.error({ err: e }, "Failed to soft-delete audit logs");
+    res.status(500).json({ error: "Failed to delete audit logs" });
   }
 });
 

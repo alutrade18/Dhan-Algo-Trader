@@ -9,6 +9,7 @@ export const appLogsTable = pgTable("app_logs", {
   status: text("status"),
   statusCode: integer("status_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export type AppLog = typeof appLogsTable.$inferSelect;
