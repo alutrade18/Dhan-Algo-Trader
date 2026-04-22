@@ -489,35 +489,92 @@ function ModifyOrderModal({ order, open, onClose, onSuccess }: ModifyOrderModalP
           </form>
         )}
 
-        {order && showConfirm && (
-          <div className="space-y-4">
-            <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
-              Review the changes below. This will modify a live order on Dhan.
-            </div>
-            <div className="space-y-2 rounded-md bg-muted/40 px-3 py-3 text-xs">
-              {[
-                { label: "Symbol",     value: order.tradingSymbol },
-                { label: "Order ID",   value: order.orderId },
-                { label: "Order Type", value: form.orderType },
-                { label: "Quantity",   value: form.quantity },
-                ...(priceRequired   ? [{ label: "Price",         value: `₹${form.price}` }]        : []),
-                ...(triggerRequired ? [{ label: "Trigger Price", value: `₹${form.triggerPrice}` }] : []),
-                { label: "Validity",   value: form.validity },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between">
-                  <span className="text-muted-foreground">{label}</span>
-                  <span className="font-mono font-medium">{value}</span>
+        {order && showConfirm && (() => {
+          const oldPrice   = order.price ?? 0;
+          const oldTrigger = order.triggerPrice ?? 0;
+          const newPrice   = Number(form.price   || 0);
+          const newTrigger = Number(form.triggerPrice || 0);
+
+          const diffRows: { label: string; oldVal: string; newVal: string; changed: boolean }[] = [
+            {
+              label: "Order Type",
+              oldVal: order.orderType,
+              newVal: form.orderType,
+              changed: order.orderType !== form.orderType,
+            },
+            {
+              label: "Quantity",
+              oldVal: String(order.quantity),
+              newVal: form.quantity,
+              changed: order.quantity !== Number(form.quantity),
+            },
+            ...(priceRequired ? [{
+              label: "Price",
+              oldVal: `₹${oldPrice.toFixed(2)}`,
+              newVal: `₹${newPrice.toFixed(2)}`,
+              changed: oldPrice !== newPrice,
+            }] : []),
+            ...(triggerRequired ? [{
+              label: "Trigger Price",
+              oldVal: `₹${oldTrigger.toFixed(2)}`,
+              newVal: `₹${newTrigger.toFixed(2)}`,
+              changed: oldTrigger !== newTrigger,
+            }] : []),
+            {
+              label: "Validity",
+              oldVal: order.validity,
+              newVal: form.validity,
+              changed: order.validity !== form.validity,
+            },
+          ];
+
+          const hasChanges = diffRows.some(r => r.changed);
+
+          return (
+            <div className="space-y-4">
+              <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                Review the changes below. This will modify a live order on Dhan.
+              </div>
+
+              {/* Context (unchanged) */}
+              <div className="flex gap-4 rounded-md bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <div><span className="font-medium text-foreground">Symbol</span><p className="font-mono mt-0.5">{order.tradingSymbol}</p></div>
+                <div><span className="font-medium text-foreground">Order ID</span><p className="font-mono mt-0.5 break-all">{order.orderId}</p></div>
+              </div>
+
+              {/* Diff table */}
+              <div className="rounded-md border border-border overflow-hidden text-xs">
+                <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-0 divide-y divide-border">
+                  <div className="contents">
+                    <div className="px-2 py-1.5 bg-muted/50 text-muted-foreground font-medium col-span-1">Field</div>
+                    <div className="px-2 py-1.5 bg-muted/50 text-muted-foreground font-medium">Before</div>
+                    <div className="px-2 py-1.5 bg-muted/50 text-muted-foreground font-medium text-center">→</div>
+                    <div className="px-2 py-1.5 bg-muted/50 text-muted-foreground font-medium">After</div>
+                  </div>
+                  {diffRows.map(({ label, oldVal, newVal, changed }) => (
+                    <div key={label} className={`contents ${changed ? "text-foreground" : "text-muted-foreground"}`}>
+                      <div className="px-2 py-2 font-medium">{label}</div>
+                      <div className={`px-2 py-2 font-mono ${changed ? "line-through opacity-50" : ""}`}>{oldVal}</div>
+                      <div className="px-2 py-2 text-center text-muted-foreground">{changed ? "→" : "="}</div>
+                      <div className={`px-2 py-2 font-mono font-semibold ${changed ? "text-primary" : ""}`}>{newVal}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {!hasChanges && (
+                <p className="text-xs text-muted-foreground text-center">No fields changed — nothing will be modified.</p>
+              )}
+
+              <DialogFooter className="pt-1">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowConfirm(false)} disabled={loading}>Back</Button>
+                <Button type="button" size="sm" disabled={loading || !hasChanges} onClick={() => void handleConfirm()}>
+                  {loading ? "Modifying…" : "Confirm Modify"}
+                </Button>
+              </DialogFooter>
             </div>
-            <DialogFooter className="pt-1">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setShowConfirm(false)} disabled={loading}>Back</Button>
-              <Button type="button" size="sm" disabled={loading} onClick={() => void handleConfirm()}>
-                {loading ? "Modifying…" : "Confirm Modify"}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );
