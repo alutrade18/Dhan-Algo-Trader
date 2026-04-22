@@ -3,7 +3,7 @@ import { eq, desc, sql, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
 import { dhanClient } from "../lib/dhan-client";
-import { sendTelegramAlert, sendTelegramAlertIfEnabled, sendTelegramTest } from "../lib/telegram";
+import { sendTelegramAlert, sendTelegramAlertIfEnabled, sendTelegramTest, alertHeader, alertFooter } from "../lib/telegram";
 import { decryptToken } from "../lib/crypto-utils";
 
 const APP_NAME = process.env.APP_NAME ?? "Algo Trader";
@@ -22,27 +22,26 @@ async function sendTelegramPing(botToken: string, chatId: string): Promise<void>
       hour12: true,
     });
     const message = [
-      `🔔 *${APP_NAME.toUpperCase()} — ALERTS ACTIVE*`,
-      "━━━━━━━━━━━━━━━━━━━━━━━",
+      alertHeader(APP_NAME, "ALERTS ACTIVE"),
       "",
-      "✅ *Telegram channel connected successfully\\.*",
-      "You will now receive real\\-time notifications for:",
+      "✅ *Telegram channel connected successfully.*",
+      "You will now receive real-time notifications for:",
       "",
       "┃ 📈 *Order executions* & fills",
       "┃ 🛡 *Kill switch* activations",
       "┃ ⚠️ *Daily loss limit* breaches",
-      "┃ 🔁 *Auto square\\-off* triggers",
+      "┃ 🔁 *Auto square-off* triggers",
       "",
-      "━━━━━━━━━━━━━━━━━━━━━━━",
+      alertFooter(),
       `🕐 *Activated:* ${now} IST`,
       `🏦 *Broker:* Dhan NSE`,
-      "━━━━━━━━━━━━━━━━━━━━━━━",
+      alertFooter(),
     ].join("\n");
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "MarkdownV2" }),
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "Markdown" }),
     });
   } catch {
     // fire-and-forget
@@ -191,10 +190,10 @@ router.put("/settings", async (req, res): Promise<void> => {
   if (body.killSwitchEnabled !== undefined) {
     updateData.killSwitchEnabled = Boolean(body.killSwitchEnabled);
     if (Boolean(body.killSwitchEnabled) && !existing.killSwitchEnabled) {
-      void sendTelegramAlertIfEnabled("killSwitch", "🚨 *Emergency Kill Switch ACTIVATED* — All trading halted");
+      void sendTelegramAlertIfEnabled("killSwitch", [alertHeader(APP_NAME, "EMERGENCY"), "", "🚨 *EMERGENCY KILL SWITCH ACTIVATED*", "All trading is now *halted immediately.*", "", alertFooter()].join("\n"));
       auditEntries.push({ field: "killSwitchEnabled", old: "false", new: "true" });
     } else if (!Boolean(body.killSwitchEnabled) && existing.killSwitchEnabled) {
-      void sendTelegramAlertIfEnabled("killSwitch", "✅ Kill switch deactivated — Trading resumed");
+      void sendTelegramAlertIfEnabled("killSwitch", [alertHeader(APP_NAME, "KILL SWITCH"), "", "✅ *KILL SWITCH DEACTIVATED*", "Trading resumed.", "", alertFooter()].join("\n"));
       auditEntries.push({ field: "killSwitchEnabled", old: "true", new: "false" });
     }
   }

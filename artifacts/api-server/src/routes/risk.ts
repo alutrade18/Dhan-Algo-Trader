@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { db, settingsTable, auditLogTable } from "@workspace/db";
-import { sendTelegramAlertIfEnabled } from "../lib/telegram";
+import { sendTelegramAlertIfEnabled, alertHeader, alertFooter } from "../lib/telegram";
 import { eq, and, gte } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
@@ -99,10 +99,10 @@ async function autoDeactivateKillSwitch() {
     }
     deactivationTracker.date = getISTDateString();
     deactivationTracker.count = 0;
-    void sendTelegramAlertIfEnabled("killSwitch", "🟢 *Midnight Reset* — Kill switch automatically deactivated. Fresh trading allowed for the new day.");
+    void sendTelegramAlertIfEnabled("killSwitch", [alertHeader("ALGO TRADER", "MIDNIGHT RESET"), "", "🟢 *Kill switch auto-deactivated*", "Fresh trading session started for the new day.", "", alertFooter()].join("\n"));
   } catch (e) {
     logger.error({ err: e }, "[Risk] Midnight kill-switch auto-deactivation failed — kill switch may remain active");
-    void sendTelegramAlertIfEnabled("criticalErrors", "⚠️ *Midnight Kill Switch Reset Failed*\n\nCould not auto-deactivate kill switch at midnight. Please deactivate manually before trading.");
+    void sendTelegramAlertIfEnabled("criticalErrors", [alertHeader("ALGO TRADER", "CRITICAL"), "", "⚠️ *MIDNIGHT RESET FAILED*", "Could not auto-deactivate kill switch at midnight.", "Deactivate manually before trading.", "", alertFooter()].join("\n"));
   }
 }
 
@@ -183,8 +183,8 @@ router.post("/risk/killswitch", async (req, res): Promise<void> => {
     void sendTelegramAlertIfEnabled(
       "killSwitch",
       status === "ACTIVATE"
-        ? "🛑 Kill Switch ACTIVATED — All order placement blocked."
-        : "✅ Kill Switch DEACTIVATED — Trading resumed normally.",
+        ? [alertHeader("ALGO TRADER", "KILL SWITCH"), "", "🛑 *KILL SWITCH ACTIVATED*", "All order placement is now *blocked.*", "", alertFooter()].join("\n")
+        : [alertHeader("ALGO TRADER", "KILL SWITCH"), "", "✅ *KILL SWITCH DEACTIVATED*", "Trading resumed normally.", "", alertFooter()].join("\n"),
     );
     res.json({
       ...(data as Record<string, unknown>),

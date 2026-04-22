@@ -53,11 +53,11 @@ async function sendRaw(botToken: string, chatId: string, text: string): Promise<
   }
 }
 
-/** Unconditional send — used only for test messages and credential pings */
+/** Unconditional send — used for test messages and credential pings */
 export async function sendTelegramAlert(message: string): Promise<void> {
   const config = await getTelegramConfig();
   if (!config) return;
-  await sendRaw(config.botToken, config.chatId, `🤖 *${APP_NAME}*\n${message}`);
+  await sendRaw(config.botToken, config.chatId, message);
 }
 
 /** Gated send — checks the per-category toggle before sending */
@@ -65,7 +65,15 @@ export async function sendTelegramAlertIfEnabled(category: TelegramAlertCategory
   const config = await getTelegramConfig();
   if (!config) return;
   if (!config.alerts[category]) return;
-  await sendRaw(config.botToken, config.chatId, `🤖 *${APP_NAME}*\n${message}`);
+  await sendRaw(config.botToken, config.chatId, message);
+}
+
+export function alertHeader(appName: string, type: string): string {
+  return `🔔 *${appName.toUpperCase()} — ${type}*\n━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
+export function alertFooter(): string {
+  return "━━━━━━━━━━━━━━━━━━━━━━━";
 }
 
 /** Direct test send using explicit credentials (for test-message endpoint) */
@@ -77,16 +85,15 @@ export async function sendTelegramTest(botToken: string, chatId: string): Promis
     hour12: true,
   });
   const text = [
-    `🔔 *${APP_NAME.toUpperCase()} — TEST ALERT*`,
-    "━━━━━━━━━━━━━━━━━━━━━━━",
+    alertHeader(APP_NAME, "TEST ALERT"),
     "",
-    "✅ *Telegram alerts are working correctly\\.*",
-    "_This is a test — no action required\\._",
+    "✅ *Telegram alerts are working correctly.*",
+    "_This is a test — no action required._",
     "",
-    "━━━━━━━━━━━━━━━━━━━━━━━",
+    alertFooter(),
     `🕐 *Sent:* ${now} IST`,
     `🏦 *Broker:* Dhan NSE`,
-    "━━━━━━━━━━━━━━━━━━━━━━━",
+    alertFooter(),
   ].join("\n");
 
   try {
@@ -94,7 +101,7 @@ export async function sendTelegramTest(botToken: string, chatId: string): Promis
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "MarkdownV2" }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
     });
     if (!res.ok) {
       const body = await res.json() as { description?: string };

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import type { Server as SocketIOServer } from "socket.io";
 import { logger } from "../lib/logger";
-import { sendTelegramAlertIfEnabled } from "../lib/telegram";
+import { sendTelegramAlertIfEnabled, alertHeader, alertFooter } from "../lib/telegram";
 
 export function createPostbackRouter(io: SocketIOServer): IRouter {
   const router: IRouter = Router();
@@ -36,13 +36,34 @@ export function createPostbackRouter(io: SocketIOServer): IRouter {
       if (status === "TRADED") {
         void sendTelegramAlertIfEnabled(
           "orderFills",
-          `✅ *ORDER EXECUTED*\nSymbol: ${symbol}\nSide: ${side} | Qty: ${qty}\nPrice: ₹${price}\nOrder: ${orderNo}`,
+          [
+            alertHeader("ALGO TRADER", "ORDER EXECUTED"),
+            "",
+            `✅ *Trade filled successfully*`,
+            "",
+            `┃ 📊 *Symbol:* ${symbol}`,
+            `┃ ${side === "BUY" ? "📈" : "📉"} *Side:* ${side} | Qty: ${qty}`,
+            `┃ 💰 *Price:* ₹${price}`,
+            `┃ 🔢 *Order ID:* ${orderNo}`,
+            "",
+            alertFooter(),
+          ].join("\n"),
         );
       } else if (status === "REJECTED") {
         const reason = String(payload.omsErrorDescription ?? payload.OmsErrorDescription ?? "Unknown");
         void sendTelegramAlertIfEnabled(
           "orderFills",
-          `❌ *ORDER REJECTED*\nSymbol: ${symbol}\nReason: ${reason}\nOrder: ${orderNo}`,
+          [
+            alertHeader("ALGO TRADER", "ORDER REJECTED"),
+            "",
+            `❌ *Order was rejected*`,
+            "",
+            `┃ 📊 *Symbol:* ${symbol}`,
+            `┃ ⚠️ *Reason:* ${reason}`,
+            `┃ 🔢 *Order ID:* ${orderNo}`,
+            "",
+            alertFooter(),
+          ].join("\n"),
         );
       }
 
