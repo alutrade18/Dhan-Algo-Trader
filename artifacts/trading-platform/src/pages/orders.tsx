@@ -112,6 +112,24 @@ function formatCurrency(n: number): string {
   })}`;
 }
 
+/** Returns current IST time as dd_mm_yyyy_HH_mm for CSV filenames */
+function csvTimestamp(): string {
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  const dd   = String(ist.getUTCDate()).padStart(2, "0");
+  const mm   = String(ist.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(ist.getUTCFullYear());
+  const HH   = String(ist.getUTCHours()).padStart(2, "0");
+  const min  = String(ist.getUTCMinutes()).padStart(2, "0");
+  return `${dd}_${mm}_${yyyy}_${HH}_${min}`;
+}
+
+/** Convert YYYY-MM-DD to DD_MM_YYYY */
+function ymdToDMY(ymd: string): string {
+  const [yyyy, mon, day] = ymd.split("-");
+  return `${day}_${mon}_${yyyy}`;
+}
+
 function downloadCsv(rows: Record<string, unknown>[], filename: string): void {
   if (rows.length === 0) return;
   const headers = Object.keys(rows[0]);
@@ -1087,7 +1105,7 @@ export default function OrdersPage() {
         "Update Time": o.updateTime,
         "OMS Error": o.omsErrorDescription ?? "",
       }));
-      const filename = `dhan-orders-today-${todayISO()}.csv`;
+      const filename = `order_book_today_${csvTimestamp()}.csv`;
       downloadCsv(rows, filename);
       toast({ title: `Exported ${rows.length} rows`, description: filename });
     } else {
@@ -1104,7 +1122,7 @@ export default function OrdersPage() {
         Segment: t.exchangeSegment,
         "Create Time": t.createTime,
       }));
-      const filename = `dhan-orders-${fromDate}-to-${toDate}.csv`;
+      const filename = `order_history_${ymdToDMY(fromDate)}_to_${ymdToDMY(toDate)}_${csvTimestamp()}.csv`;
       downloadCsv(rows, filename);
       toast({ title: `Exported ${rows.length} rows`, description: filename });
     }

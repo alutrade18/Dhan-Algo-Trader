@@ -13,6 +13,19 @@ function getTodayIST(): string {
   return ist.toISOString().slice(0, 10);
 }
 function toYMD(d: Date) { return d.toISOString().slice(0, 10); }
+function csvTimestamp(): string {
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const dd  = String(ist.getUTCDate()).padStart(2, "0");
+  const mm  = String(ist.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(ist.getUTCFullYear());
+  const HH  = String(ist.getUTCHours()).padStart(2, "0");
+  const min = String(ist.getUTCMinutes()).padStart(2, "0");
+  return `${dd}_${mm}_${yyyy}_${HH}_${min}`;
+}
+function ymdToDMY(ymd: string): string {
+  const [yyyy, mon, day] = ymd.split("-");
+  return `${day}_${mon}_${yyyy}`;
+}
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d; }
 function parseAmount(val: string | undefined): number {
   return Number(String(val ?? "0").replace(/,/g, ""));
@@ -130,7 +143,7 @@ export default function TradeHistory() {
     const csv = [headers, ...rows].map(row => row.map(v => JSON.stringify(v)).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `ledger_${fromDate}_to_${toDate}.csv`; a.click(); URL.revokeObjectURL(a.href);
+    a.download = `ledger_statement_${ymdToDMY(fromDate)}_to_${ymdToDMY(toDate)}_${csvTimestamp()}.csv`; a.click(); URL.revokeObjectURL(a.href);
   }
 
   return (
