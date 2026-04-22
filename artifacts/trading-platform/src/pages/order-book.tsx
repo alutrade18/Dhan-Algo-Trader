@@ -277,15 +277,17 @@ function DateInput({
   min,
   max,
   label,
+  className,
 }: {
   value: string;
   onChange: (iso: string) => void;
   min?: string;
   max?: string;
   label: string;
+  className?: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+    <div className={`flex items-center gap-1.5 min-w-0 ${className ?? ""}`}>
       <span className="text-[11px] text-muted-foreground shrink-0 select-none">{label}</span>
       <label className="relative flex items-center flex-1 min-w-0 h-8 rounded-md border border-border/50 hover:border-primary/50 focus-within:border-primary transition-colors cursor-pointer bg-transparent overflow-hidden">
         <CalendarDays className="absolute left-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10 shrink-0" />
@@ -1147,14 +1149,14 @@ export default function OrdersPage() {
     <TooltipProvider>
       <div className="space-y-3">
 
-        {/* ── Top header ────────────────────────────────────────── */}
+        {/* ── Top header — all controls in one flex-wrap row ─────── */}
         <div className="flex items-center gap-2 flex-wrap">
 
-          {/* Preset toggle tabs — left side */}
-          <div className="flex items-center gap-1">
+          {/* Preset tabs */}
+          <div className="flex items-center gap-0.5 shrink-0">
             <button
               onClick={() => setActivePreset("live")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                 isLive
                   ? "bg-success/15 text-success border-success/30"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/60"
@@ -1163,14 +1165,12 @@ export default function OrdersPage() {
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isLive ? "bg-success animate-pulse" : "bg-muted-foreground/50"}`} />
               Live
             </button>
-
-            <div className="w-px h-4 bg-border shrink-0 mx-0.5" />
-
+            <div className="w-px h-4 bg-border shrink-0 mx-1" />
             {HISTORY_PRESETS.map((p) => (
               <button
                 key={p.id}
                 onClick={() => handlePreset(p.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   activePreset === p.id
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -1179,10 +1179,9 @@ export default function OrdersPage() {
                 {p.label}
               </button>
             ))}
-
             <button
               onClick={() => setActivePreset("custom")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 activePreset === "custom"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -1192,7 +1191,36 @@ export default function OrdersPage() {
             </button>
           </div>
 
-          {/* Action buttons — right side */}
+          {/* Date pickers + Fetch — always visible; dimmed when Live */}
+          <div className={`flex items-center gap-2 transition-opacity ${isLive ? "opacity-35 pointer-events-none" : "opacity-100"}`}>
+            <DateInput
+              label="From"
+              value={fromDate}
+              max={toDate}
+              onChange={(v) => { setFromDate(v); setActivePreset("custom"); }}
+              className="w-[9rem] shrink-0"
+            />
+            <DateInput
+              label="To"
+              value={toDate}
+              min={fromDate}
+              max={todayISO()}
+              onChange={(v) => { setToDate(v); setActivePreset("custom"); }}
+              className="w-[8.5rem] shrink-0"
+            />
+            <Button
+              size="sm" className="h-8 px-3 gap-1.5 shrink-0"
+              onClick={handleCustomFetch}
+              disabled={historyLoading || !fromDate || !toDate}
+            >
+              {historyLoading
+                ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <Search className="h-3.5 w-3.5" />}
+              Fetch
+            </Button>
+          </div>
+
+          {/* Action buttons — pushed to right */}
           <div className="flex items-center gap-2 ml-auto">
             <Button
               variant="outline" size="sm"
@@ -1214,39 +1242,6 @@ export default function OrdersPage() {
             </Button>
           </div>
         </div>
-
-        {/* ── Date pickers — shown when NOT in live view ─────────── */}
-        {!isLive && (
-          <div className="rounded-xl border border-border bg-card px-3 py-2.5 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-            <div className="grid grid-cols-2 gap-2 flex-1 w-full sm:w-auto">
-              <DateInput
-                label="From"
-                value={fromDate}
-                max={toDate}
-                onChange={(v) => { setFromDate(v); setActivePreset("custom"); }}
-              />
-              <DateInput
-                label="To"
-                value={toDate}
-                min={fromDate}
-                max={todayISO()}
-                onChange={(v) => { setToDate(v); setActivePreset("custom"); }}
-              />
-            </div>
-            <Button
-              size="sm" className="h-8 px-4 gap-1.5 w-full sm:w-auto"
-              onClick={handleCustomFetch}
-              disabled={historyLoading || !fromDate || !toDate}
-            >
-              {historyLoading ? (
-                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Search className="h-3.5 w-3.5" />
-              )}
-              Fetch
-            </Button>
-          </div>
-        )}
 
         {/* ── Stat cards ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
