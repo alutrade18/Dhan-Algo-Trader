@@ -35,9 +35,8 @@ async function sendTelegramPing(botToken: string, chatId: string): Promise<void>
       "",
       "━━━━━━━━━━━━━━━━━━━━━━━",
       `🕐 *Activated:* ${now} IST`,
-      `🏦 *Broker:* Dhan NSE/BSE`,
+      `🏦 *Broker:* Dhan NSE`,
       "━━━━━━━━━━━━━━━━━━━━━━━",
-      `⚡ _${APP_NAME} · Precision\\. Speed\\. Control\\._`,
     ].join("\n");
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

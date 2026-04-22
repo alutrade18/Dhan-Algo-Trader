@@ -77,12 +77,17 @@ export async function sendTelegramTest(botToken: string, chatId: string): Promis
     hour12: true,
   });
   const text = [
-    `🤖 *${APP_NAME} — Test Message*`,
+    `🚀 *${APP_NAME.toUpperCase()} — TEST ALERT*`,
+    "━━━━━━━━━━━━━━━━━━━━━━━",
     "",
-    "✅ Your Telegram alerts are working correctly\\!",
-    `🕐 Sent at: ${now} IST`,
+    "✅ *Telegram alerts are working correctly\\.*",
     "",
     "_This is a test message — no action required\\._",
+    "",
+    "━━━━━━━━━━━━━━━━━━━━━━━",
+    `🕐 *Sent:* ${now} IST`,
+    `🏦 *Broker:* Dhan NSE`,
+    "━━━━━━━━━━━━━━━━━━━━━━━",
   ].join("\n");
 
   try {
