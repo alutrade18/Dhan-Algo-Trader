@@ -145,7 +145,7 @@ router.post("/orders", async (req, res): Promise<void> => {
     // Translate our internal shorthand values to the real Dhan API values.
     // Dhan Python SDK source confirms: INTRA="INTRADAY", SL="STOP_LOSS", SLM="STOP_LOSS_MARKET"
     const PRODUCT_TYPE_MAP: Record<string, string> = {
-      INTRA: "INTRADAY", CNC: "CNC", MARGIN: "MARGIN", CO: "CO", BO: "BO", MTF: "MTF",
+      INTRA: "INTRADAY", CNC: "CNC", MARGIN: "MARGIN", MTF: "MTF", CO: "CO", BO: "BO",
     };
     const ORDER_TYPE_MAP: Record<string, string> = {
       MARKET: "MARKET", LIMIT: "LIMIT", SL: "STOP_LOSS", SLM: "STOP_LOSS_MARKET",

@@ -103,7 +103,7 @@ export const PlaceOrderBody = zod.object({
   transactionType: zod.enum(["BUY", "SELL"]),
   quantity: zod.number(),
   orderType: zod.enum(["MARKET", "LIMIT", "SL", "SLM"]),
-  productType: zod.enum(["INTRA", "CNC", "MARGIN", "CO", "BO"]),
+  productType: zod.enum(["INTRA", "CNC", "MARGIN", "MTF", "CO", "BO"]),
   price: zod.number(),
   triggerPrice: zod.number().optional(),
   disclosedQuantity: zod.number().optional(),

@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
-import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -37,58 +36,5 @@ router.delete("/positions", async (req, res): Promise<void> => {
   }
 });
 
-// POST /positions/exit-single — Place a closing order for one position
-router.post("/positions/exit-single", async (req, res): Promise<void> => {
-  if (!dhanClient.isConfigured()) {
-    res.status(401).json({ error: "Broker not connected" });
-    return;
-  }
-  const { securityId, exchangeSegment, productType, quantity, transactionType } = req.body as {
-    securityId: string;
-    exchangeSegment: string;
-    productType: string;
-    quantity: number;
-    transactionType: "BUY" | "SELL";
-  };
-
-  // Dhan positions API and orders API both use the same product type values.
-  // Pass through as-is. The only alias is our internal "INTRA" shorthand
-  // which maps to Dhan's actual value "INTRADAY".
-  const PRODUCT_TYPE_MAP: Record<string, string> = {
-    INTRA: "INTRADAY",  // our frontend shorthand → Dhan API value
-  };
-  const orderProductType = PRODUCT_TYPE_MAP[productType] ?? productType;
-
-  // Match the exact payload structure from Dhan's official Python SDK (_order.py).
-  // All fields must be present, including boProfitValue/boStopLossValue as null.
-  const orderBody = {
-    transactionType,
-    exchangeSegment,
-    productType: orderProductType,
-    orderType: "MARKET",
-    validity: "DAY",
-    securityId,
-    quantity: Number(quantity),
-    disclosedQuantity: 0,
-    price: 0,
-    afterMarketOrder: false,
-    boProfitValue: null,
-    boStopLossValue: null,
-    triggerPrice: 0,
-  };
-
-  logger.info(
-    { received: { securityId, exchangeSegment, productType, quantity, transactionType }, sending: orderBody },
-    "[exit-single] placing exit order",
-  );
-
-  try {
-    const result = await dhanClient.placeOrder(orderBody);
-    res.json(result);
-  } catch (e) {
-    if (e instanceof DhanApiError) res.status(e.status).json(e.toClientResponse());
-    else res.status(500).json({ error: "Failed to exit position" });
-  }
-});
 
 export default router;

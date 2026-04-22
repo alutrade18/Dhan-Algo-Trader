@@ -143,25 +143,40 @@ export default function Positions() {
   const exitSingle = async (pos: DhanPosition) => {
     const key = pos.securityId ?? "";
     setExiting(prev => ({ ...prev, [key]: true }));
-    const payload = {
-      securityId: pos.securityId,
-      exchangeSegment: pos.exchangeSegment,
-      productType: pos.productType ?? "INTRADAY",
-      quantity: Math.abs(pos.netQty ?? 0),
-      transactionType: (pos.netQty ?? 0) > 0 ? "SELL" : "BUY",
+
+    // Map Dhan positions productType values to our orders API productType enum.
+    // Positions API returns "INTRADAY"; orders API accepts "INTRA".
+    const PRODUCT_MAP: Record<string, string> = {
+      INTRADAY: "INTRA", MARGIN: "MARGIN", CNC: "CNC",
+      MTF: "MTF", CO: "CO", BO: "BO",
     };
-    // eslint-disable-next-line no-console
-    console.log("[exit-single] raw position:", JSON.stringify(pos));
-    // eslint-disable-next-line no-console
-    console.log("[exit-single] sending payload:", JSON.stringify(payload));
+    // Fallback to "INTRA" for any unrecognized productType
+    const transactionType = (pos.netQty ?? 0) > 0 ? "SELL" : "BUY";
+
+    // Place a counter order via POST /orders — same as any new order placement,
+    // but in the opposite direction to close the open position.
+    const payload = {
+      transactionType,
+      exchangeSegment: pos.exchangeSegment,
+      productType: PRODUCT_MAP[pos.productType ?? "INTRADAY"] ?? "INTRA",
+      orderType: "MARKET",
+      validity: "DAY",
+      securityId: pos.securityId,
+      quantity: Math.abs(pos.netQty ?? 0),
+      disclosedQuantity: 0,
+      price: 0,
+      triggerPrice: 0,
+      afterMarketOrder: false,
+    };
+
     try {
-      const res = await fetch(`${BASE}api/positions/exit-single`, {
+      const res = await fetch(`${BASE}api/orders`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.errorMessage ?? data.error ?? "Exit failed");
-      toast({ title: "Exit order placed", description: `${pos.tradingSymbol} — Order #${data.orderId}` });
+      const data = await res.json() as Record<string, unknown>;
+      if (!res.ok) throw new Error((data.errorMessage as string) ?? (data.error as string) ?? "Exit failed");
+      toast({ title: "Exit order placed", description: `${pos.tradingSymbol} — Order #${String(data.orderId ?? "")}` });
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ["positions"] }), 2500);
     } catch (e: unknown) {
       toast({ title: "Exit failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
