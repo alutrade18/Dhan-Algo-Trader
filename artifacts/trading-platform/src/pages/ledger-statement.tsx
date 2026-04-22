@@ -207,7 +207,7 @@ export default function TradeHistory() {
             </Card>
           ) : (
             <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full table-auto text-sm">
+              <table className="w-full table-auto text-sm min-w-[640px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     {[{ label: "Date", right: false }, { label: "Narration", right: false }, { label: "Exchange", right: false }, { label: "Voucher No.", right: false }, { label: "Debit", right: true }, { label: "Credit", right: true }, { label: "Balance", right: true }].map(h => (

@@ -358,3 +358,11 @@
   .sidebar-item-active { background: hsl(var(--sidebar-accent)); color: hsl(var(--sidebar-accent-foreground)); }
   .sidebar-item-active svg { color: hsl(var(--sidebar-primary)); }
 }
+
+/* ── iOS safe-area support (notch / Dynamic Island / home bar) ── */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}

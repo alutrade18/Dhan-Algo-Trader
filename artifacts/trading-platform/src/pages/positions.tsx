@@ -63,7 +63,12 @@ const isClosed      = (p: DhanPosition) => (p.netQty ?? 0) === 0 || p.positionTy
 
 function expiryLabel(d?: string) {
   if (!d || d.startsWith("0001")) return null;
-  return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return null;
+  const dd   = String(dt.getUTCDate()).padStart(2, "0");
+  const mm   = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = dt.getUTCFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 }
 
 type TabKey = "open" | "closed";
@@ -303,7 +308,7 @@ export default function Positions() {
         <div className="flex items-center gap-2 sm:ml-auto">
           {lastUpdated && (
             <span className="text-[10px] text-muted-foreground hidden md:inline">
-              Updated {lastUpdated.toLocaleTimeString("en-IN")}
+              Updated {lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })}
             </span>
           )}
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleRefresh} disabled={cooling || isLoading}>

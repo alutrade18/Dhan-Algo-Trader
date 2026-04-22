@@ -27,10 +27,18 @@ interface PagedResponse<T> { logs: T[]; total: number; page: number; limit: numb
 type TabKey = "audit" | "success" | "failed";
 
 function fmtIST(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  });
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const ist  = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const dd   = String(ist.getDate()).padStart(2, "0");
+    const mm   = String(ist.getMonth() + 1).padStart(2, "0");
+    const yyyy = ist.getFullYear();
+    const hh   = String(ist.getHours()).padStart(2, "0");
+    const min  = String(ist.getMinutes()).padStart(2, "0");
+    const ss   = String(ist.getSeconds()).padStart(2, "0");
+    return `${dd}-${mm}-${yyyy} ${hh}:${min}:${ss}`;
+  } catch { return iso; }
 }
 function levelColor(level: string) {
   if (level === "error") return "text-destructive font-semibold";
