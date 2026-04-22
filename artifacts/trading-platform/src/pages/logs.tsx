@@ -171,9 +171,9 @@ function AppLogDetailModal({ log, onClose }: { log: AppLog | null; onClose: () =
 // ── Delete Confirmation Dialog ────────────────────────────────────────────────
 
 function DeleteConfirmDialog({
-  open, tabLabel, onCancel, onConfirm, loading,
+  open, onCancel, onConfirm, loading,
 }: {
-  open: boolean; tabLabel: string; onCancel: () => void; onConfirm: () => void; loading: boolean;
+  open: boolean; onCancel: () => void; onConfirm: () => void; loading: boolean;
 }) {
   return (
     <AlertDialog open={open}>
@@ -181,15 +181,11 @@ function DeleteConfirmDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-destructive" />
-            Delete {tabLabel}?
+            Delete Logs?
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-2">
-            <span className="block">
-              Are you sure you want to clear all <strong>{tabLabel}</strong> from the UI?
-            </span>
-            <span className="block text-xs bg-muted/60 border border-border rounded p-2 text-foreground">
-              🔒 <strong>Data is never deleted from the database.</strong> Records will be hidden from the UI
-              but permanently retained for audit and compliance. A log entry will be created recording this action.
+          <AlertDialogDescription>
+            <span className="block text-sm bg-muted/60 border border-border rounded p-2 text-foreground">
+              🔒 Data is never deleted from the database. Records will save always for audit and compliance.
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -275,12 +271,8 @@ function Pagination({ page, total, onPrev, onNext }: {
 // ── View Components ───────────────────────────────────────────────────────────
 
 function AuditLogsView() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AuditEntry | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const { data, isLoading, isError } = useQuery<PagedResponse<AuditEntry>>({
     queryKey: ["audit-log", page],
@@ -294,47 +286,10 @@ function AuditLogsView() {
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
 
-  async function handleDelete() {
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(`${BASE}api/settings/audit-log`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
-      const result = await res.json() as { deleted: number };
-      toast({ title: "Audit logs cleared", description: `${result.deleted} entries removed from view. Data retained in database.` });
-      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
-      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
-      setPage(0);
-    } catch {
-      toast({ title: "Delete failed", description: "Could not clear audit logs. Try again.", variant: "destructive" });
-    } finally {
-      setDeleteLoading(false);
-      setShowDeleteConfirm(false);
-    }
-  }
-
   return (
     <>
       {isError && <ErrorBanner />}
       <AuditDetailModal entry={selected} onClose={() => setSelected(null)} />
-      <DeleteConfirmDialog
-        open={showDeleteConfirm}
-        tabLabel="Audit Logs"
-        onCancel={() => setShowDeleteConfirm(false)}
-        onConfirm={() => void handleDelete()}
-        loading={deleteLoading}
-      />
-      <div className="flex items-center justify-end mb-2.5">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={logs.length === 0 || isLoading}
-        >
-          <Trash2 className="w-3 h-3" />
-          Delete All
-        </Button>
-      </div>
       <TableShell
         headers={["Time (IST)", "Action", "Field", "Old Value", "New Value", "Description"]}
         isLoading={isLoading} isEmpty={!isError && logs.length === 0}
@@ -367,12 +322,8 @@ function AuditLogsView() {
 }
 
 function SuccessLogsView() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AppLog | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const { data, isLoading, isError } = useQuery<PagedResponse<AppLog>>({
     queryKey: ["logs-success", page],
@@ -386,49 +337,10 @@ function SuccessLogsView() {
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
 
-  async function handleDelete() {
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(`${BASE}api/logs?tab=success`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
-      const result = await res.json() as { deleted: number };
-      toast({ title: "Success logs cleared", description: `${result.deleted} entries removed from view. Data retained in database.` });
-      void queryClient.invalidateQueries({ queryKey: ["logs-success"] });
-      void queryClient.invalidateQueries({ queryKey: ["logs-success-count"] });
-      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
-      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
-      setPage(0);
-    } catch {
-      toast({ title: "Delete failed", description: "Could not clear success logs. Try again.", variant: "destructive" });
-    } finally {
-      setDeleteLoading(false);
-      setShowDeleteConfirm(false);
-    }
-  }
-
   return (
     <>
       {isError && <ErrorBanner />}
       <AppLogDetailModal log={selected} onClose={() => setSelected(null)} />
-      <DeleteConfirmDialog
-        open={showDeleteConfirm}
-        tabLabel="Success Logs"
-        onCancel={() => setShowDeleteConfirm(false)}
-        onConfirm={() => void handleDelete()}
-        loading={deleteLoading}
-      />
-      <div className="flex items-center justify-end mb-2.5">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={logs.length === 0 || isLoading}
-        >
-          <Trash2 className="w-3 h-3" />
-          Delete All
-        </Button>
-      </div>
       <TableShell
         headers={["Time (IST)", "Category", "Action", "Code", "Details"]}
         isLoading={isLoading} isEmpty={!isError && logs.length === 0}
@@ -464,12 +376,8 @@ function SuccessLogsView() {
 }
 
 function FailedLogsView() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AppLog | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const { data, isLoading, isError } = useQuery<PagedResponse<AppLog>>({
     queryKey: ["logs-failed", page],
@@ -483,49 +391,10 @@ function FailedLogsView() {
   const logs = data?.logs ?? [];
   const total = data?.total ?? 0;
 
-  async function handleDelete() {
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(`${BASE}api/logs?tab=failed`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
-      const result = await res.json() as { deleted: number };
-      toast({ title: "Failed logs cleared", description: `${result.deleted} entries removed from view. Data retained in database.` });
-      void queryClient.invalidateQueries({ queryKey: ["logs-failed"] });
-      void queryClient.invalidateQueries({ queryKey: ["logs-failed-count"] });
-      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
-      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
-      setPage(0);
-    } catch {
-      toast({ title: "Delete failed", description: "Could not clear failed logs. Try again.", variant: "destructive" });
-    } finally {
-      setDeleteLoading(false);
-      setShowDeleteConfirm(false);
-    }
-  }
-
   return (
     <>
       {isError && <ErrorBanner />}
       <AppLogDetailModal log={selected} onClose={() => setSelected(null)} />
-      <DeleteConfirmDialog
-        open={showDeleteConfirm}
-        tabLabel="Failed Logs"
-        onCancel={() => setShowDeleteConfirm(false)}
-        onConfirm={() => void handleDelete()}
-        loading={deleteLoading}
-      />
-      <div className="flex items-center justify-end mb-2.5">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={logs.length === 0 || isLoading}
-        >
-          <Trash2 className="w-3 h-3" />
-          Delete All
-        </Button>
-      </div>
       <TableShell
         headers={["Time (IST)", "Category", "Level", "Action", "Code", "Details"]}
         isLoading={isLoading} isEmpty={!isError && logs.length === 0}
@@ -584,7 +453,11 @@ function CountBadge({ count }: { count: number | undefined }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Logs() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("audit");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const { data: auditCount } = useQuery<{ total: number }>({
     queryKey: ["audit-log-count"],
@@ -619,6 +492,37 @@ export default function Logs() {
     refetchInterval: 60_000,
   });
 
+  const activeCount =
+    activeTab === "audit"   ? (auditCount?.total   ?? 0) :
+    activeTab === "success" ? (successCount?.total  ?? 0) :
+                              (failedCount?.total   ?? 0);
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    try {
+      const url =
+        activeTab === "audit"
+          ? `${BASE}api/settings/audit-log`
+          : `${BASE}api/logs?tab=${activeTab}`;
+      const res = await fetch(url, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      const result = await res.json() as { deleted: number };
+      const label = activeTab === "audit" ? "Audit logs" : activeTab === "success" ? "Success logs" : "Failed logs";
+      toast({ title: `${label} cleared`, description: `${result.deleted} entries removed from view. Data retained in database.` });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-log-count"] });
+      void queryClient.invalidateQueries({ queryKey: ["logs-success"] });
+      void queryClient.invalidateQueries({ queryKey: ["logs-success-count"] });
+      void queryClient.invalidateQueries({ queryKey: ["logs-failed"] });
+      void queryClient.invalidateQueries({ queryKey: ["logs-failed-count"] });
+    } catch {
+      toast({ title: "Delete failed", description: "Could not clear logs. Try again.", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   const TABS: { key: TabKey; label: string; icon: React.ReactNode; iconClass: string; count: number | undefined }[] = [
     { key: "audit",   label: "Audit Logs",   icon: <ClipboardList className="w-3.5 h-3.5" />, iconClass: "text-purple-400", count: auditCount?.total   },
     { key: "success", label: "Success Logs", icon: <CheckCircle2  className="w-3.5 h-3.5" />, iconClass: "text-success",    count: successCount?.total },
@@ -627,25 +531,45 @@ export default function Logs() {
 
   return (
     <div className="w-full">
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => void handleDelete()}
+        loading={deleteLoading}
+      />
       <Card>
-        <div className="flex flex-wrap gap-1 p-3 pb-0 border-b border-border">
-          {TABS.map(({ key, label, icon, iconClass, count }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-md border-b-2 transition-colors whitespace-nowrap",
-                activeTab === key
-                  ? "border-primary text-foreground bg-muted/40"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/20"
-              )}
+        <div className="flex items-center gap-1 px-3 pt-3 pb-0 border-b border-border">
+          <div className="flex flex-wrap gap-1 flex-1">
+            {TABS.map(({ key, label, icon, iconClass, count }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t-md border-b-2 transition-colors whitespace-nowrap",
+                  activeTab === key
+                    ? "border-primary text-foreground bg-muted/40"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                )}
+              >
+                <span className={activeTab === key ? iconClass : ""}>{icon}</span>
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{label.split(" ")[0]}</span>
+                <CountBadge count={count} />
+              </button>
+            ))}
+          </div>
+          <div className="pb-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={activeCount === 0 || deleteLoading}
             >
-              <span className={activeTab === key ? iconClass : ""}>{icon}</span>
-              <span className="hidden sm:inline">{label}</span>
-              <span className="sm:hidden">{label.split(" ")[0]}</span>
-              <CountBadge count={count} />
-            </button>
-          ))}
+              <Trash2 className="w-3 h-3" />
+              Delete All
+            </Button>
+          </div>
         </div>
 
         <CardContent className="p-3 sm:p-4">
