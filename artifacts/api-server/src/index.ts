@@ -234,6 +234,17 @@ loadSavedCredentials().then(async () => {
     startAutoSquareOffScheduler();
     startKillSwitchScheduler();
     startEquityScheduler();
+
+    // Log the server's outbound public IP so it can be whitelisted in Dhan.
+    // Dhan POST /orders requires the SERVER IP (not user's browser IP) to be whitelisted.
+    fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(5_000) })
+      .then(r => r.json() as Promise<{ ip: string }>)
+      .then(({ ip }) => {
+        logger.info({ serverOutboundIp: ip }, "SERVER OUTBOUND IP — add this to Dhan API whitelist for order placement");
+      })
+      .catch(() => {
+        logger.warn("Could not determine server outbound IP at startup");
+      });
   });
 });
 
