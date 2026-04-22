@@ -1149,8 +1149,7 @@ export default function OrdersPage() {
 
         {/* ── Top header ────────────────────────────────────────── */}
         <div className="flex items-center gap-2">
-          <p className="text-sm font-bold text-foreground hidden sm:block">Order Book</p>
-          <div className="flex items-center gap-2 sm:ml-auto ml-auto">
+          <div className="flex items-center gap-2 ml-auto">
             <Button
               variant="outline" size="sm"
               onClick={handleRefresh}

@@ -10,14 +10,14 @@ import { marketSocket } from "@/lib/market-socket";
 
 const Dashboard    = lazy(() => import("@/pages/dashboard"));
 const Charts       = lazy(() => import("@/pages/charts"));
-const Orders       = lazy(() => import("@/pages/orders"));
-const Positions    = lazy(() => import("@/pages/positions"));
-const Strategies   = lazy(() => import("@/pages/strategies"));
-const Settings     = lazy(() => import("@/pages/settings"));
-const RiskManager  = lazy(() => import("@/pages/risk-manager"));
-const Logs         = lazy(() => import("@/pages/logs"));
-const OptionChain  = lazy(() => import("@/pages/option-chain"));
-const TradeHistory = lazy(() => import("@/pages/trade-history"));
+const OrderBook       = lazy(() => import("@/pages/order-book"));
+const Positions       = lazy(() => import("@/pages/positions"));
+const Strategies      = lazy(() => import("@/pages/strategies"));
+const Settings        = lazy(() => import("@/pages/settings"));
+const RiskManager     = lazy(() => import("@/pages/risk-manager"));
+const Logs            = lazy(() => import("@/pages/logs"));
+const OptionChain     = lazy(() => import("@/pages/option-chain"));
+const LedgerStatement = lazy(() => import("@/pages/ledger-statement"));
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const BASE = import.meta.env.BASE_URL;
@@ -58,14 +58,14 @@ function AppRoutes() {
           </Route>
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/charts" component={Charts} />
-          <Route path="/order-book" component={Orders} />
+          <Route path="/order-book" component={OrderBook} />
           <Route path="/positions" component={Positions} />
           <Route path="/strategies" component={Strategies} />
           <Route path="/settings" component={Settings} />
           <Route path="/risk-manager" component={RiskManager} />
           <Route path="/logs" component={Logs} />
           <Route path="/option-chain" component={OptionChain} />
-          <Route path="/ledger-statement" component={TradeHistory} />
+          <Route path="/ledger-statement" component={LedgerStatement} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>
