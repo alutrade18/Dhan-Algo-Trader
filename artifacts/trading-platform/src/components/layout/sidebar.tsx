@@ -28,9 +28,9 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/positions", label: "Positions", icon: Briefcase },
-      { href: "/orders", label: "Order Book", icon: List },
+      { href: "/order-book", label: "Order Book", icon: List },
       { href: "/option-chain", label: "Option Chain", icon: LineChart },
-      { href: "/trade-history", label: "Ledger Statement", icon: BookOpen },
+      { href: "/ledger-statement", label: "Ledger Statement", icon: BookOpen },
     ],
   },
   {
