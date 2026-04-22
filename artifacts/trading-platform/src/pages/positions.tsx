@@ -143,15 +143,21 @@ export default function Positions() {
   const exitSingle = async (pos: DhanPosition) => {
     const key = pos.securityId ?? "";
     setExiting(prev => ({ ...prev, [key]: true }));
+    const payload = {
+      securityId: pos.securityId,
+      exchangeSegment: pos.exchangeSegment,
+      productType: pos.productType ?? "INTRADAY",
+      quantity: Math.abs(pos.netQty ?? 0),
+      transactionType: (pos.netQty ?? 0) > 0 ? "SELL" : "BUY",
+    };
+    // eslint-disable-next-line no-console
+    console.log("[exit-single] raw position:", JSON.stringify(pos));
+    // eslint-disable-next-line no-console
+    console.log("[exit-single] sending payload:", JSON.stringify(payload));
     try {
       const res = await fetch(`${BASE}api/positions/exit-single`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          securityId: pos.securityId, exchangeSegment: pos.exchangeSegment,
-          productType: pos.productType ?? "INTRADAY",
-          quantity: Math.abs(pos.netQty ?? 0),
-          transactionType: (pos.netQty ?? 0) > 0 ? "SELL" : "BUY",
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.errorMessage ?? data.error ?? "Exit failed");

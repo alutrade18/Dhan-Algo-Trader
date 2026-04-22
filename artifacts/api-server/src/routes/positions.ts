@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -62,6 +63,25 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
   };
   const orderProductType = PRODUCT_TYPE_MAP[productType] ?? productType;
 
+  // Log exactly what we received and what we're sending so mismatches are visible in prod logs
+  logger.info(
+    {
+      received: { securityId, exchangeSegment, productType, quantity, transactionType },
+      sending: {
+        security_id: securityId,
+        exchange_segment: exchangeSegment,
+        transaction_type: transactionType,
+        product_type: orderProductType,
+        order_type: "MARKET",
+        validity: "DAY",
+        quantity,
+        price: 0,
+        after_market_order: false,
+      },
+    },
+    "[exit-single] placing exit order",
+  );
+
   try {
     // Dhan API v2 requires snake_case field names.
     const result = await dhanClient.placeOrder({
@@ -72,7 +92,9 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
       order_type: "MARKET",
       validity: "DAY",
       quantity,
+      disclosed_quantity: 0,
       price: 0,
+      trigger_price: 0,
       after_market_order: false,
     });
     res.json(result);
