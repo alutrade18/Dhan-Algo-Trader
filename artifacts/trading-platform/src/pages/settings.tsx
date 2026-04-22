@@ -166,14 +166,39 @@ function ServerIpInfo() {
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <SectionLabel>Manual fallback</SectionLabel>
-          <p className="text-xs text-muted-foreground">If the button fails, whitelist manually:</p>
-          <ol className="text-xs text-muted-foreground space-y-0.5 list-decimal list-inside">
-            <li>Dhan Web → My Profile → Manage App</li>
-            <li>Select your app → Whitelist IP</li>
-            <li>Paste <span className="font-mono font-semibold text-foreground">{ip ?? "…"}</span></li>
-          </ol>
+        {/* Important Notes */}
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400/80">Important Notes</p>
+
+          {/* 7-day restriction */}
+          <div className="flex items-start gap-2">
+            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-200/90 font-medium leading-snug">
+              Once IP is set, it cannot be changed for <span className="font-bold text-amber-300">7 days</span>
+            </p>
+          </div>
+
+          {/* Manual IP Process */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Manual IP Process — DHAN Broker</p>
+            <ol className="space-y-1">
+              {[
+                "Go to Dhan Web",
+                "Click Profile (top right)",
+                "Click DhanHQ",
+                "Scroll down to Add IP Setting",
+                <>Copy IP from above: <code className="font-mono text-[11px] font-bold text-foreground bg-muted/30 px-1 py-0.5 rounded">{ip ?? "…"}</code></>,
+                "Paste to Dhan as Primary IP",
+              ].map((step, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/40 flex items-center justify-center text-[10px] font-bold text-foreground mt-0.5">
+                    {i + 1}
+                  </span>
+                  <span className="leading-snug">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
       </div>
     </div>
