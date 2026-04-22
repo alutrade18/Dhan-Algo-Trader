@@ -51,15 +51,11 @@ router.post("/positions/exit-single", async (req, res): Promise<void> => {
     transactionType: "BUY" | "SELL";
   };
 
-  // Dhan's positions API returns "INTRADAY" but the orders API requires "INTRA".
-  // Map all position product type names to the order API equivalents.
+  // Dhan positions API and orders API both use the same product type values.
+  // Pass through as-is. The only alias is our internal "INTRA" shorthand
+  // which maps to Dhan's actual value "INTRADAY".
   const PRODUCT_TYPE_MAP: Record<string, string> = {
-    INTRADAY: "INTRA",
-    CNC: "CNC",
-    MARGIN: "MARGIN",
-    CO: "CO",
-    BO: "BO",
-    MTF: "MTF",
+    INTRA: "INTRADAY",  // our frontend shorthand → Dhan API value
   };
   const orderProductType = PRODUCT_TYPE_MAP[productType] ?? productType;
 
