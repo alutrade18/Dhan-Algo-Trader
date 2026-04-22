@@ -108,7 +108,6 @@ function serializeSettings(s: typeof settingsTable.$inferSelect) {
       totalPnl: true,
       availableBalance: true,
       activeStrategies: true,
-      equityCurve: true,
     },
     refreshIntervalSeconds: s.refreshIntervalSeconds ?? 15,
   };

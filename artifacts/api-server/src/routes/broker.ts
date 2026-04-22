@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, settingsTable, equityCurveCacheTable } from "@workspace/db";
+import { db, settingsTable } from "@workspace/db";
 import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { marketFeedWS } from "../lib/market-feed-ws";
 import { orderUpdateWS } from "../lib/order-update-ws";
@@ -111,14 +111,6 @@ router.post("/broker/disconnect", async (req, res): Promise<void> => {
     req.log.info("Broker credentials cleared from database");
   } catch (e) {
     req.log.error({ err: e }, "Failed to clear broker credentials from database");
-  }
-
-  // 4. Clear equity curve cache from DB — cached ledger data belongs to this account only
-  try {
-    await db.delete(equityCurveCacheTable);
-    req.log.info("Equity curve cache cleared from database");
-  } catch (e) {
-    req.log.error({ err: e }, "Failed to clear equity curve cache from database");
   }
 
   res.json({ success: true, message: "Disconnected from broker" });

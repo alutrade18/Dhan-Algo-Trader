@@ -8,7 +8,6 @@ import { marketFeedWS } from "./lib/market-feed-ws";
 import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
 import { startKillSwitchScheduler, initDeactivationTracker } from "./routes/risk";
-import { startEquityScheduler } from "./lib/equity-scheduler";
 import { decryptToken } from "./lib/crypto-utils";
 import { loadDailyCountersFromDb } from "./lib/rate-limiter";
 import { loadHolidayCache } from "./lib/market-calendar";
@@ -284,8 +283,6 @@ loadSavedCredentials().then(async () => {
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
     startKillSwitchScheduler();
-    startEquityScheduler();
-
     void logServerIp();
   });
 });
