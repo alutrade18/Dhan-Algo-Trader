@@ -302,22 +302,6 @@ export const dhanClient = {
     return dhanRequest("DELETE", "/positions");
   },
 
-  async getHoldings() {
-    return dhanRequest("GET", "/holdings");
-  },
-
-  async getTradeBook() {
-    return dhanRequest("GET", "/trades");
-  },
-
-  async getTradeHistory(
-    fromDate: string,
-    toDate: string,
-    pageNumber = 0,
-  ) {
-    return dhanRequest("GET", `/trades/${fromDate}/${toDate}/${pageNumber}`);
-  },
-
   async getAllTradeHistory(fromDate: string, toDate: string) {
     const allTrades: unknown[] = [];
     let page = 0;
@@ -375,7 +359,7 @@ export const dhanClient = {
   },
 
   async getMarketQuote(
-    securities: Record<string, string[]>,
+    securities: Record<string, string[] | number[]>,
     quoteType: string,
   ) {
     const endpoints: Record<string, string> = {
@@ -384,10 +368,9 @@ export const dhanClient = {
       full: "/marketfeed/quote",
     };
     const endpoint = endpoints[quoteType] || "/marketfeed/ltp";
-    // Dhan API requires integer security IDs — convert all string IDs to numbers
     const body: Record<string, number[]> = {};
     for (const [seg, ids] of Object.entries(securities)) {
-      body[seg] = ids.map(id => parseInt(id, 10)).filter(n => !isNaN(n));
+      body[seg] = (ids as (string | number)[]).map(id => parseInt(String(id), 10)).filter(n => !isNaN(n));
     }
     return dhanRequest("POST", endpoint, body);
   },
@@ -404,23 +387,6 @@ export const dhanClient = {
     return Number(entry?.last_price ?? 0);
   },
 
-  async getHistoricalData(data: {
-    securityId: string;
-    exchangeSegment: string;
-    instrumentType: string;
-    expiryCode?: string;
-    fromDate: string;
-    toDate: string;
-  }) {
-    return dhanRequest("POST", "/charts/historical", {
-      security_id: data.securityId,
-      exchange_segment: data.exchangeSegment,
-      instrument: data.instrumentType,
-      expiry_code: data.expiryCode || 0,
-      from_date: data.fromDate,
-      to_date: data.toDate,
-    });
-  },
 
   async getIntradayData(data: {
     securityId: string;
@@ -473,9 +439,6 @@ export const dhanClient = {
     });
   },
 
-  async getSecurityList() {
-    return dhanRequest("GET", "/compact/instruments");
-  },
 
   async getKillSwitchStatus() {
     return dhanRequest("GET", "/killswitch");
@@ -486,37 +449,6 @@ export const dhanClient = {
   },
 
 
-  async getForeverOrders() {
-    return dhanRequest("GET", "/forever/orders");
-  },
-
-  async placeForeverOrder(body: Record<string, unknown>) {
-    return dhanRequest("POST", "/forever/orders", { dhanClientId: credentials.clientId, ...body });
-  },
-
-  async modifyForeverOrder(orderId: string, body: Record<string, unknown>) {
-    return dhanRequest("PUT", `/forever/orders/${orderId}`, { dhanClientId: credentials.clientId, order_id: orderId, ...body });
-  },
-
-  async cancelForeverOrder(orderId: string) {
-    return dhanRequest("DELETE", `/forever/orders/${orderId}`);
-  },
-
-  async getAllConditionalTriggers() {
-    return dhanRequest("GET", "/alerts/pending");
-  },
-
-  async placeConditionalTrigger(body: Record<string, unknown>) {
-    return dhanRequest("POST", "/alerts", { dhanClientId: credentials.clientId, ...body });
-  },
-
-  async modifyConditionalTrigger(alertId: string, body: Record<string, unknown>) {
-    return dhanRequest("PUT", `/alerts/${alertId}`, { dhanClientId: credentials.clientId, ...body });
-  },
-
-  async deleteConditionalTrigger(alertId: string) {
-    return dhanRequest("DELETE", `/alerts/${alertId}`);
-  },
 
   getCredentials() {
     return { clientId: credentials.clientId, accessToken: credentials.accessToken };

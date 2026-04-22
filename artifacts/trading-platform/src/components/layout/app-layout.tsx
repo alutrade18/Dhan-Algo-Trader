@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Activity, Moon, Sun, Menu, PauseCircle, PlayCircle, ShieldAlert, Wifi, Lock, AlertTriangle } from "lucide-react";
+import { Activity, Moon, Sun, Menu, ShieldAlert, Wifi, Lock, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -187,57 +187,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }
 
-  const [allPaused, setAllPaused] = useState(false);
-
-  const pauseAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${BASE}api/strategies/pause-all`, { method: "POST" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-    onSuccess: () => {
-      setAllPaused(true);
-      toast({ title: "All strategies paused", description: "Click 'Activate All Strategy' to resume." });
-      queryClient.invalidateQueries({ queryKey: ["strategies"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to pause strategies", variant: "destructive" }),
-  });
-
-  const activateAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${BASE}api/strategies/activate-all`, { method: "POST" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-    onSuccess: () => {
-      setAllPaused(false);
-      toast({ title: "All strategies activated", description: "All paused strategies are now active." });
-      queryClient.invalidateQueries({ queryKey: ["strategies"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to activate strategies", variant: "destructive" }),
-  });
-
   const emergencyStopMutation = useMutation({
     mutationFn: async () => {
-      const [pauseRes, killRes] = await Promise.all([
-        fetch(`${BASE}api/strategies/pause-all`, { method: "POST" }),
-        fetch(`${BASE}api/risk/killswitch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "ACTIVATE" }),
-        }),
-      ]);
-      if (!pauseRes.ok || !killRes.ok) throw new Error("Failed");
+      const res = await fetch(`${BASE}api/risk/killswitch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ACTIVATE" }),
+      });
+      if (!res.ok) throw new Error("Failed");
     },
     onSuccess: () => {
-      toast({ title: "Emergency Stop Activated", description: "All strategies paused and Dhan kill switch enabled.", variant: "destructive" });
+      toast({ title: "Kill Switch Activated", description: "All new orders are blocked on Dhan.", variant: "destructive" });
       queryClient.invalidateQueries({ queryKey: ["killswitch-status"] });
-      queryClient.invalidateQueries({ queryKey: ["strategies"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
-    onError: () => toast({ title: "Error", description: "Failed to activate emergency stop", variant: "destructive" }),
+    onError: () => toast({ title: "Error", description: "Failed to activate kill switch", variant: "destructive" }),
   });
 
   // isActive is set by our backend from the real-time Dhan API response
@@ -270,31 +234,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             {isDashboard && (
               <div className="flex items-center gap-1.5 ml-2">
-                {allPaused ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs gap-1.5 border-primary/50 text-primary hover:bg-primary/10 hidden sm:flex"
-                    onClick={() => activateAllMutation.mutate()}
-                    disabled={activateAllMutation.isPending}
-                    title="Activate All Strategies"
-                  >
-                    <PlayCircle className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline">Activate All Strategy</span>
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs gap-1.5 border-primary/30 text-primary/70 hover:bg-primary/8 hover:text-primary hidden sm:flex"
-                    onClick={() => pauseAllMutation.mutate()}
-                    disabled={pauseAllMutation.isPending}
-                    title="Pause All Strategies"
-                  >
-                    <PauseCircle className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline">Pause All Strategy</span>
-                  </Button>
-                )}
                 {!hasPin ? (
                   <Button
                     variant="outline"
@@ -452,12 +391,12 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
               <div>
                 <h3 className="font-semibold text-sm">Activate Kill Switch?</h3>
-                <p className="text-[11px] text-muted-foreground">This will pause all strategies and block all order placement.</p>
+                <p className="text-[11px] text-muted-foreground">This will block all new order placement on Dhan.</p>
               </div>
             </div>
             <div className="flex items-start gap-2.5 rounded-xl bg-destructive/10 border border-destructive/25 px-4 py-3 text-xs text-destructive">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>All active strategies will be paused and new orders will be blocked on Dhan immediately.</span>
+              <span>All new orders will be blocked on Dhan immediately. Existing positions are not affected.</span>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="flex-1 h-9"

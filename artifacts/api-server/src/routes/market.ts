@@ -3,8 +3,6 @@ import { dhanClient, DhanApiError } from "../lib/dhan-client";
 import { db, instrumentsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import {
-  GetMarketQuoteBody,
-  GetHistoricalDataBody,
   GetIntradayDataBody,
   GetOptionChainBody,
   GetExpiryListBody,
@@ -21,28 +19,6 @@ function isExcelSerial(v: unknown): v is number {
 
 const router: IRouter = Router();
 
-router.post("/market/quote", async (req, res): Promise<void> => {
-  const parsed = GetMarketQuoteBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  try {
-    const data = await dhanClient.getMarketQuote(
-      parsed.data.securities,
-      parsed.data.quoteType,
-    );
-    res.json({ data });
-  } catch (e) {
-    if (e instanceof DhanApiError) {
-      res.status(e.status).json(e.toClientResponse());
-    } else {
-      req.log.error({ err: e }, "Failed to fetch market quote");
-      res.status(500).json({ error: "Failed to fetch market quote" });
-    }
-  }
-});
 
 // GET /market/ltp?exchSeg=NSE_EQ&secId=1333
 // Fast single-instrument LTP — used by Super Orders entry price auto-fill
@@ -73,43 +49,6 @@ router.get("/market/ltp", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/market/historical", async (req, res): Promise<void> => {
-  const parsed = GetHistoricalDataBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  try {
-    const result = await dhanClient.getHistoricalData({
-      securityId: parsed.data.securityId,
-      exchangeSegment: parsed.data.exchangeSegment,
-      instrumentType: parsed.data.instrumentType,
-      expiryCode: parsed.data.expiryCode,
-      fromDate: parsed.data.fromDate instanceof Date ? parsed.data.fromDate.toISOString().slice(0, 10) : String(parsed.data.fromDate),
-      toDate: parsed.data.toDate instanceof Date ? parsed.data.toDate.toISOString().slice(0, 10) : String(parsed.data.toDate),
-    });
-    const r = result as Record<string, unknown>;
-    const candles = Array.isArray(r.data) ? r.data : [];
-    res.json({
-      data: candles.map((c: unknown[]) => ({
-        timestamp: String(c[0] || ""),
-        open: Number(c[1] || 0),
-        high: Number(c[2] || 0),
-        low: Number(c[3] || 0),
-        close: Number(c[4] || 0),
-        volume: Number(c[5] || 0),
-      })),
-    });
-  } catch (e) {
-    if (e instanceof DhanApiError) {
-      res.status(e.status).json(e.toClientResponse());
-    } else {
-      req.log.error({ err: e }, "Failed to fetch historical data");
-      res.status(500).json({ error: "Failed to fetch historical data" });
-    }
-  }
-});
 
 router.post("/market/intraday", async (req, res): Promise<void> => {
   const parsed = GetIntradayDataBody.safeParse(req.body);
@@ -374,60 +313,5 @@ router.post("/market/expiry-list", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/market/option-strikes", async (req, res): Promise<void> => {
-  const underlyingSecId = Number(req.query.underlyingSecId);
-  const expiry = String(req.query.expiry ?? "");
-  const instrument = String(req.query.instrument ?? "OPTIDX");
-
-  if (!underlyingSecId || !expiry) {
-    res.status(400).json({ error: "underlyingSecId and expiry required" });
-    return;
-  }
-
-  try {
-    const expirySerial = String(Math.round(new Date(expiry).getTime() / 86400000 + 25569));
-
-    const rows = await db
-      .select({
-        securityId: instrumentsTable.securityId,
-        exchId: instrumentsTable.exchId,
-        segment: instrumentsTable.segment,
-        symbolName: instrumentsTable.symbolName,
-        strikePrice: instrumentsTable.strikePrice,
-        optionType: instrumentsTable.optionType,
-        lotSize: instrumentsTable.lotSize,
-        expiryDate: instrumentsTable.expiryDate,
-      })
-      .from(instrumentsTable)
-      .where(
-        and(
-          eq(instrumentsTable.underlyingSecurityId, underlyingSecId),
-          eq(instrumentsTable.instrument, instrument),
-          sql`${instrumentsTable.expiryDate}::text = ${expirySerial}`
-        )
-      )
-      .orderBy(instrumentsTable.strikePrice);
-
-    res.json({ data: rows });
-  } catch (e) {
-    req.log.error({ err: e }, "Failed to fetch option strikes");
-    res.status(500).json({ error: "Failed" });
-  }
-});
-
-router.get("/market/securities", async (req, res): Promise<void> => {
-  try {
-    const result = await dhanClient.getSecurityList();
-    const r = result as Record<string, unknown>;
-    res.json({ data: Array.isArray(r.data) ? r.data : [] });
-  } catch (e) {
-    if (e instanceof DhanApiError) {
-      res.status(e.status).json(e.toClientResponse());
-    } else {
-      req.log.error({ err: e }, "Failed to fetch security list");
-      res.status(500).json({ error: "Failed to fetch security list" });
-    }
-  }
-});
 
 export default router;

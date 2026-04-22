@@ -28,7 +28,6 @@ router.use("/orders", orderRateLimit);
 router.use("/positions/exit-single", orderRateLimit); // exit = order placement
 
 // ── QUOTE APIs: 1/sec (LTP, OHLC, snapshots) ─────────────────────────────────
-router.use("/market/quote", quoteRateLimit);
 router.use("/market/ltp", quoteRateLimit);
 router.use("/funds/margin", quoteRateLimit);
 
@@ -36,13 +35,8 @@ router.use("/funds/margin", quoteRateLimit);
 // No middleware block here — the route handler delays instead of rejecting.
 
 // ── DATA APIs: 5/sec | 100,000/day (historical & candle data) ────────────────
-router.use("/market/historical", dataRateLimit);
 router.use("/market/intraday", dataRateLimit);
-router.use("/market/expiry-list", dataRateLimit);
 router.use("/market/expiry", dataRateLimit);
-router.use("/market/option-strikes", dataRateLimit);
-router.use("/market/security-list", dataRateLimit);
-router.use("/market/securities", dataRateLimit);
 
 // ── NON-TRADING APIs: 20/sec (management, info, config endpoints) ─────────────
 router.use([

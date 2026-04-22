@@ -203,59 +203,6 @@ router.post("/broker/generate-token", async (req, res): Promise<void> => {
   }
 });
 
-// POST /broker/renew-token — Renew Dhan access token
-router.post("/broker/renew-token", async (req, res): Promise<void> => {
-  if (!dhanClient.isConfigured()) {
-    res.status(401).json({ error: "Broker not connected — connect or generate a token first" });
-    return;
-  }
-  try {
-    const creds = dhanClient.getCredentials();
-    const DHAN_BASE = "https://api.dhan.co/v2";
-    const response = await fetch(`${DHAN_BASE}/RenewToken`, {
-      method: "GET",
-      headers: {
-        "access-token": creds.accessToken,
-        "dhanClientId": creds.clientId,
-      },
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      res.status(response.status).json({ error: "Token renewal failed", details: err });
-      return;
-    }
-    const data = await response.json() as { accessToken?: string; expiryTime?: string };
-    if (data.accessToken) {
-      dhanClient.configure(creds.clientId, data.accessToken);
-      const [settings] = await db.select().from(settingsTable).limit(1);
-      if (settings) {
-        await db.update(settingsTable).set({ brokerAccessToken: encryptToken(data.accessToken) }).where(eq(settingsTable.id, settings.id));
-      }
-      marketFeedWS.configure(creds.clientId, data.accessToken);
-      orderUpdateWS.configure(creds.clientId, data.accessToken);
-    }
-    res.json({ success: true, ...data });
-  } catch (e) {
-    res.status(500).json({ error: "Failed to renew token" });
-  }
-});
-
-// GET /broker/token-info — Get token expiry info
-router.get("/broker/token-info", async (_req, res): Promise<void> => {
-  try {
-    const [settings] = await db.select().from(settingsTable).limit(1);
-    if (!settings?.brokerAccessToken) {
-      res.json({ hasToken: false });
-      return;
-    }
-    res.json({
-      hasToken: true,
-      tokenGeneratedAt: settings.tokenGeneratedAt?.toISOString() ?? null,
-    });
-  } catch {
-    res.json({ hasToken: false });
-  }
-});
 
 // GET /broker/server-ip — Returns the server's outbound public IP (for Dhan whitelist)
 let cachedServerIp: string | null = null;
