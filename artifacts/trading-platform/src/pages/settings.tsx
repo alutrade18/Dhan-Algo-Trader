@@ -609,6 +609,48 @@ export default function Settings() {
               )}
             </div>
 
+            {/* ── Alert types info ── */}
+            <div className="space-y-2">
+              <SectionLabel>Alerts you'll receive</SectionLabel>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { icon: <Zap className="w-3 h-3" />, label: "Kill Switch", desc: "Activate / deactivate", color: "text-primary bg-primary/10 border-primary/20" },
+                  { icon: <Bell className="w-3 h-3" />, label: "Order Fills", desc: "Every trade confirmation", color: "text-success bg-success/10 border-success/20" },
+                  { icon: <Clock className="w-3 h-3" />, label: "Midnight Reset", desc: "Auto-reset at 12:00 AM", color: "text-violet-400 bg-violet-500/10 border-violet-500/20" },
+                  { icon: <XCircle className="w-3 h-3" />, label: "Critical Errors", desc: "API / system failures", color: "text-destructive bg-destructive/10 border-destructive/20" },
+                ].map(({ icon, label, desc, color }) => (
+                  <div key={label} className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 ${color}`}>
+                    <span className="mt-0.5 shrink-0">{icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold leading-tight">{label}</p>
+                      <p className="text-[10px] opacity-70 leading-tight mt-0.5">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Quick setup guide ── */}
+            {!settingsData?.hasTelegramToken && (
+              <div className="rounded-xl border border-border/40 bg-muted/20 px-4 py-3 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Quick Setup</p>
+                <ol className="space-y-1.5">
+                  {[
+                    <>Open <span className="font-semibold text-foreground">@BotFather</span> on Telegram → type <code className="bg-muted/40 px-1 rounded text-[11px]">/newbot</code></>,
+                    <>Copy the <span className="font-semibold text-foreground">Bot Token</span> it gives you → paste above</>,
+                    <>Send any message to your bot → open <span className="font-semibold text-foreground">@userinfobot</span> to get your Chat ID</>,
+                  ].map((step, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-muted/60 flex items-center justify-center text-[10px] font-bold text-foreground mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="leading-snug">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
             {settingsData?.hasTelegramToken && (
               <button
                 type="button" onClick={sendTestMessage} disabled={testMsgState === "sending"}
