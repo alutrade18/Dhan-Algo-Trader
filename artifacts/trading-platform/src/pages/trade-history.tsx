@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -104,18 +104,28 @@ export default function TradeHistory() {
   }, []);
 
   // ── Ledger state ────────────────────────────────────────────────────────────
-  const [fromDate, setFromDate] = useState(toYMD(daysAgo(29)));
+  const [fromDate, setFromDate] = useState(toYMD(daysAgo(7)));
   const [toDate, setToDate] = useState<string>(getTodayIST);
   const [ledgerData, setLedgerData] = useState<LedgerEntry[]>([]);
   const [closingBalance, setClosingBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const fetchLedger = useCallback(async () => {
+  const fetchLedger = useCallback(async (signal?: AbortSignal) => {
+    // Cancel any in-flight request before starting a new one
+    if (abortRef.current) abortRef.current.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const sig = signal ?? ctrl.signal;
+
     setLoading(true); setError(null); setFetched(true); setClosingBalance(null);
     try {
-      const res = await fetch(`${BASE}api/trades/ledger?fromDate=${fromDate}&toDate=${toDate}`);
+      const res = await fetch(
+        `${BASE}api/trades/ledger?fromDate=${fromDate}&toDate=${toDate}`,
+        { signal: sig }
+      );
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string; errorMessage?: string };
         throw new Error(err.errorMessage ?? err.error ?? "Failed to load ledger");
@@ -129,12 +139,25 @@ export default function TradeHistory() {
       }
       setLedgerData(all.filter(r => !isSummaryRow(r)));
     } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "Unknown error");
       setLedgerData([]);
     } finally {
       setLoading(false);
     }
   }, [fromDate, toDate]);
+
+  // Auto-fetch last 7 days on mount; abort when page unmounts
+  useEffect(() => {
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    void fetchLedger(ctrl.signal);
+    return () => {
+      ctrl.abort();
+      abortRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // only on mount
 
   function exportCSV() {
     if (!ledgerData.length) return;
@@ -153,7 +176,7 @@ export default function TradeHistory() {
         <DateField value={fromDate} onChange={setFromDate} max={toDate} />
         <span className="text-xs text-muted-foreground">To</span>
         <DateField value={toDate} onChange={setToDate} min={fromDate} max={today} />
-        <Button size="sm" className="gap-1.5 h-9" onClick={fetchLedger} disabled={loading}>
+        <Button size="sm" className="gap-1.5 h-9" onClick={() => void fetchLedger()} disabled={loading}>
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           {loading ? "Loading…" : "Fetch Ledger"}
         </Button>
