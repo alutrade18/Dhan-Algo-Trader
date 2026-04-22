@@ -92,43 +92,6 @@ export async function checkDailyLossLimit(settings: Awaited<ReturnType<typeof ge
   return { allowed: true };
 }
 
-/** Check if the order quantity exceeds the per-symbol cap */
-export async function checkMaxQtyPerSymbol(
-  settings: Awaited<ReturnType<typeof getSettings>>,
-  quantity?: number,
-): Promise<OrderGuardResult> {
-  const cap = settings?.maxQtyPerSymbol ? Number(settings.maxQtyPerSymbol) : null;
-  if (!cap || !quantity) return { allowed: true };
-  if (quantity > cap) {
-    return {
-      allowed: false,
-      reason: `Order quantity ${quantity} exceeds the max allowed per symbol (${cap}). Adjust in Risk Manager.`,
-    };
-  }
-  return { allowed: true };
-}
-
-/** Check if there are too many open orders already */
-export async function checkMaxOpenOrders(
-  settings: Awaited<ReturnType<typeof getSettings>>,
-): Promise<OrderGuardResult> {
-  const cap = settings?.maxOpenOrders ? Number(settings.maxOpenOrders) : null;
-  if (!cap) return { allowed: true };
-  try {
-    const positions = await getCachedPositions();
-    const openCount = positions.filter((p) => Number(p.netQty ?? 0) !== 0).length;
-    if (openCount >= cap) {
-      return {
-        allowed: false,
-        reason: `You already have ${openCount} open position(s). Max allowed is ${cap}. Close some before placing new orders.`,
-      };
-    }
-  } catch {
-    return { allowed: true };
-  }
-  return { allowed: true };
-}
-
 /** Run all order guards. Returns first failure or allowed:true */
 export async function runOrderGuards(params: {
   tradingSymbol?: string;
@@ -142,12 +105,6 @@ export async function runOrderGuards(params: {
 
   const lossCheck = await checkDailyLossLimit(settings);
   if (!lossCheck.allowed) return lossCheck;
-
-  const qtyCheck = await checkMaxQtyPerSymbol(settings, params.quantity);
-  if (!qtyCheck.allowed) return qtyCheck;
-
-  const openOrdersCheck = await checkMaxOpenOrders(settings);
-  if (!openOrdersCheck.allowed) return openOrdersCheck;
 
   return { allowed: true };
 }

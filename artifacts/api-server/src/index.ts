@@ -7,7 +7,6 @@ import { db, settingsTable } from "@workspace/db";
 import { marketFeedWS } from "./lib/market-feed-ws";
 import { orderUpdateWS } from "./lib/order-update-ws";
 import { setIO } from "./lib/io";
-import { startAutoSquareOffScheduler } from "./lib/auto-square-off";
 import { startKillSwitchScheduler, initDeactivationTracker } from "./routes/risk";
 import { startEquityScheduler } from "./lib/equity-scheduler";
 import { decryptToken } from "./lib/crypto-utils";
@@ -242,7 +241,6 @@ loadSavedCredentials().then(async () => {
   await initDeactivationTracker();
   httpServer.listen(port, () => {
     logger.info({ port }, "Server listening");
-    startAutoSquareOffScheduler();
     startKillSwitchScheduler();
     startEquityScheduler();
 
