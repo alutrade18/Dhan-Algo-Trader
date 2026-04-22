@@ -85,6 +85,18 @@ interface OptionEntry {
   putAskQty: number;
 }
 
+// ── Segment derivation ───────────────────────────────────────────────
+// Maps the exchange ID from instrument data to the underlying equity's
+// exchange segment — avoids hardcoding "NSE_EQ" throughout the page.
+const UNDERLYING_SEGMENT_MAP: Record<string, string> = {
+  NSE: "NSE_EQ",
+  BSE: "BSE_EQ",
+  MCX: "MCX_COMM",
+};
+function deriveUnderlyingSegment(exchId: string): string {
+  return UNDERLYING_SEGMENT_MAP[exchId.toUpperCase()] ?? "NSE_EQ";
+}
+
 // ── Market Hours (IST) ──────────────────────────────────────────────
 // NSE Equity F&O           : Mon-Fri 09:15 → 15:30
 // MCX Commodity F&O        : Mon-Fri 09:00 → 23:30
@@ -350,7 +362,7 @@ export default function OptionChain() {
     : (stockUnderlying?.underlyingSecurityId ?? null);
   const activeSegment = mode === "index"
     ? (activeIndex?.segment ?? "IDX_I")
-    : "NSE_EQ";
+    : deriveUnderlyingSegment(stockUnderlying?.exchId ?? "NSE");
   const activeLabel = mode === "index"
     ? (activeIndex?.label ?? "")
     : (stockUnderlying?.underlyingSymbol ?? "");

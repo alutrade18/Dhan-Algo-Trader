@@ -59,9 +59,6 @@ function AppRoutes() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/charts" component={Charts} />
           <Route path="/order-book" component={Orders} />
-          <Route path="/orders">
-            <Redirect to="/order-book" />
-          </Route>
           <Route path="/positions" component={Positions} />
           <Route path="/strategies" component={Strategies} />
           <Route path="/settings" component={Settings} />
@@ -69,9 +66,6 @@ function AppRoutes() {
           <Route path="/logs" component={Logs} />
           <Route path="/option-chain" component={OptionChain} />
           <Route path="/ledger-statement" component={TradeHistory} />
-          <Route path="/trade-history">
-            <Redirect to="/ledger-statement" />
-          </Route>
           <Route component={NotFound} />
         </Switch>
       </Suspense>
