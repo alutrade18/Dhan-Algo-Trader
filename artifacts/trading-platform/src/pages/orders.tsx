@@ -36,6 +36,7 @@ import {
   Search,
   CalendarDays,
 } from "lucide-react";
+import { isMarketOpen } from "@/lib/market-calendar";
 const BASE = import.meta.env.BASE_URL;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -594,7 +595,7 @@ export default function OrdersPage() {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
       if (isLive) {
         autoRefreshRef.current = setInterval(() => {
-          if (document.visibilityState === "visible") void fetchOrders();
+          if (document.visibilityState === "visible" && isMarketOpen()) void fetchOrders();
         }, INTERVAL_MS);
       } else {
         autoRefreshRef.current = null;

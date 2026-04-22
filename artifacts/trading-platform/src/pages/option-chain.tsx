@@ -301,7 +301,7 @@ function mapDbToUnderlying(r: DbInstrument): IndexUnderlying {
     symbol: r.symbolName,
     dhanSecId: r.securityId,
     dbSecId: r.underlyingSecurityId ?? r.securityId,
-    segment: "IDX_I",
+    segment: r.segment || "IDX_I",
     exchange: exch,
   };
 }

@@ -45,3 +45,18 @@ export function isHolidayToday(exchange: "NSE" | "MCX" = "NSE"): boolean {
   const today = todayIST();
   return (exchange === "MCX" ? MCX_HOLIDAYS : NSE_HOLIDAYS).includes(today);
 }
+
+/**
+ * Returns true when NSE/BSE equity markets are open for trading.
+ * Session: Mon–Fri, 09:15–15:30 IST, excluding NSE holidays.
+ */
+export function isMarketOpen(): boolean {
+  if (isHolidayToday("NSE")) return false;
+  const nowIST = new Date(Date.now() + 5.5 * 3_600_000);
+  const day = nowIST.getUTCDay(); // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false;
+  const h = nowIST.getUTCHours();
+  const m = nowIST.getUTCMinutes();
+  const minuteOfDay = h * 60 + m;
+  return minuteOfDay >= 9 * 60 + 15 && minuteOfDay < 15 * 60 + 30;
+}

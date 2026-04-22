@@ -79,7 +79,19 @@ class OrderUpdateWS extends EventEmitter {
         if (!json || typeof json !== "object") return;
 
         this.reconnectDelay = MIN_RECONNECT_MS;
-        logger.info({ orderUpdate: json }, "OrderUpdateWS: order update received");
+
+        const status = json.Status ?? "";
+
+        if (status === "PARTIALLY_FILLED" || status === "PART_TRADED") {
+          logger.warn(
+            { orderNo: json.OrderNo, tradedQty: json.TradedQty, totalQty: json.Quantity, symbol: json.Symbol },
+            "OrderUpdateWS: partial fill received",
+          );
+          this.emit("partialFill", json);
+        } else {
+          logger.info({ orderUpdate: json }, "OrderUpdateWS: order update received");
+        }
+
         this.emit("orderUpdate", json);
       } catch (e) {
         logger.debug({ err: (e as Error).message }, "OrderUpdateWS: unhandled frame");
