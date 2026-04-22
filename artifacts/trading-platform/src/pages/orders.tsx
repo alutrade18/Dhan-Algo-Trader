@@ -268,43 +268,30 @@ function DateInput({
   max?: string;
   label: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const display = value ? value.split("-").reverse().join("-") : "";
-
-  function openPicker() {
-    const el = inputRef.current;
-    if (!el) return;
-    if (typeof el.showPicker === "function") {
-      try { el.showPicker(); } catch { el.click(); }
-    } else {
-      el.click();
-    }
-  }
-
   return (
     <div className="flex items-center gap-1.5 flex-1 min-w-0">
-      <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
-      <button
-        type="button"
-        onClick={openPicker}
-        className="relative flex items-center gap-1.5 border border-border/50 rounded-md px-2 py-1 bg-transparent h-8 flex-1 min-w-0 hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer group"
-      >
-        <span className={`text-sm font-mono flex-1 text-left truncate ${display ? "text-foreground" : "text-muted-foreground"}`}>
-          {display || "DD-MM-YYYY"}
-        </span>
-        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+      <span className="text-[11px] text-muted-foreground shrink-0 select-none">{label}</span>
+      <label className="relative flex items-center flex-1 min-w-0 h-8 rounded-md border border-border/50 hover:border-primary/50 focus-within:border-primary transition-colors cursor-pointer bg-transparent overflow-hidden">
+        <CalendarDays className="absolute left-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10 shrink-0" />
         <input
-          ref={inputRef}
           type="date"
           value={value}
           min={min}
           max={max}
           onChange={(e) => onChange(e.target.value)}
-          tabIndex={-1}
-          className="absolute inset-0 opacity-0 w-0 h-0 pointer-events-none"
+          className={[
+            "w-full h-full pl-7 pr-1 text-xs font-mono bg-transparent outline-none cursor-pointer",
+            "text-foreground appearance-none",
+            "[&::-webkit-calendar-picker-indicator]:opacity-0",
+            "[&::-webkit-calendar-picker-indicator]:absolute",
+            "[&::-webkit-calendar-picker-indicator]:inset-0",
+            "[&::-webkit-calendar-picker-indicator]:w-full",
+            "[&::-webkit-calendar-picker-indicator]:h-full",
+            "[&::-webkit-calendar-picker-indicator]:cursor-pointer",
+          ].join(" ")}
           style={{ colorScheme: "dark" }}
         />
-      </button>
+      </label>
     </div>
   );
 }

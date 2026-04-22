@@ -1,11 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, RefreshCw, Wallet, CalendarIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Download, RefreshCw, Wallet, CalendarDays } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -17,19 +14,6 @@ function getTodayIST(): string {
 }
 function toYMD(d: Date) { return d.toISOString().slice(0, 10); }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d; }
-function ymdToDisplay(ymd: string) {
-  if (!ymd || ymd.length !== 10) return ymd;
-  const [y, m, d] = ymd.split("-");
-  return `${d}-${m}-${y}`;
-}
-function displayToYmd(display: string) {
-  const parts = display.trim().replace(/\//g, "-").split("-");
-  if (parts.length !== 3) return "";
-  const [d, m, y] = parts;
-  if (y.length !== 4) return "";
-  const ymd = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  return isNaN(new Date(ymd).getTime()) ? "" : ymd;
-}
 function parseAmount(val: string | undefined): number {
   return Number(String(val ?? "0").replace(/,/g, ""));
 }
@@ -48,38 +32,28 @@ function formatDisplayDate(raw: string) {
 
 // ── Controlled date input ─────────────────────────────────────────────────────
 function DateField({ value, onChange, min, max }: { value: string; onChange: (ymd: string) => void; min?: string; max?: string }) {
-  const [text, setText] = useState(() => ymdToDisplay(value));
-  const pickerRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { setText(ymdToDisplay(value)); }, [value]);
-  function commit(raw: string) {
-    const ymd = displayToYmd(raw);
-    if (!ymd) { setText(ymdToDisplay(value)); return; }
-    if (min && ymd < min) { setText(ymdToDisplay(value)); return; }
-    if (max && ymd > max) { setText(ymdToDisplay(value)); return; }
-    onChange(ymd);
-    setText(ymdToDisplay(ymd));
-  }
   return (
-    <div className="relative flex items-center">
-      <Input type="text" value={text} placeholder="DD-MM-YYYY" maxLength={10} className="w-36 text-xs font-mono h-9 pr-8"
-        onChange={e => setText(e.target.value)}
-        onBlur={e => commit(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }}
+    <label className="relative flex items-center h-9 rounded-md border border-border/50 hover:border-primary/50 focus-within:border-primary transition-colors cursor-pointer bg-transparent overflow-hidden w-36">
+      <CalendarDays className="absolute left-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10 shrink-0" />
+      <input
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={e => onChange(e.target.value)}
+        className={[
+          "w-full h-full pl-7 pr-1 text-xs font-mono bg-transparent outline-none cursor-pointer",
+          "text-foreground appearance-none",
+          "[&::-webkit-calendar-picker-indicator]:opacity-0",
+          "[&::-webkit-calendar-picker-indicator]:absolute",
+          "[&::-webkit-calendar-picker-indicator]:inset-0",
+          "[&::-webkit-calendar-picker-indicator]:w-full",
+          "[&::-webkit-calendar-picker-indicator]:h-full",
+          "[&::-webkit-calendar-picker-indicator]:cursor-pointer",
+        ].join(" ")}
+        style={{ colorScheme: "dark" }}
       />
-      <button type="button" className="absolute right-2 text-muted-foreground hover:text-foreground transition-colors z-10 hidden sm:flex" onClick={() => pickerRef.current?.showPicker()} tabIndex={-1}>
-        <CalendarIcon className="w-3.5 h-3.5" />
-      </button>
-      {/* Desktop: hidden picker triggered by calendar icon button */}
-      <input ref={pickerRef} type="date" value={value} min={min} max={max}
-        onChange={e => { onChange(e.target.value); setText(ymdToDisplay(e.target.value)); }}
-        className="sr-only absolute inset-0 w-0 h-0 opacity-0 pointer-events-none" tabIndex={-1}
-      />
-      {/* Mobile: full-area transparent native date input — iOS/Android open picker on tap */}
-      <input type="date" value={value} min={min} max={max}
-        onChange={e => { onChange(e.target.value); setText(ymdToDisplay(e.target.value)); }}
-        className="sm:hidden absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-      />
-    </div>
+    </label>
   );
 }
 
