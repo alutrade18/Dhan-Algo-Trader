@@ -149,11 +149,9 @@ export default function TradeHistory() {
 
   // Auto-fetch last 7 days on mount; abort when page unmounts
   useEffect(() => {
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    void fetchLedger(ctrl.signal);
+    void fetchLedger();
     return () => {
-      ctrl.abort();
+      abortRef.current?.abort();
       abortRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
